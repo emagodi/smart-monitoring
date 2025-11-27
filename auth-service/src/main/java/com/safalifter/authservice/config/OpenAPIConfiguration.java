@@ -21,11 +21,11 @@ import com.safalifter.authservice.handlers.ErrorResponse;
 @OpenAPIDefinition(
         info = @Info(
                 contact = @Contact(
-                        name = "Powertel Contracts Management System",
+                        name = "Powertel Smart Monitoring Solution",
                         email = "emagodi1@powertel.co.zw"
                 ),
-                title = "Powertel Contracts Management APIs",
-                description = "Contracts Management System API documentation",
+                title = "Powertel Smart Monitoring Solution APIs",
+                description = "Powertel Smart Monitoring Solution API documentation",
                 version = "0.0.1-SNAPSHOT"
         ),
         servers = {

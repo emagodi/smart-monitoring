@@ -10,6 +10,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import com.safalifter.authservice.enums.Role;
+import com.safalifter.authservice.enums.Region;
+import com.safalifter.authservice.enums.District;
+import com.safalifter.authservice.enums.Depot;
 @Data
 @Builder
 @NoArgsConstructor
@@ -29,7 +32,16 @@ public class RegisterRequest {
 
     private String phone;
 
-    @NotNull
+ 
     private Role role;
+
+    
+    private Region region;
+
+   
+    private District district;
+
+    
+    private Depot depot;
 
 }

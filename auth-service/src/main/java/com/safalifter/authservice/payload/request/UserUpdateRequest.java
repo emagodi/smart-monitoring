@@ -9,6 +9,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import com.safalifter.authservice.enums.Role;
+import com.safalifter.authservice.enums.Region;
+import com.safalifter.authservice.enums.District;
+import com.safalifter.authservice.enums.Depot;
 import com.safalifter.authservice.validation.StrongPassword;
 
 @Data
@@ -34,5 +37,11 @@ public class UserUpdateRequest {
 
     @NotNull
     private Role role;
+
+    private Region region;
+
+    private District district;
+
+    private Depot depot;
 
 }

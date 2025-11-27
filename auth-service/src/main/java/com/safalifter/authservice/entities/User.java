@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import com.safalifter.authservice.enums.Role;
+import com.safalifter.authservice.enums.*;
 
 
 import java.time.LocalDateTime;
@@ -41,6 +41,15 @@ public class User implements UserDetails { // make our app User a spring securit
 
     @Enumerated(EnumType.STRING)
     private Role role;
+
+    @Enumerated(EnumType.STRING)
+    private Region region;
+
+    @Enumerated(EnumType.STRING)
+    private District district;
+
+    @Enumerated(EnumType.STRING)
+    private Depot depot;
 
     @OneToOne(mappedBy = "user")
     private ForgotPassword forgotPassword;

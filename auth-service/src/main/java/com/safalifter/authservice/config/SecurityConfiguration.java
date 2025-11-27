@@ -59,7 +59,13 @@ public class SecurityConfiguration {
         config.setAllowCredentials(true);
 
         // For dev: you may want to use e.g. http://localhost:3000
-        config.setAllowedOrigins(Arrays.asList("http://localhost:3000","https://localhost:3000", "http://127.0.0.1:3000"));
+        config.setAllowedOrigins(Arrays.asList(
+                "http://localhost:3000",
+                "https://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:8080",
+                "http://localhost:8082"
+        ));
         config.setAllowedHeaders(Arrays.asList(
                 HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT));
         config.setAllowedMethods(Arrays.asList(
