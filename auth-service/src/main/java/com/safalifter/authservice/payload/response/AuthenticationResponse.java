@@ -1,9 +1,6 @@
 package com.safalifter.authservice.payload.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.safalifter.authservice.enums.Region;
-import com.safalifter.authservice.enums.District;
-import com.safalifter.authservice.enums.Depot;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,11 +26,11 @@ public class AuthenticationResponse {
 
     private String phone;
 
-    private Region region;
+    private String region;
 
-    private District district;
+    private String district;
 
-    private Depot depot;
+    private String depot;
 
     private List<String> roles;
 

@@ -139,38 +139,22 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             log.error("Invalid credentials for {}", request.getEmail());
             throw new AuthenticationException("Invalid email or password");
         }
-
-        if (user.isTemporaryPassword()) {
-            return AuthenticationResponse.builder()
-                    .accessToken(null)
-                    .roles(Collections.emptyList())
-                    .email(user.getEmail())
-                    .id(user.getId())
-                    .firstname(user.getFirstname())
-                    .lastname(user.getLastname())
-                    .password(user.getPassword())
-                    .phone(user.getPhone())
-                    .region(user.getRegion())
-                    .district(user.getDistrict())
-                    .depot(user.getDepot())
-                    .temporaryPassword(true)
-                    .refreshToken(null)
-                    .message("Please change your temporary password.")
-                    .build();
+        String jwt = null;
+        try {
+            jwt = jwtService.generateToken(user);
+        } catch (Exception e) {
+            log.warn("Could not generate JWT: {}", e.getMessage());
         }
 
-        String otp = generateOtp();
-        user.setOtp(otp);
-        user.setOtpExpiry(LocalDateTime.now().plusMinutes(5));
-        userRepository.save(user);
+        var refreshToken = refreshTokenService.createRefreshToken(user.getId());
 
-        notificationService.sendOtpSms(user.getPhone(), otp);
-
-      //  emailService.sendSimpleMessage(new MailBody(user.getEmail(), "Your OTP Code", "Your OTP code is: " + otp));
+        var roles = user.getRole().getAuthorities().stream()
+                .map(SimpleGrantedAuthority::getAuthority)
+                .toList();
 
         return AuthenticationResponse.builder()
-                .accessToken(null)
-                .roles(Collections.emptyList())
+                .accessToken(jwt)
+                .roles(roles)
                 .email(user.getEmail())
                 .id(user.getId())
                 .firstname(user.getFirstname())
@@ -180,9 +164,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .region(user.getRegion())
                 .district(user.getDistrict())
                 .depot(user.getDepot())
-                .temporaryPassword(false)
-                .refreshToken(null)
-                .message("An OTP has been sent to your email. Please enter it to proceed.")
+                .temporaryPassword(user.isTemporaryPassword())
+                .refreshToken(refreshToken.getToken())
+                .tokenType("BEARER")
+                .message("User Authenticated Successfully")
                 .build();
     }
 

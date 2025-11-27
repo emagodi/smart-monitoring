@@ -27,6 +27,10 @@ public class GatewayConfig {
                 .route("auth-service", r -> r.path("/api/v1/auth/**")
                         .uri("lb://auth-service"))
 
+                .route("auth-regions", r -> r.path("/api/v1/regions/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://auth-service"))
+
                 .route("auth-swagger-ui", r -> r.path("/auth/swagger-ui/**", "/auth/swagger-ui.html")
                         .filters(f -> f.rewritePath("/auth/(?<segment>.*)", "/${segment}"))
                         .uri("lb://auth-service"))
