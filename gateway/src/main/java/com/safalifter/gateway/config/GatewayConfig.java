@@ -31,6 +31,30 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://auth-service"))
 
+                .route("auth-districts", r -> r.path("/api/v1/districts/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://auth-service"))
+
+                .route("auth-depots", r -> r.path("/api/v1/depots/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://auth-service"))
+
+                .route("transformer-transformers", r -> r.path("/api/v1/transformers/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-sensors", r -> r.path("/api/v1/sensors/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-sensor-readings", r -> r.path("/api/v1/sensor-readings/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-alerts", r -> r.path("/api/v1/alerts/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
                 .route("auth-swagger-ui", r -> r.path("/auth/swagger-ui/**", "/auth/swagger-ui.html")
                         .filters(f -> f.rewritePath("/auth/(?<segment>.*)", "/${segment}"))
                         .uri("lb://auth-service"))
@@ -41,6 +65,13 @@ public class GatewayConfig {
 
                 .route("auth-openapi-root", r -> r.path("/v3/api-docs/**")
                         .uri("lb://auth-service"))
+                .route("transformer-swagger-ui", r -> r.path("/transformer/swagger-ui/**", "/transformer/swagger-ui.html")
+                        .filters(f -> f.rewritePath("/transformer/(?<segment>.*)", "/${segment}"))
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-openapi", r -> r.path("/transformer/v3/api-docs/**")
+                        .filters(f -> f.rewritePath("/transformer/(?<segment>.*)", "/${segment}"))
+                        .uri("lb://transformer-service"))
                 .build();
     }
 

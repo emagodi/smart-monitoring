@@ -1,63 +1,112 @@
-version: "3.5"
-
 services:
-  postgres:
-    container_name: postgres
-    image: postgres:latest
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 55
-      POSTGRES_DB: microservice
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: tms
+    ports:
+      - "3306:3306"
     volumes:
-        - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: notifications
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
     ports:
       - "5432:5432"
-
-  zookeeper:
-    container_name: zookeeper
-    image: "docker.io/bitnami/zookeeper:3"
-    ports:
-      - "2181:2181"
     volumes:
-      - "zookeeper_data:/bitnami"
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      - postgres_data:/var/lib/postgresql/data
 
-  kafka:
-    container_name: kafka
-    image: "docker.io/bitnami/kafka:2-debian-10"
-    ports:
-      - "9092:9092"
-    expose:
-      - "9093"
-    volumes:
-      - "kafka_data:/bitnami"
+  config-server:
+    build: ./config-server
+    container_name: config-server
     environment:
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_ADVERTISED_LISTENERS=INSIDE://kafka:9093,OUTSIDE://localhost:9092
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      - KAFKA_LISTENERS=INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
-      - KAFKA_INTER_BROKER_LISTENER_NAME=INSIDE
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      SPRING_PROFILES_ACTIVE: native
+      SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config
+    volumes:
+      - ./config:/config:ro
+    ports:
+      - "8888:8888"
     depends_on:
-      - zookeeper
+      - mysql
 
-  kafka-ui:
-    container_name: kafka-ui
-    image: provectuslabs/kafka-ui
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
     ports:
-      - "9090:8080"
-    restart: always
+      - "8761:8761"
+    depends_on:
+      - config-server
+
+  gateway:
+    build: ./gateway
+    container_name: api-gateway
     environment:
-      - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9093
-      - KAFKA_CLUSTERS_0_ZOOKEEPER=localhost:2181
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka-server
+      - config-server
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./uploads:/uploads/monitor
+    depends_on:
+      - mysql
+      - eureka-server
+      - config-server
+
+  transformer-service:
+    build: ./transformer-service
+    container_name: transformer-service
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      LORIOT_WS_URL: ${LORIOT_WS_URL}
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+    ports:
+      - "8083:8083"
+    depends_on:
+      - mysql
+      - eureka-server
+      - config-server
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      SERVER_PORT: 8085
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888/
+    depends_on:
+      - postgres
+      - eureka-server
+      - config-server
+    ports:
+      - "8085:8085"
 
 volumes:
-  zookeeper_data:
-    driver: local
-  kafka_data:
-    driver: local
+  mysql_data:
   postgres_data:
     driver: local
