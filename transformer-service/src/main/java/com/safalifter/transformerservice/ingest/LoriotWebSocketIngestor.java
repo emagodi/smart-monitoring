@@ -137,13 +137,24 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             Sensor sensor = sensorOpt.get();
 
             try {
-                SensorReading reading = SensorReading.builder()
-                        .sensorId(sensor.getId())
-                        .rawPayload(rawMessage)
-                        .decoded(buildDecodedSummary(msg))
-                        .build();
-                SensorReading saved = sensorReadingRepository.save(reading);
-                log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
+                String decoded = buildDecodedSummary(msg);
+                java.util.Optional<SensorReading> latestOpt = sensorReadingRepository.findTopBySensorIdOrderByUpdatedAtDesc(sensor.getId());
+                SensorReading saved;
+                if (latestOpt.isPresent()) {
+                    SensorReading existing = latestOpt.get();
+                    existing.setRawPayload(rawMessage);
+                    existing.setDecoded(decoded);
+                    saved = sensorReadingRepository.save(existing);
+                    log.info("Updated SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
+                } else {
+                    SensorReading reading = SensorReading.builder()
+                            .sensorId(sensor.getId())
+                            .rawPayload(rawMessage)
+                            .decoded(decoded)
+                            .build();
+                    saved = sensorReadingRepository.save(reading);
+                    log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
+                }
                 if (logWs) log.info("DECODE {}", saved.getDecoded());
             } catch (Exception e) {
                 log.error("Failed to persist sensor reading for {}", sensorKey, e);
