@@ -30,6 +30,7 @@ services:
   config-server:
     build: ./config-server
     container_name: config-server
+    restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: native
       SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config
@@ -45,6 +46,7 @@ services:
   eureka-server:
     build: ./eureka-server
     container_name: eureka-server
+    restart: unless-stopped
     environment:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
@@ -56,6 +58,7 @@ services:
   gateway:
     build: ./gateway
     container_name: api-gateway
+    restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
@@ -71,6 +74,7 @@ services:
   auth-service:
     build: ./auth-service
     container_name: auth-service
+    restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
@@ -89,6 +93,7 @@ services:
   transformer-service:
     build: ./transformer-service
     container_name: transformer-service
+    restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
@@ -106,6 +111,7 @@ services:
   notification-service:
     build: ./notification-service
     container_name: notification-service
+    restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
