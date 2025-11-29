@@ -55,22 +55,6 @@ services:
     depends_on:
       - config-server
 
-  gateway:
-    build: ./gateway
-    container_name: api-gateway
-    restart: unless-stopped
-    environment:
-      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
-      EUREKA_URI: http://eureka-server:8761/eureka
-      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
-      TZ: Africa/Harare
-      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
-    ports:
-      - "8080:8080"
-    depends_on:
-      - eureka-server
-      - config-server
-
   auth-service:
     build: ./auth-service
     container_name: auth-service
@@ -126,6 +110,23 @@ services:
       - config-server
     ports:
       - "8085:8085"
+
+    
+  gateway:
+    build: ./gateway
+    container_name: api-gateway
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka-server
+      - config-server
 
 volumes:
   mysql_data:
