@@ -6,6 +6,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: tms
+      TZ: Africa/Harare
     ports:
       - "3306:3306"
     volumes:
@@ -20,6 +21,7 @@ services:
       POSTGRES_DB: notifications
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret
+      TZ: Africa/Harare
     ports:
       - "5432:5432"
     volumes:
@@ -31,6 +33,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: native
       SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     volumes:
       - ./config:/config:ro
     ports:
@@ -41,6 +45,9 @@ services:
   eureka-server:
     build: ./eureka-server
     container_name: eureka-server
+    environment:
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
       - "8761:8761"
     depends_on:
@@ -53,6 +60,8 @@ services:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
       - "8080:8080"
     depends_on:
@@ -66,6 +75,8 @@ services:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
       - "8082:8082"
     volumes:
@@ -83,6 +94,8 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       LORIOT_WS_URL: ${LORIOT_WS_URL}
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
       - "8083:8083"
     depends_on:
@@ -99,6 +112,8 @@ services:
       SERVER_PORT: 8085
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888/
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     depends_on:
       - postgres
       - eureka-server
