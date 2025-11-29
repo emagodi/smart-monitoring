@@ -171,6 +171,16 @@ public class AuthenticationController {
                 .build();
     }
 
+    @GetMapping("/user/email/{email}")
+    @Operation(summary = "Find Role By Email",
+            description = "Returns the role associated with the given user email.")
+    public ResponseEntity<com.safalifter.authservice.enums.Role> getRoleByEmail(@PathVariable String email) {
+        return userRepository.findByEmail(email)
+                .map(User::getRole)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.ok(com.safalifter.authservice.enums.Role.USER));
+    }
+
     @GetMapping("user/id/{id}")
     @Operation(summary = "Find User By User Id",
             description = "This endpoint will allow you to get a particular user by their user id.")
