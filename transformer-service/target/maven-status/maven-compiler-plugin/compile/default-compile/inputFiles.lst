@@ -14,6 +14,7 @@ C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Sensor.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\SensorReading.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SensorServiceImpl.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorValueResponse.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\CustomAccessDeniedHandler.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtServiceImpl.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\AlertController.java
@@ -32,6 +33,7 @@ C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\SensorRepository.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\OpenApiConfig.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\AlertServiceImpl.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorReadingDetailResponse.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\TransformerServiceApplication.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtAuthenticationFilter.java
 C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\SensorReadingService.java
