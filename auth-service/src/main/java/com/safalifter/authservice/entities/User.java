@@ -1,6 +1,7 @@
 package com.safalifter.authservice.entities;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,6 +36,7 @@ public class User implements UserDetails { // make our app User a spring securit
     @Column(unique = true)
     private String email;
 
+    @JsonIgnore
     private String password;
 
     private String phone;
