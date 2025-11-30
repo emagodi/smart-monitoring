@@ -36,7 +36,7 @@ public class SensorController {
     @Operation(summary = "Get sensor by id")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<SensorResponse> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(sensorService.getById(id));
+        return ResponseEntity.ok(sensorService.getWithReadings(id));
     }
 
     @GetMapping

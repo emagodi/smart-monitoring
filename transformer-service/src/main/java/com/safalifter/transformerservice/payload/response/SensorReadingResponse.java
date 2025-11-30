@@ -14,4 +14,6 @@ public class SensorReadingResponse {
     private Long sensorId;
     private String rawPayload;
     private String decoded;
+    private String type;
+    private String value;
 }

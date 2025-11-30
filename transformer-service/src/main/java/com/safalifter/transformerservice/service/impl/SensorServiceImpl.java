@@ -12,6 +12,7 @@ import com.safalifter.transformerservice.payload.response.SensorResponse;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.SensorService;
+import com.safalifter.transformerservice.service.SensorReadingService;
 
 import java.util.List;
 
@@ -22,6 +23,7 @@ public class SensorServiceImpl implements SensorService {
 
     private final SensorRepository sensorRepository;
     private final TransformerRepository transformerRepository;
+    private final SensorReadingService sensorReadingService;
 
     @Override
     public SensorResponse create(SensorRequest request) {
@@ -45,13 +47,33 @@ public class SensorServiceImpl implements SensorService {
     }
 
     @Override
+    public SensorResponse getWithReadings(Long id) {
+        Sensor sensor = sensorRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + id + " not found"));
+        SensorResponse base = toResponse(sensor);
+        base.setSensorReadings(sensorReadingService.listDetailedParsedBySensorId(sensor.getId()));
+        return base;
+    }
+
+    @Override
     public List<SensorResponse> getAll() {
-        return sensorRepository.findAll().stream().map(this::toResponse).toList();
+        return sensorRepository.findAll().stream()
+                .map(s -> {
+                    SensorResponse r = toResponse(s);
+                    r.setSensorReadings(sensorReadingService.listDetailedParsedBySensorId(s.getId()));
+                    return r;
+                })
+                .toList();
     }
 
     @Override
     public List<SensorResponse> listByTransformerId(Long transformerId) {
-        return sensorRepository.findByTransformerId(transformerId).stream().map(this::toResponse).toList();
+        return sensorRepository.findByTransformerId(transformerId).stream()
+                .map(s -> {
+                    SensorResponse r = toResponse(s);
+                    r.setSensorReadings(sensorReadingService.listDetailedParsedBySensorId(s.getId()));
+                    return r;
+                })
+                .toList();
     }
 
     @Override

@@ -49,7 +49,7 @@ public class SensorReadingController {
     @GetMapping("/sensor/{sensorId}")
     @Operation(summary = "List readings by sensor")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
-    public ResponseEntity<List<SensorReadingResponse>> listBySensor(@PathVariable Long sensorId) {
+    public ResponseEntity<List<com.safalifter.transformerservice.payload.response.SensorValueResponse>> listBySensor(@PathVariable Long sensorId) {
         return ResponseEntity.ok(sensorReadingService.listBySensorId(sensorId));
     }
 
@@ -67,4 +67,5 @@ public class SensorReadingController {
         sensorReadingService.delete(id);
         return ResponseEntity.noContent().build();
     }
+    // removed duplicate parsed values endpoint; use /sensor/{sensorId}
 }
