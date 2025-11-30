@@ -32,9 +32,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private boolean shouldSkip(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        // permit auth and swagger endpoints without token
-        return uri.startsWith("/api/v1/auth") ||
-                uri.startsWith("/v2/api-docs") ||
+        // permit only specific auth endpoints and swagger resources without token
+        if (uri.equals("/api/v1/auth/register") ||
+                uri.equals("/api/v1/auth/authenticate") ||
+                uri.equals("/api/v1/auth/refresh-token") ||
+                uri.equals("/api/v1/auth/refresh-token-cookie")) {
+            return true;
+        }
+        return uri.startsWith("/v2/api-docs") ||
                 uri.startsWith("/v3/api-docs") ||
                 uri.startsWith("/swagger") ||
                 uri.contains("swagger-ui") ||

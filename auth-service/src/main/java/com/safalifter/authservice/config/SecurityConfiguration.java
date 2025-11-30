@@ -31,10 +31,15 @@ public class SecurityConfiguration {
                         .authenticationEntryPoint(unauthorizedEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**",
+                        .requestMatchers(
+                                "/api/v1/auth/register",
+                                "/api/v1/auth/authenticate",
+                                "/api/v1/auth/refresh-token",
+                                "/api/v1/auth/refresh-token-cookie",
                                 "/v2/api-docs", "/v3/api-docs/**",
                                 "/swagger-resources/**", "/swagger-ui/**",
-                                "/webjars/**", "/swagger-ui.html").permitAll()
+                                "/webjars/**", "/swagger-ui.html"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(STATELESS))

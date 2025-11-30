@@ -32,6 +32,8 @@ public class TransformerServiceImpl implements TransformerService {
                 .capacity(request.getCapacity())
                 .isActive(request.getIsActive())
                 .depotId(request.getDepotId())
+                .lat(request.getLat())
+                .lng(request.getLng())
                 .build();
         Transformer saved = transformerRepository.save(transformer);
         return toResponse(saved);
@@ -61,6 +63,8 @@ public class TransformerServiceImpl implements TransformerService {
         transformer.setCapacity(request.getCapacity());
         transformer.setActive(request.getIsActive());
         transformer.setDepotId(request.getDepotId());
+        transformer.setLat(request.getLat());
+        transformer.setLng(request.getLng());
         Transformer saved = transformerRepository.save(transformer);
         return toResponse(saved);
     }
@@ -88,6 +92,8 @@ public class TransformerServiceImpl implements TransformerService {
                 .capacity(transformer.getCapacity())
                 .isActive(transformer.isActive())
                 .depotId(transformer.getDepotId())
+                .lat(transformer.getLat())
+                .lng(transformer.getLng())
                 .sensors(sensors)
                 .build();
     }

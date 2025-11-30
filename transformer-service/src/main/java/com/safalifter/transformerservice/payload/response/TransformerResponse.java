@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.math.BigDecimal;
 
 @Data
 @Builder
@@ -17,5 +18,7 @@ public class TransformerResponse {
     private Integer capacity;
     private Boolean isActive;
     private Long depotId;
+    private BigDecimal lat;
+    private BigDecimal lng;
     private List<SensorResponse> sensors;
 }
