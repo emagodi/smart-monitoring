@@ -13,19 +13,6 @@ services:
       - mysql_data:/var/lib/mysql
       - ./db-init:/docker-entrypoint-initdb.d:ro
 
-  postgres:
-    image: postgres:15
-    container_name: postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: notifications
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secret
-      TZ: Africa/Harare
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
 
   config-server:
     build: ./config-server
@@ -101,11 +88,11 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       SERVER_PORT: 8085
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888/
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888/
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     depends_on:
-      - postgres
+      - mysql
       - eureka-server
       - config-server
     ports:
@@ -129,5 +116,3 @@ services:
 
 volumes:
   mysql_data:
-  postgres_data:
-    driver: local

@@ -2,6 +2,7 @@ package com.safalifter.transformerservice.service;
 
 import com.safalifter.transformerservice.payload.request.SensorReadingRequest;
 import com.safalifter.transformerservice.payload.response.SensorReadingResponse;
+import com.safalifter.transformerservice.entities.SensorReading;
 
 import java.util.List;
 import com.safalifter.transformerservice.payload.response.SensorValueResponse;
@@ -16,4 +17,5 @@ public interface SensorReadingService {
     List<SensorReadingDetailResponse> listDetailedParsedBySensorId(Long sensorId);
     SensorReadingResponse update(Long id, SensorReadingRequest request);
     void delete(Long id);
+    void processTriggers(SensorReading reading);
 }

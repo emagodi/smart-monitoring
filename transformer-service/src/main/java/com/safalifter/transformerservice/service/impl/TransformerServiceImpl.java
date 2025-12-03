@@ -5,7 +5,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import com.safalifter.transformerservice.entities.Sensor;
 import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.payload.request.TransformerRequest;
 import com.safalifter.transformerservice.payload.response.SensorResponse;

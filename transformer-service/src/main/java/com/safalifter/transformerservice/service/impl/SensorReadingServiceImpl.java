@@ -16,6 +16,10 @@ import com.safalifter.transformerservice.payload.response.SensorReadingDetailRes
 import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.SensorReadingService;
+import com.safalifter.transformerservice.service.AlertService;
+import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.clients.NotificationClient;
+import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -27,6 +31,8 @@ public class SensorReadingServiceImpl implements SensorReadingService {
 
     private final SensorReadingRepository sensorReadingRepository;
     private final SensorRepository sensorRepository;
+    private final AlertService alertService;
+    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -38,6 +44,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                 .decoded(request.getDecoded())
                 .build();
         SensorReading saved = sensorReadingRepository.save(reading);
+        processTriggers(saved);
         return toResponse(saved);
     }
 
@@ -87,6 +94,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
         reading.setRawPayload(request.getRawPayload());
         reading.setDecoded(request.getDecoded());
         SensorReading saved = sensorReadingRepository.save(reading);
+        processTriggers(saved);
         return toResponse(saved);
     }
 
@@ -146,6 +154,16 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                 }
             }
         } catch (Exception ignored) {}
+        try {
+            if (reading.getDecoded() != null && !reading.getDecoded().isBlank()) {
+                Map<String,Object> m = objectMapper.readValue(reading.getDecoded(), new TypeReference<Map<String,Object>>(){});
+                Object data = m.get("data");
+                if (data instanceof Map<?,?> ddm) {
+                    Object v = ddm.get(key);
+                    if (v != null) return normalizeContact(key, v);
+                }
+            }
+        } catch (Exception ignored) {}
         return null;
     }
 
@@ -162,6 +180,43 @@ public class SensorReadingServiceImpl implements SensorReadingService {
         String t = type.toLowerCase();
         if (t.contains("temp")) return "temperature";
         if (t.contains("contact")) return "contact";
+        if (t.contains("suspicious")) return "suspicious_till";
         return t;
+    }
+
+    public void processTriggers(SensorReading reading) {
+        Sensor sensor = sensorRepository.findById(reading.getSensorId()).orElse(null);
+        if (sensor == null) return;
+        String type = canonicalType(sensor.getType());
+        Object val = extractValue(reading, type);
+        if (val == null) return;
+        boolean trigger = false;
+        String message;
+        if ("contact".equals(type)) {
+            String v = String.valueOf(normalizeContact(type, val));
+            trigger = "open".equalsIgnoreCase(v);
+            message = sensor.getName() + " contact " + v;
+        } else if ("temperature".equals(type)) {
+            double d;
+            try { d = Double.parseDouble(String.valueOf(val)); } catch (Exception e) { d = Double.NaN; }
+            trigger = !Double.isNaN(d) && d >= 20.0;
+            message = sensor.getName() + " temperature " + String.valueOf(val);
+        } else if ("suspicious_till".equals(type)) {
+            String v = String.valueOf(val);
+            boolean b = "true".equalsIgnoreCase(v) || "1".equals(v);
+            trigger = b;
+            message = sensor.getName() + " suspicious_till " + v;
+        } else {
+            return;
+        }
+        if (trigger) {
+            AlertRequest ar = AlertRequest.builder()
+                    .sensorId(sensor.getId())
+                    .value(String.valueOf(val))
+                    .isAlert(true)
+                    .message(message)
+                    .build();
+            try { alertService.create(ar); } catch (Exception ignored) {}
+        }
     }
 }
