@@ -24,4 +24,26 @@ public class Alert extends BaseEntity {
     private boolean isAlert;
     @Column
     private String message;
+    @Column(name = "transformer_id")
+    private Long transformerId;
+    @Column(name = "transformer_name")
+    private String transformerName;
+    @Column(name = "transformer_capacity")
+    private Integer transformerCapacity;
+    @Column(name = "depot_id")
+    private Long depotId;
+    @Column(name = "depot_name")
+    private String depotName;
+    @Column(name = "lat", precision = 20, scale = 12)
+    private java.math.BigDecimal lat;
+    @Column(name = "lng", precision = 21, scale = 12)
+    private java.math.BigDecimal lng;
+    @Column(name = "dev_eui")
+    private String devEui;
+    @Column(name = "device_id")
+    private String deviceId;
+    @Column(name = "device_name")
+    private String deviceName;
+    @Column(name = "sensor_type")
+    private String sensorType;
 }

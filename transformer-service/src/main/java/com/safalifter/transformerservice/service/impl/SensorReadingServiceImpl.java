@@ -9,12 +9,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import com.safalifter.transformerservice.entities.SensorReading;
 import com.safalifter.transformerservice.entities.Sensor;
+import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.payload.request.SensorReadingRequest;
 import com.safalifter.transformerservice.payload.response.SensorReadingResponse;
 import com.safalifter.transformerservice.payload.response.SensorValueResponse;
 import com.safalifter.transformerservice.payload.response.SensorReadingDetailResponse;
 import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
+import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.SensorReadingService;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
@@ -32,6 +34,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
     private final SensorReadingRepository sensorReadingRepository;
     private final SensorRepository sensorRepository;
     private final AlertService alertService;
+    private final TransformerRepository transformerRepository;
     private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -210,11 +213,28 @@ public class SensorReadingServiceImpl implements SensorReadingService {
             return;
         }
         if (trigger) {
+            Transformer tf = null;
+            try {
+                if (sensor.getTransformerId() != null) {
+                    tf = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
+                }
+            } catch (Exception ignored) {}
             AlertRequest ar = AlertRequest.builder()
                     .sensorId(sensor.getId())
                     .value(String.valueOf(val))
                     .isAlert(true)
                     .message(message)
+                    .transformerId(sensor.getTransformerId())
+                    .transformerName(tf != null ? tf.getName() : null)
+                    .transformerCapacity(tf != null ? tf.getCapacity() : null)
+                    .depotId(tf != null ? tf.getDepotId() : null)
+                    .depotName(tf != null ? tf.getDepotName() : null)
+                    .lat(tf != null ? tf.getLat() : null)
+                    .lng(tf != null ? tf.getLng() : null)
+                    .devEui(sensor.getDevEui())
+                    .deviceId(sensor.getDeviceId())
+                    .deviceName(sensor.getName())
+                    .sensorType(sensor.getType())
                     .build();
             try { alertService.create(ar); } catch (Exception ignored) {}
         }

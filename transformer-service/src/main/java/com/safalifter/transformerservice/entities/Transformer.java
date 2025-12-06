@@ -25,6 +25,8 @@ public class Transformer extends BaseEntity {
     private boolean isActive;
     @Column(name = "depot_id", nullable = false)
     private Long depotId;
+    @Column(name = "depot_name")
+    private String depotName;
     @Column(precision = 20, scale = 12)
     private BigDecimal lat;
     @Column(precision = 21, scale = 12)
