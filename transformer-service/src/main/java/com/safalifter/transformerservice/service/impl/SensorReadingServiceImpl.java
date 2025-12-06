@@ -9,13 +9,19 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import com.safalifter.transformerservice.entities.SensorReading;
 import com.safalifter.transformerservice.entities.Sensor;
+import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.payload.request.SensorReadingRequest;
 import com.safalifter.transformerservice.payload.response.SensorReadingResponse;
 import com.safalifter.transformerservice.payload.response.SensorValueResponse;
 import com.safalifter.transformerservice.payload.response.SensorReadingDetailResponse;
 import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
+import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.SensorReadingService;
+import com.safalifter.transformerservice.service.AlertService;
+import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.clients.NotificationClient;
+import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -27,6 +33,9 @@ public class SensorReadingServiceImpl implements SensorReadingService {
 
     private final SensorReadingRepository sensorReadingRepository;
     private final SensorRepository sensorRepository;
+    private final AlertService alertService;
+    private final TransformerRepository transformerRepository;
+    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -38,6 +47,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                 .decoded(request.getDecoded())
                 .build();
         SensorReading saved = sensorReadingRepository.save(reading);
+        processTriggers(saved);
         return toResponse(saved);
     }
 
@@ -87,6 +97,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
         reading.setRawPayload(request.getRawPayload());
         reading.setDecoded(request.getDecoded());
         SensorReading saved = sensorReadingRepository.save(reading);
+        processTriggers(saved);
         return toResponse(saved);
     }
 
@@ -146,6 +157,16 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                 }
             }
         } catch (Exception ignored) {}
+        try {
+            if (reading.getDecoded() != null && !reading.getDecoded().isBlank()) {
+                Map<String,Object> m = objectMapper.readValue(reading.getDecoded(), new TypeReference<Map<String,Object>>(){});
+                Object data = m.get("data");
+                if (data instanceof Map<?,?> ddm) {
+                    Object v = ddm.get(key);
+                    if (v != null) return normalizeContact(key, v);
+                }
+            }
+        } catch (Exception ignored) {}
         return null;
     }
 
@@ -162,6 +183,60 @@ public class SensorReadingServiceImpl implements SensorReadingService {
         String t = type.toLowerCase();
         if (t.contains("temp")) return "temperature";
         if (t.contains("contact")) return "contact";
+        if (t.contains("suspicious")) return "suspicious_till";
         return t;
+    }
+
+    public void processTriggers(SensorReading reading) {
+        Sensor sensor = sensorRepository.findById(reading.getSensorId()).orElse(null);
+        if (sensor == null) return;
+        String type = canonicalType(sensor.getType());
+        Object val = extractValue(reading, type);
+        if (val == null) return;
+        boolean trigger = false;
+        String message;
+        if ("contact".equals(type)) {
+            String v = String.valueOf(normalizeContact(type, val));
+            trigger = "open".equalsIgnoreCase(v);
+            message = sensor.getName() + " contact " + v;
+        } else if ("temperature".equals(type)) {
+            double d;
+            try { d = Double.parseDouble(String.valueOf(val)); } catch (Exception e) { d = Double.NaN; }
+            trigger = !Double.isNaN(d) && d >= 20.0;
+            message = sensor.getName() + " temperature " + String.valueOf(val);
+        } else if ("suspicious_till".equals(type)) {
+            String v = String.valueOf(val);
+            boolean b = "true".equalsIgnoreCase(v) || "1".equals(v);
+            trigger = b;
+            message = sensor.getName() + " suspicious_till " + v;
+        } else {
+            return;
+        }
+        if (trigger) {
+            Transformer tf = null;
+            try {
+                if (sensor.getTransformerId() != null) {
+                    tf = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
+                }
+            } catch (Exception ignored) {}
+            AlertRequest ar = AlertRequest.builder()
+                    .sensorId(sensor.getId())
+                    .value(String.valueOf(val))
+                    .isAlert(true)
+                    .message(message)
+                    .transformerId(sensor.getTransformerId())
+                    .transformerName(tf != null ? tf.getName() : null)
+                    .transformerCapacity(tf != null ? tf.getCapacity() : null)
+                    .depotId(tf != null ? tf.getDepotId() : null)
+                    .depotName(tf != null ? tf.getDepotName() : null)
+                    .lat(tf != null ? tf.getLat() : null)
+                    .lng(tf != null ? tf.getLng() : null)
+                    .devEui(sensor.getDevEui())
+                    .deviceId(sensor.getDeviceId())
+                    .deviceName(sensor.getName())
+                    .sensorType(sensor.getType())
+                    .build();
+            try { alertService.create(ar); } catch (Exception ignored) {}
+        }
     }
 }

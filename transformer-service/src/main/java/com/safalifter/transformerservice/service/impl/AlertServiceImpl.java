@@ -30,6 +30,17 @@ public class AlertServiceImpl implements AlertService {
                 .value(request.getValue())
                 .isAlert(Boolean.TRUE.equals(request.getIsAlert()))
                 .message(request.getMessage())
+                .transformerId(request.getTransformerId())
+                .transformerName(request.getTransformerName())
+                .transformerCapacity(request.getTransformerCapacity())
+                .depotId(request.getDepotId())
+                .depotName(request.getDepotName())
+                .lat(request.getLat())
+                .lng(request.getLng())
+                .devEui(request.getDevEui())
+                .deviceId(request.getDeviceId())
+                .deviceName(request.getDeviceName())
+                .sensorType(request.getSensorType())
                 .build();
         Alert saved = alertRepository.save(alert);
         return toResponse(saved);
@@ -59,6 +70,17 @@ public class AlertServiceImpl implements AlertService {
         alert.setValue(request.getValue());
         alert.setAlert(Boolean.TRUE.equals(request.getIsAlert()));
         alert.setMessage(request.getMessage());
+        alert.setTransformerId(request.getTransformerId());
+        alert.setTransformerName(request.getTransformerName());
+        alert.setTransformerCapacity(request.getTransformerCapacity());
+        alert.setDepotId(request.getDepotId());
+        alert.setDepotName(request.getDepotName());
+        alert.setLat(request.getLat());
+        alert.setLng(request.getLng());
+        alert.setDevEui(request.getDevEui());
+        alert.setDeviceId(request.getDeviceId());
+        alert.setDeviceName(request.getDeviceName());
+        alert.setSensorType(request.getSensorType());
         Alert saved = alertRepository.save(alert);
         return toResponse(saved);
     }
@@ -76,6 +98,17 @@ public class AlertServiceImpl implements AlertService {
                 .value(alert.getValue())
                 .isAlert(alert.isAlert())
                 .message(alert.getMessage())
+                .transformerId(alert.getTransformerId())
+                .transformerName(alert.getTransformerName())
+                .transformerCapacity(alert.getTransformerCapacity())
+                .depotId(alert.getDepotId())
+                .depotName(alert.getDepotName())
+                .lat(alert.getLat())
+                .lng(alert.getLng())
+                .devEui(alert.getDevEui())
+                .deviceId(alert.getDeviceId())
+                .deviceName(alert.getDeviceName())
+                .sensorType(alert.getSensorType())
                 .build();
     }
 }

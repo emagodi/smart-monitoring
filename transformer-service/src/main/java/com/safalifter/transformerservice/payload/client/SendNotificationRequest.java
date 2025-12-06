@@ -1,4 +1,4 @@
-package com.safalifter.notificationservice.request;
+package com.safalifter.transformerservice.payload.client;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -9,7 +9,4 @@ public class SendNotificationRequest {
     private String userId;
     private String offerId;
     private String message;
-    private String phone;
-    private String email;
-    private String subject;
 }

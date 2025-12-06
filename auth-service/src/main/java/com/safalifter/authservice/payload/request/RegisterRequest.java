@@ -35,10 +35,16 @@ public class RegisterRequest {
     
     private String region;
 
+    private Long regionId;
+
     
     private String district;
 
+    private Long districtId;
+
     
     private String depot;
+
+    private Long depotId;
 
 }

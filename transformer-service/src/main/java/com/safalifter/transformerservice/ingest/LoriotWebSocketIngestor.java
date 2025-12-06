@@ -5,6 +5,7 @@ import com.safalifter.transformerservice.entities.Sensor;
 import com.safalifter.transformerservice.entities.SensorReading;
 import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
+import com.safalifter.transformerservice.service.SensorReadingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +37,7 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
 
     private final SensorRepository sensorRepository;
     private final SensorReadingRepository sensorReadingRepository;
+    private final SensorReadingService sensorReadingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Value("${loriot.ws.log:false}")
     private boolean logWs;
@@ -155,6 +157,7 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
                     saved = sensorReadingRepository.save(reading);
                     log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
                 }
+                try { sensorReadingService.processTriggers(saved); } catch (Exception ignored) {}
                 if (logWs) log.info("DECODE {}", saved.getDecoded());
             } catch (Exception e) {
                 log.error("Failed to persist sensor reading for {}", sensorKey, e);
@@ -190,7 +193,26 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
                 Map<String,Object> decoded = decodeVendor(buf, msg);
                 decoded.put("deveui", extractString(msg, "EUI", "devEui", "deveui", "DevEUI", "eui", "id"));
                 decoded.put("port", extractInt(msg, "port", "fPort"));
-                decoded.put("data", payload);
+                java.util.HashMap<String,Object> data = new java.util.HashMap<>();
+                Object recs = decoded.get("records");
+                if (recs instanceof java.util.List<?> list) {
+                    for (Object o : list) {
+                        if (!(o instanceof java.util.Map<?,?> r)) continue;
+                        Object name = r.get("name");
+                        if (!(name instanceof String)) continue;
+                        String n = ((String) name).toLowerCase();
+                        Object v = r.get("value");
+                        if (v == null) v = r.get("value_le");
+                        if (v == null) v = r.get("value_be");
+                        if (v == null) continue;
+                        if (n.contains("temperature") && !data.containsKey("temperature")) data.put("temperature", v);
+                        if (n.equals("digital_in") && !data.containsKey("contact")) data.put("contact", v);
+                    }
+                }
+                Object susp = msg.get("suspicious_till");
+                if (susp == null) susp = msg.get("suspiciousTill");
+                if (susp != null) data.put("suspicious_till", susp);
+                decoded.put("data", data);
                 return objectMapper.writeValueAsString(decoded);
             } catch (Exception e) {
                 return "{}";

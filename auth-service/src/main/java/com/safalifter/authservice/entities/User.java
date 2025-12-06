@@ -50,6 +50,15 @@ public class User implements UserDetails { // make our app User a spring securit
 
     private String depot;
 
+    @Column(name = "region_id")
+    private Long regionId;
+
+    @Column(name = "district_id")
+    private Long districtId;
+
+    @Column(name = "depot_id")
+    private Long depotId;
+
     @OneToOne(mappedBy = "user")
     private ForgotPassword forgotPassword;
 

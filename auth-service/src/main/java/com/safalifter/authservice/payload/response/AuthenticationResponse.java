@@ -32,6 +32,15 @@ public class AuthenticationResponse {
 
     private String depot;
 
+    @JsonProperty("region_id")
+    private Long regionId;
+
+    @JsonProperty("district_id")
+    private Long districtId;
+
+    @JsonProperty("depot_id")
+    private Long depotId;
+
     private List<String> roles;
 
     private boolean temporaryPassword;
