@@ -38,7 +38,8 @@ public class SecurityConfiguration {
                                 "/api/v1/auth/refresh-token-cookie",
                                 "/v2/api-docs", "/v3/api-docs/**",
                                 "/swagger-resources/**", "/swagger-ui/**",
-                                "/webjars/**", "/swagger-ui.html"
+                                "/webjars/**", "/swagger-ui.html",
+                                "/api/v1/auth/users/role/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

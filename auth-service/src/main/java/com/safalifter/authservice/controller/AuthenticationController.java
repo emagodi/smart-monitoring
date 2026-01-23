@@ -219,10 +219,16 @@ public class AuthenticationController {
 
     @GetMapping("/users")
     @Operation(summary = "List all users")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN')")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','LOSS_CONTROL')")
     public ResponseEntity<List<User>> listAllUsers() {
         List<User> users = userRepository.findAll();
         return ResponseEntity.ok(users);
+    }
+
+    @GetMapping("/users/role/{role}/depot/{depotId}")
+    @Operation(summary = "List users by role and depot")
+    public ResponseEntity<List<User>> getUsersByRoleAndDepot(@PathVariable com.safalifter.authservice.enums.Role role, @PathVariable Long depotId) {
+        return ResponseEntity.ok(authenticationService.getUsersByRoleAndDepot(role, depotId));
     }
 
     // Extract duplicate entry message using regex

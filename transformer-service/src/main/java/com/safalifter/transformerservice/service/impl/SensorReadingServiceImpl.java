@@ -20,8 +20,6 @@ import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.SensorReadingService;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
-import com.safalifter.transformerservice.clients.NotificationClient;
-import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -35,7 +33,6 @@ public class SensorReadingServiceImpl implements SensorReadingService {
     private final SensorRepository sensorRepository;
     private final AlertService alertService;
     private final TransformerRepository transformerRepository;
-    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -219,6 +216,11 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                     tf = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
                 }
             } catch (Exception ignored) {}
+            
+            if (tf != null && !tf.isActive()) {
+                return;
+            }
+
             AlertRequest ar = AlertRequest.builder()
                     .sensorId(sensor.getId())
                     .value(String.valueOf(val))

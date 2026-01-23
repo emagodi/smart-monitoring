@@ -38,6 +38,7 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     private final SensorRepository sensorRepository;
     private final SensorReadingRepository sensorReadingRepository;
     private final SensorReadingService sensorReadingService;
+    private final com.safalifter.transformerservice.repository.TransformerRepository transformerRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Value("${loriot.ws.log:false}")
     private boolean logWs;
@@ -45,6 +46,9 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     private long defaultTransformerId;
     @Value("${loriot.default.sensor-type:}")
     private String defaultSensorType;
+
+    private WebSocket webSocket;
+    private final java.util.concurrent.ScheduledExecutorService scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
 
     @Override
     public void run(ApplicationArguments args) {
@@ -57,14 +61,36 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             return;
         }
 
+        final String targetUrl = url;
+        // Initial connection
+        connect(targetUrl);
+        
+        // Schedule reconnection check
+        scheduler.scheduleAtFixedRate(() -> {
+            if (webSocket == null || webSocket.isOutputClosed() || webSocket.isInputClosed()) {
+                log.warn("LORIOT WebSocket is closed or null. Attempting reconnection...");
+                connect(targetUrl);
+            }
+        }, 30, 30, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private void connect(String url) {
         try {
             HttpClient client = HttpClient.newHttpClient();
             client.newWebSocketBuilder()
-                    .buildAsync(URI.create(url), new Listener())
-                    .thenAccept(ws -> log.info("Connected to LORIOT WebSocket"))
-                    .exceptionally(ex -> { log.error("Failed to connect to LORIOT WebSocket", ex); return null; });
+                .buildAsync(URI.create(url), new Listener())
+                .thenAccept(ws -> {
+                    this.webSocket = ws;
+                    log.info("Connected to LORIOT WebSocket");
+                })
+                .exceptionally(ex -> {
+                    log.error("Failed to connect to LORIOT WebSocket", ex);
+                    this.webSocket = null;
+                    return null;
+                });
         } catch (Exception e) {
             log.error("Error starting LORIOT WebSocket client", e);
+            this.webSocket = null;
         }
     }
 
@@ -101,11 +127,13 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
             log.error("LORIOT WebSocket error", error);
+            LoriotWebSocketIngestor.this.webSocket = null;
         }
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             log.info("LORIOT WebSocket closed: code={} reason={}", statusCode, reason);
+            LoriotWebSocketIngestor.this.webSocket = null;
             return CompletableFuture.completedFuture(null);
         }
 
@@ -137,6 +165,14 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
                 sensorOpt = Optional.of(newSensor);
             }
             Sensor sensor = sensorOpt.get();
+
+            if (sensor.getTransformerId() != null) {
+                var transformer = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
+                if (transformer != null && !transformer.isActive()) {
+                    if (logWs) log.info("Transformer {} is inactive. Skipping reading.", transformer.getName());
+                    return;
+                }
+            }
 
             try {
                 String decoded = buildDecodedSummary(msg);

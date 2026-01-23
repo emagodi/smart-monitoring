@@ -1,6 +1,5 @@
 package com.safalifter.transformerservice.config;
 
-import io.micrometer.common.util.StringUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,7 +11,9 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.safalifter.transformerservice.client.AuthClient;
 import com.safalifter.transformerservice.enums.Role;
 
 import java.io.IOException;
@@ -23,7 +24,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final RemoteUserService remoteUserService;
+    private final AuthClient authClient;
 
     private boolean shouldSkip(HttpServletRequest request) {
         String uri = request.getRequestURI();
@@ -52,16 +53,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             jwt = jwtService.getJwtFromCookies(request);
         }
 
-        if (StringUtils.isEmpty(jwt)) {
+        if (!StringUtils.hasText(jwt)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         final String userEmail = jwtService.extractUserName(jwt);
-        if (!StringUtils.isEmpty(userEmail) && org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (StringUtils.hasText(userEmail) && org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() == null) {
             Role role;
             try {
-                role = remoteUserService.getRoleByEmail(userEmail);
+                role = authClient.getRoleByEmail(userEmail);
             } catch (Exception ex) {
                 role = Role.USER;
             }

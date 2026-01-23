@@ -16,6 +16,7 @@ public enum Role {
     TECHNICALDIRECTOR,
     COMMERCIALDIRECTOR,
     BUSINESSMANAGER,
+    LOSS_CONTROL,
     USER;
 
     public List<SimpleGrantedAuthority> getAuthorities() {

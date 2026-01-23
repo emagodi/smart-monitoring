@@ -11,20 +11,39 @@ import com.safalifter.transformerservice.payload.response.AlertResponse;
 import com.safalifter.transformerservice.repository.AlertRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.AlertService;
+import com.safalifter.transformerservice.service.SmsService;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class AlertServiceImpl implements AlertService {
 
     private final AlertRepository alertRepository;
     private final SensorRepository sensorRepository;
+    private final SmsService smsService;
+    private final com.safalifter.transformerservice.repository.TransformerRepository transformerRepository;
 
     @Override
     public AlertResponse create(AlertRequest request) {
-        sensorRepository.findById(request.getSensorId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + request.getSensorId() + " not found"));
+        var sensor = sensorRepository.findById(request.getSensorId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + request.getSensorId() + " not found"));
+        
+        Long transformerId = request.getTransformerId();
+        if (transformerId == null) {
+            transformerId = sensor.getTransformerId();
+        }
+
+        if (transformerId != null) {
+            var transformer = transformerRepository.findById(transformerId).orElse(null);
+            if (transformer != null && !transformer.isActive()) {
+                log.info("Transformer {} is inactive. Skipping alert creation.", transformer.getName());
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transformer is in maintenance mode");
+            }
+        }
+
         Alert alert = Alert.builder()
                 .sensorId(request.getSensorId())
                 .value(request.getValue())
@@ -43,6 +62,12 @@ public class AlertServiceImpl implements AlertService {
                 .sensorType(request.getSensorType())
                 .build();
         Alert saved = alertRepository.save(alert);
+        try {
+            smsService.sendAlertSms(saved);
+        } catch (Exception e) {
+            // Log but don't fail the alert creation
+            log.error("Failed to trigger SMS: {}", e.getMessage());
+        }
         return toResponse(saved);
     }
 
