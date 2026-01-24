@@ -30,8 +30,8 @@ import com.safalifter.authservice.handlers.ErrorResponse;
         ),
         servers = {
                 @Server(
-                        description = "Development",
-                        url = "http://localhost:8080"
+                        description = "Default Server",
+                        url = "/"
 
                 )
         },
