@@ -167,32 +167,21 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             Sensor sensor = sensorOpt.get();
 
             if (sensor.getTransformerId() != null) {
-                var transformer = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
-                if (transformer != null && !transformer.isActive()) {
-                    if (logWs) log.info("Transformer {} is inactive. Skipping reading.", transformer.getName());
-                    return;
-                }
+                // We check transformer status later for alerts, but we continue to ingest data for AI/History
+                // var transformer = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
             }
 
             try {
                 String decoded = buildDecodedSummary(msg);
-                java.util.Optional<SensorReading> latestOpt = sensorReadingRepository.findTopBySensorIdOrderByUpdatedAtDesc(sensor.getId());
-                SensorReading saved;
-                if (latestOpt.isPresent()) {
-                    SensorReading existing = latestOpt.get();
-                    existing.setRawPayload(rawMessage);
-                    existing.setDecoded(decoded);
-                    saved = sensorReadingRepository.save(existing);
-                    log.info("Updated SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
-                } else {
-                    SensorReading reading = SensorReading.builder()
-                            .sensorId(sensor.getId())
-                            .rawPayload(rawMessage)
-                            .decoded(decoded)
-                            .build();
-                    saved = sensorReadingRepository.save(reading);
-                    log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
-                }
+                // ALWAYS save a new reading (Historical Data)
+                SensorReading reading = SensorReading.builder()
+                        .sensorId(sensor.getId())
+                        .rawPayload(rawMessage)
+                        .decoded(decoded)
+                        .build();
+                SensorReading saved = sensorReadingRepository.save(reading);
+                log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
+
                 try { sensorReadingService.processTriggers(saved); } catch (Exception ignored) {}
                 if (logWs) log.info("DECODE {}", saved.getDecoded());
             } catch (Exception e) {

@@ -20,6 +20,9 @@ import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.SensorReadingService;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.client.VisionClient;
+import com.safalifter.transformerservice.payload.request.SensorAnalysisRequest;
+import com.safalifter.transformerservice.payload.response.VisionAnalysisResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -33,6 +36,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
     private final SensorRepository sensorRepository;
     private final AlertService alertService;
     private final TransformerRepository transformerRepository;
+    private final VisionClient visionClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -187,39 +191,52 @@ public class SensorReadingServiceImpl implements SensorReadingService {
     public void processTriggers(SensorReading reading) {
         Sensor sensor = sensorRepository.findById(reading.getSensorId()).orElse(null);
         if (sensor == null) return;
+
+        // Fetch transformer for maintenance status
+        Transformer tf = null;
+        boolean maintenanceMode = false;
+        if (sensor.getTransformerId() != null) {
+            tf = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
+            if (tf != null) {
+                maintenanceMode = !tf.isActive();
+            }
+        }
+
         String type = canonicalType(sensor.getType());
         Object val = extractValue(reading, type);
         if (val == null) return;
         boolean trigger = false;
-        String message;
-        if ("contact".equals(type)) {
-            String v = String.valueOf(normalizeContact(type, val));
-            trigger = "open".equalsIgnoreCase(v);
-            message = sensor.getName() + " contact " + v;
-        } else if ("temperature".equals(type)) {
-            double d;
-            try { d = Double.parseDouble(String.valueOf(val)); } catch (Exception e) { d = Double.NaN; }
-            trigger = !Double.isNaN(d) && d >= 20.0;
-            message = sensor.getName() + " temperature " + String.valueOf(val);
-        } else if ("suspicious_till".equals(type)) {
-            String v = String.valueOf(val);
-            boolean b = "true".equalsIgnoreCase(v) || "1".equals(v);
-            trigger = b;
-            message = sensor.getName() + " suspicious_till " + v;
-        } else {
-            return;
-        }
-        if (trigger) {
-            Transformer tf = null;
-            try {
-                if (sensor.getTransformerId() != null) {
-                    tf = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
-                }
-            } catch (Exception ignored) {}
+        String message = "";
+        
+        // AI DECISION ENGINE REPLACEMENT
+        try {
+            SensorAnalysisRequest dto = SensorAnalysisRequest.builder()
+                .sensorId(sensor.getId())
+                .sensorType(type)
+                .value(val)
+                .devEui(sensor.getDevEui())
+                .maintenanceMode(maintenanceMode)
+                .timestamp(reading.getCreatedAt() != null ? reading.getCreatedAt().toString() : java.time.LocalDateTime.now().toString())
+                .build();
+                
+            VisionAnalysisResponse result = visionClient.analyzeSensor(dto);
             
-            if (tf != null && !tf.isActive()) {
-                return;
+            if ("CRITICAL".equalsIgnoreCase(result.getDecision()) ||  
+                "WARNING".equalsIgnoreCase(result.getDecision()) || 
+                (result.getRiskScore() != null && result.getRiskScore() > 0.7)) {
+                
+                if (!"MAINTENANCE".equalsIgnoreCase(result.getDecision())) {
+                     trigger = true;
+                     message = "AI Alert: " + result.getDetails();
+                }
             }
+        } catch (Exception e) {
+             e.printStackTrace();
+        }
+
+        if (trigger) {
+            // Check maintenance again? No, AI logic handles it, but safety check:
+            if (maintenanceMode) return;
 
             AlertRequest ar = AlertRequest.builder()
                     .sensorId(sensor.getId())

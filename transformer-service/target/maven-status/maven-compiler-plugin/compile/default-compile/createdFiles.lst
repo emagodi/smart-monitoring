@@ -35,7 +35,6 @@ com\safalifter\transformerservice\controller\SensorReadingController.class
 com\safalifter\transformerservice\payload\request\SensorReadingRequest$SensorReadingRequestBuilder.class
 com\safalifter\transformerservice\payload\request\SensorReadingRequest.class
 com\safalifter\transformerservice\repository\AlertRepository.class
-com\safalifter\transformerservice\dtos\UserDto$UserDtoBuilder.class
 com\safalifter\transformerservice\service\impl\AlertServiceImpl.class
 com\safalifter\transformerservice\controller\SensorController.class
 com\safalifter\transformerservice\payload\response\SensorResponse$SensorResponseBuilder.class
@@ -49,7 +48,6 @@ com\safalifter\transformerservice\payload\response\TransformerResponse.class
 com\safalifter\transformerservice\service\impl\SensorReadingServiceImpl$1.class
 com\safalifter\transformerservice\config\SecurityConfiguration.class
 com\safalifter\transformerservice\payload\response\AlertResponse.class
-com\safalifter\transformerservice\dtos\UserDto.class
 com\safalifter\transformerservice\service\TransformerService.class
 com\safalifter\transformerservice\config\Http401UnauthorizedEntryPoint.class
 com\safalifter\transformerservice\entities\SmsNotification.class

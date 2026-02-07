@@ -1,0 +1,12 @@
+
+fastapi
+uvicorn
+pydantic
+requests
+torch
+torchvision
+numpy
+scikit-learn
+Pillow
+icrawler
+kaggle

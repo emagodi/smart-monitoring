@@ -92,6 +92,14 @@ services:
       - eureka-server
       - config-server
 
+  vision-ai-service:
+    build: ./vision-ai-service
+    container_name: vision-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Africa/Harare
     
   gateway:
     build: ./gateway

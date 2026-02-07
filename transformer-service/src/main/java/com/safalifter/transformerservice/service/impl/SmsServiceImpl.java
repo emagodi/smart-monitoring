@@ -1,7 +1,7 @@
 package com.safalifter.transformerservice.service.impl;
 
 import com.safalifter.transformerservice.client.AuthClient;
-import com.safalifter.transformerservice.dtos.UserDto;
+import com.safalifter.transformerservice.payload.response.UserResponse;
 import com.safalifter.transformerservice.entities.Alert;
 import com.safalifter.transformerservice.entities.SmsNotification;
 import com.safalifter.transformerservice.enums.Role;
@@ -45,9 +45,9 @@ public class SmsServiceImpl implements SmsService {
             // Since we need to find users by depot, and we have depotId in Alert
             if (alert.getDepotId() != null) {
                 log.info("Fetching LOSS_CONTROL users for depotId: {}", alert.getDepotId());
-                List<UserDto> users = authClient.getUsersByRoleAndDepot(Role.LOSS_CONTROL, alert.getDepotId());
+                List<UserResponse> users = authClient.getUsersByRoleAndDepot(Role.LOSS_CONTROL, alert.getDepotId());
                 if (users != null && !users.isEmpty()) {
-                    for (UserDto user : users) {
+                    for (UserResponse user : users) {
                         if (user.getPhone() != null && !user.getPhone().isEmpty()) {
                             log.info("Sending SMS to LOSS_CONTROL user: {}", user.getEmail());
                             createAndSendSms(user.getPhone(), message, alert.getId());

@@ -12,6 +12,7 @@ import com.safalifter.transformerservice.repository.AlertRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.service.SmsService;
+import com.safalifter.transformerservice.service.EmailService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -25,6 +26,7 @@ public class AlertServiceImpl implements AlertService {
     private final AlertRepository alertRepository;
     private final SensorRepository sensorRepository;
     private final SmsService smsService;
+    private final EmailService emailService;
     private final com.safalifter.transformerservice.repository.TransformerRepository transformerRepository;
 
     @Override
@@ -67,6 +69,11 @@ public class AlertServiceImpl implements AlertService {
         } catch (Exception e) {
             // Log but don't fail the alert creation
             log.error("Failed to trigger SMS: {}", e.getMessage());
+        }
+        try {
+            emailService.sendAlertEmail(saved);
+        } catch (Exception e) {
+            log.error("Failed to trigger Email: {}", e.getMessage());
         }
         return toResponse(saved);
     }

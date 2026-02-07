@@ -1,5 +1,6 @@
 package com.safalifter.transformerservice.payload.response;
 
+import com.safalifter.transformerservice.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +16,6 @@ public class UserResponse {
     private String lastname;
     private String email;
     private String phone;
-    private String role;
+    private Role role;
     private Long depotId;
 }
