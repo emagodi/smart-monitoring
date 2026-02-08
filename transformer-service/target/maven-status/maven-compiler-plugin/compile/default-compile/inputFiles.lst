@@ -19,6 +19,7 @@ C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\AppConfig.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\client\VisionClient.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SensorServiceImpl.java
+C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\TestController.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\enums\EmailStatus.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorReadingDetailResponse.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\EmailServiceImpl.java

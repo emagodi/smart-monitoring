@@ -1,10 +1,9 @@
 
 fastapi
 uvicorn
+python-multipart
 pydantic
 requests
-torch
-torchvision
 numpy
 scikit-learn
 Pillow
