@@ -24,7 +24,8 @@ const CrudScreen = ({
     itemSubtitleKey = 'id', // Key to display as subtitle
     renderCustomItem = null,
     transformDataBeforeSubmit = null, // Function to transform data before create/update
-    addButtonLabel // Label for the add button
+    addButtonLabel, // Label for the add button
+    entityName = 'Item' // Name of the entity being managed (e.g., 'Region', 'District')
 }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -32,23 +33,71 @@ const CrudScreen = ({
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({});
     const [submitting, setSubmitting] = useState(false);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [isPagination, setIsPagination] = useState(false);
+    
+    // Success Modal State
+    const [successModalVisible, setSuccessModalVisible] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
+    const [successType, setSuccessType] = useState('create'); // 'create', 'update', 'delete'
+    
+    // Delete Modal State
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState(null);
+    const [deleting, setDeleting] = useState(false);
 
-    const loadData = async () => {
-        setLoading(true);
+    const loadData = async (nextPage = 0, shouldAppend = false) => {
+        if (!shouldAppend) setLoading(true);
+        else setLoadingMore(true);
+
         try {
-            const result = await fetchData();
-            setData(result);
+            const result = await fetchData(nextPage, 10);
+            
+            let newItems = [];
+            let isPaged = false;
+            let moreAvailable = false;
+
+            if (result && result.content && Array.isArray(result.content)) {
+                // Paginated response
+                isPaged = true;
+                newItems = result.content;
+                moreAvailable = !result.last;
+            } else if (Array.isArray(result)) {
+                // Regular array response
+                newItems = result;
+                moreAvailable = false;
+            }
+
+            if (shouldAppend) {
+                setData(prev => [...prev, ...newItems]);
+            } else {
+                setData(newItems);
+            }
+
+            setIsPagination(isPaged);
+            setHasMore(moreAvailable);
+            setPage(nextPage);
+
         } catch (error) {
             console.error('Error fetching data:', error);
             Alert.alert('Error', 'Failed to load data');
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     };
 
     useEffect(() => {
-        loadData();
+        loadData(0, false);
     }, []);
+
+    const handleLoadMore = () => {
+        if (hasMore && !loadingMore && isPagination) {
+            loadData(page + 1, true);
+        }
+    };
 
     const handleOpenCreate = () => {
         setEditingItem(null);
@@ -92,13 +141,16 @@ const CrudScreen = ({
 
             if (editingItem) {
                 await updateItem(editingItem.id, dataToSubmit);
-                Alert.alert('Success', 'Item updated successfully');
+                setSuccessMessage(`${entityName} updated successfully`);
+                setSuccessType('update');
             } else {
                 await createItem(dataToSubmit);
-                Alert.alert('Success', 'Item created successfully');
+                setSuccessMessage(`${entityName} created successfully`);
+                setSuccessType('create');
             }
             setModalVisible(false);
-            loadData();
+            setSuccessModalVisible(true); // Show success modal
+            loadData(0, false); // Reload from scratch
         } catch (error) {
             console.error('Error saving item:', error);
             Alert.alert('Error', 'Failed to save item');
@@ -108,26 +160,28 @@ const CrudScreen = ({
     };
 
     const handleDelete = (item) => {
-        Alert.alert(
-            'Confirm Delete',
-            `Are you sure you want to delete this item?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await deleteItem(item.id);
-                            loadData();
-                        } catch (error) {
-                            console.error('Error deleting item:', error);
-                            Alert.alert('Error', 'Failed to delete item');
-                        }
-                    }
-                }
-            ]
-        );
+        setItemToDelete(item);
+        setDeleteModalVisible(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!itemToDelete) return;
+        
+        setDeleting(true);
+        try {
+            await deleteItem(itemToDelete.id);
+            setDeleteModalVisible(false);
+            setSuccessMessage(`${entityName} deleted successfully`);
+            setSuccessType('delete');
+            setSuccessModalVisible(true);
+            loadData(0, false);
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            Alert.alert('Error', 'Failed to delete item');
+        } finally {
+            setDeleting(false);
+            setItemToDelete(null);
+        }
     };
 
     const renderItem = ({ item }) => {
@@ -139,7 +193,6 @@ const CrudScreen = ({
             <View style={styles.card}>
                 <View style={styles.cardContent}>
                     <Text style={styles.cardTitle}>{item[itemTitleKey]}</Text>
-                    <Text style={styles.cardSubtitle}>ID: {item[itemSubtitleKey]}</Text>
                     {/* Render other fields as details */}
                     {fields.map(field => {
                         if (field.name !== itemTitleKey && field.name !== 'id' && !field.hiddenInList) {
@@ -189,12 +242,22 @@ const CrudScreen = ({
                         keyExtractor={item => String(item.id)}
                         contentContainerStyle={styles.listContent}
                         refreshing={loading}
-                        onRefresh={loadData}
+                        onRefresh={() => loadData(0, false)}
                         ListEmptyComponent={
                             <View style={styles.centered}>
                                 <Text style={styles.emptyText}>No items found</Text>
                             </View>
                         }
+                        ListFooterComponent={() => (
+                            <View style={styles.footer}>
+                                {loadingMore && <ActivityIndicator size="small" color="#0067A5" />}
+                                {hasMore && !loadingMore && isPagination && (
+                                    <TouchableOpacity onPress={handleLoadMore} style={styles.loadMoreButton}>
+                                        <Text style={styles.loadMoreText}>Load More</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
                     />
                 )}
             </View>
@@ -208,11 +271,8 @@ const CrudScreen = ({
                 <View style={styles.modalContainer}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                {editingItem ? 'Edit Item' : 'New Item'}
-                            </Text>
-                            <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                <Ionicons name="close" size={24} color="#333" />
+                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                                <Ionicons name="close" size={24} color="#EF6C00" />
                             </TouchableOpacity>
                         </View>
 
@@ -237,11 +297,96 @@ const CrudScreen = ({
                             {submitting ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
-                                <Text style={styles.submitButtonText}>
-                                    {editingItem ? 'Update' : 'Create'}
-                                </Text>
+                                <>
+                                    <Ionicons name={editingItem ? "save-outline" : "add-circle-outline"} size={24} color="#fff" />
+                                    <Text style={styles.submitButtonText}>
+                                        {editingItem ? 'Update' : 'Create'}
+                                    </Text>
+                                </>
                             )}
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Success Modal */}
+            <Modal
+                visible={successModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setSuccessModalVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.successModalContent}>
+                        <View style={[
+                            styles.successIconContainer, 
+                            successType === 'update' && { backgroundColor: '#E1F5FE' },
+                            successType === 'delete' && { backgroundColor: '#FFEBEE' }
+                        ]}>
+                            <Ionicons 
+                                name={successType === 'delete' ? "trash-outline" : "checkmark-circle"} 
+                                size={64} 
+                                color={
+                                    successType === 'update' ? '#0288D1' : 
+                                    (successType === 'delete' ? '#D32F2F' : '#4CAF50')
+                                } 
+                            />
+                        </View>
+                        <Text style={styles.successTitle}>
+                            {successType === 'update' ? 'Updated!' : (successType === 'delete' ? 'Deleted!' : 'Success!')}
+                        </Text>
+                        <Text style={styles.successMessage}>{successMessage}</Text>
+                        <TouchableOpacity
+                            style={[
+                                styles.successButton,
+                                successType === 'update' && { backgroundColor: '#0288D1' },
+                                successType === 'delete' && { backgroundColor: '#D32F2F' }
+                            ]}
+                            onPress={() => setSuccessModalVisible(false)}
+                        >
+                            <Text style={styles.successButtonText}>
+                                {successType === 'delete' ? 'Close' : 'Great!'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                visible={deleteModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setDeleteModalVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.deleteModalContent}>
+                        <View style={styles.deleteIconContainer}>
+                            <Ionicons name="trash-outline" size={48} color="#D32F2F" />
+                        </View>
+                        <Text style={styles.deleteTitle}>Delete Item?</Text>
+                        <Text style={styles.deleteMessage}>
+                            Are you sure you want to delete this item? This action cannot be undone.
+                        </Text>
+                        <View style={styles.deleteActions}>
+                            <TouchableOpacity
+                                style={styles.cancelDeleteButton}
+                                onPress={() => setDeleteModalVisible(false)}
+                            >
+                                <Text style={styles.cancelDeleteText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.confirmDeleteButton}
+                                onPress={confirmDelete}
+                                disabled={deleting}
+                            >
+                                {deleting ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.confirmDeleteText}>Delete</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -356,60 +501,216 @@ const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
         justifyContent: 'center',
+        alignItems: 'center',
         backgroundColor: 'rgba(0,0,0,0.5)',
         padding: 20,
     },
     modalContent: {
+        width: '100%',
         backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        marginBottom: 24,
+        backgroundColor: '#FFF3E0', // Light Orange
+        padding: 16,
+        marginTop: -24,
+        marginHorizontal: -24,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+    },
+    closeButton: {
+        backgroundColor: 'rgba(239, 108, 0, 0.1)', // Subtle orange tint
+        padding: 8,
+        borderRadius: 20,
+    },
+    modalTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#1a1a1a',
+        letterSpacing: 0.5,
+    },
+    inputContainer: {
+        marginBottom: 20,
+    },
+    label: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#444',
+        marginBottom: 8,
+    },
+    input: {
+        borderWidth: 1.5,
+        borderColor: '#e1e1e1',
         borderRadius: 12,
-        padding: 20,
+        padding: 14,
+        fontSize: 16,
+        backgroundColor: '#fff',
+        color: '#333',
+    },
+    submitButton: {
+        backgroundColor: '#0067A5',
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 12,
+        flexDirection: 'row',
+        elevation: 4,
+        shadowColor: '#0067A5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+    },
+    disabledButton: {
+        opacity: 0.7,
+        backgroundColor: '#88aacc',
+    },
+    submitButtonText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '600',
+        marginLeft: 10,
+        letterSpacing: 0.5,
+    },
+    footer: {
+        paddingVertical: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadMoreButton: {
+        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#0067A5',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    loadMoreText: {
+        color: '#0067A5',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    // Success Modal Styles
+    successModalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        alignItems: 'center',
+        width: '80%',
+        maxWidth: 340,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
-        elevation: 5,
+        elevation: 10,
     },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    inputContainer: {
+    successIconContainer: {
         marginBottom: 16,
+        backgroundColor: '#E8F5E9',
+        padding: 16,
+        borderRadius: 50,
     },
-    label: {
-        fontSize: 14,
-        color: '#666',
+    successTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#1a1a1a',
         marginBottom: 8,
     },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 12,
+    successMessage: {
         fontSize: 16,
-        backgroundColor: '#f9f9f9',
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 24,
     },
-    submitButton: {
-        backgroundColor: '#0067A5',
-        padding: 16,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 10,
+    successButton: {
+        backgroundColor: '#4CAF50',
+        paddingVertical: 12,
+        paddingHorizontal: 32,
+        borderRadius: 25,
+        elevation: 2,
     },
-    disabledButton: {
-        opacity: 0.7,
-    },
-    submitButtonText: {
+    successButtonText: {
         color: '#fff',
         fontSize: 16,
+        fontWeight: '600',
+    },
+    // Delete Modal Styles
+    deleteModalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        alignItems: 'center',
+        width: '80%',
+        maxWidth: 340,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 10,
+    },
+    deleteIconContainer: {
+        marginBottom: 16,
+        backgroundColor: '#FFEBEE',
+        padding: 16,
+        borderRadius: 50,
+    },
+    deleteTitle: {
+        fontSize: 22,
         fontWeight: 'bold',
+        color: '#D32F2F',
+        marginBottom: 8,
+    },
+    deleteMessage: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    deleteActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+    },
+    cancelDeleteButton: {
+        flex: 1,
+        paddingVertical: 12,
+        marginRight: 8,
+        borderRadius: 12,
+        backgroundColor: '#f5f5f5',
+        alignItems: 'center',
+    },
+    cancelDeleteText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#666',
+    },
+    confirmDeleteButton: {
+        flex: 1,
+        paddingVertical: 12,
+        marginLeft: 8,
+        borderRadius: 12,
+        backgroundColor: '#D32F2F',
+        alignItems: 'center',
+    },
+    confirmDeleteText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#fff',
     },
 });
 

@@ -15,6 +15,8 @@ import com.safalifter.authservice.repository.DepotRepository;
 import com.safalifter.authservice.service.RegionService;
 
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @Transactional
@@ -40,8 +42,8 @@ public class RegionServiceImpl implements RegionService {
     }
 
     @Override
-    public List<RegionResponse> getAll() {
-        return regionRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<RegionResponse> getAll(Pageable pageable) {
+        return regionRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override

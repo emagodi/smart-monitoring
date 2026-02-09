@@ -17,6 +17,7 @@ const RegionListScreen = () => {
             deleteItem={infrastructureService.deleteRegion}
             fields={fields}
             itemTitleKey="name"
+            entityName="Region"
         />
     );
 };

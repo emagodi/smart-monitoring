@@ -1,8 +1,8 @@
 import api from './api';
 
 // Region Services
-const getAllRegions = async () => {
-    const response = await api.get('/api/v1/regions');
+const getAllRegions = async (page = 0, size = 10) => {
+    const response = await api.get(`/api/v1/regions?page=${page}&size=${size}`);
     return response.data;
 };
 

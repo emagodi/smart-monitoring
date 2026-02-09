@@ -29,6 +29,7 @@ const TransformerCrudScreen = () => {
             fields={fields}
             itemTitleKey="name"
             transformDataBeforeSubmit={transformDataBeforeSubmit}
+            entityName="Transformer"
         />
     );
 };

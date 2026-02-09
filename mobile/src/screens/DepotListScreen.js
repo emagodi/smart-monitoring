@@ -26,6 +26,7 @@ const DepotListScreen = () => {
             fields={fields}
             itemTitleKey="name"
             transformDataBeforeSubmit={transformDataBeforeSubmit}
+            entityName="Depot"
         />
     );
 };

@@ -34,6 +34,7 @@ const DistrictListScreen = () => {
             fields={fields}
             itemTitleKey="name"
             transformDataBeforeSubmit={transformDataBeforeSubmit}
+            entityName="District"
         />
     );
 };

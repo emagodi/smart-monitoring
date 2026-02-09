@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import com.safalifter.authservice.payload.request.RegionRequest;
 import com.safalifter.authservice.payload.response.RegionResponse;
 import com.safalifter.authservice.service.RegionService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -44,9 +46,9 @@ public class RegionController {
     @GetMapping
     @Operation(summary = "List regions")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
-    public ResponseEntity<List<RegionResponse>> getAll() {
+    public ResponseEntity<Page<RegionResponse>> getAll(Pageable pageable) {
         log.info("List regions");
-        return ResponseEntity.ok(regionService.getAll());
+        return ResponseEntity.ok(regionService.getAll(pageable));
     }
 
     @PutMapping("/{id}")
