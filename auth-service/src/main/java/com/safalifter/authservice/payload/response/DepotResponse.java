@@ -13,4 +13,5 @@ public class DepotResponse {
     private Long id;
     private String name;
     private Long districtId;
+    private String districtName;
 }

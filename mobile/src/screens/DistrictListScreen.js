@@ -13,7 +13,17 @@ const DistrictListScreen = () => {
     
     const fields = [
         { name: 'name', label: 'District Name', placeholder: 'Enter district name', required: true },
-        { name: 'regionId', label: 'Region ID', placeholder: 'Enter Region ID', required: true, keyboardType: 'numeric' }
+        { 
+            name: 'regionId', 
+            label: 'Region', 
+            placeholder: 'Select Region', 
+            required: true, 
+            type: 'selector',
+            fetchOptions: infrastructureService.getAllRegions,
+            displayKey: 'name',
+            valueKey: 'id',
+            labelKey: 'regionName'
+        }
     ];
 
     const transformDataBeforeSubmit = (data, editingItem) => {

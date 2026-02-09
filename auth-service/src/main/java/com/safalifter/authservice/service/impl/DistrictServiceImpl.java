@@ -16,6 +16,8 @@ import com.safalifter.authservice.repository.RegionRepository;
 import com.safalifter.authservice.service.DistrictService;
 
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @Transactional
@@ -42,8 +44,11 @@ public class DistrictServiceImpl implements DistrictService {
     }
 
     @Override
-    public List<DistrictResponse> getAll() {
-        return districtRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<DistrictResponse> getAll(String search, Pageable pageable) {
+        if (search != null && !search.trim().isEmpty()) {
+            return districtRepository.findByNameContainingIgnoreCase(search, pageable).map(this::toResponse);
+        }
+        return districtRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override
@@ -77,6 +82,7 @@ public class DistrictServiceImpl implements DistrictService {
                 .id(district.getId())
                 .name(district.getName())
                 .regionId(district.getRegion() != null ? district.getRegion().getId() : null)
+                .regionName(district.getRegion() != null ? district.getRegion().getName() : null)
                 .depots(depots)
                 .build();
     }

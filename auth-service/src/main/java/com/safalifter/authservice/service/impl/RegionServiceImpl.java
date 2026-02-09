@@ -42,7 +42,10 @@ public class RegionServiceImpl implements RegionService {
     }
 
     @Override
-    public Page<RegionResponse> getAll(Pageable pageable) {
+    public Page<RegionResponse> getAll(String search, Pageable pageable) {
+        if (search != null && !search.trim().isEmpty()) {
+            return regionRepository.findByNameContainingIgnoreCase(search, pageable).map(this::toResponse);
+        }
         return regionRepository.findAll(pageable).map(this::toResponse);
     }
 

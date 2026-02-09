@@ -5,7 +5,17 @@ import infrastructureService from '../services/infrastructure';
 const DepotListScreen = () => {
     const fields = [
         { name: 'name', label: 'Depot Name', placeholder: 'Enter depot name', required: true },
-        { name: 'districtId', label: 'District ID', placeholder: 'Enter District ID', required: true, keyboardType: 'numeric' }
+        { 
+            name: 'districtId', 
+            label: 'District', 
+            placeholder: 'Select District', 
+            required: true, 
+            type: 'selector',
+            fetchOptions: infrastructureService.getAllDistricts,
+            displayKey: 'name',
+            valueKey: 'id',
+            labelKey: 'districtName'
+        }
     ];
 
     const transformDataBeforeSubmit = (data, editingItem) => {

@@ -1,7 +1,9 @@
 import api from './api';
 
-const getAllTransformers = async () => {
-    const response = await api.get('/api/v1/transformers');
+const getAllTransformers = async (page = 0, size = 10, search = '') => {
+    let url = `/api/v1/transformers?page=${page}&size=${size}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const response = await api.get(url);
     return response.data;
 };
 

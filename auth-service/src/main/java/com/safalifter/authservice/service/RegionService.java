@@ -10,7 +10,7 @@ import java.util.List;
 public interface RegionService {
     RegionResponse create(RegionRequest request);
     RegionResponse getById(Long id);
-    Page<RegionResponse> getAll(Pageable pageable);
+    Page<RegionResponse> getAll(String search, Pageable pageable);
     RegionResponse update(Long id, RegionRequest request);
     void delete(Long id);
 }

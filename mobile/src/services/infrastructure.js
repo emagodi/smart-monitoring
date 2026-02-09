@@ -1,8 +1,10 @@
 import api from './api';
 
 // Region Services
-const getAllRegions = async (page = 0, size = 10) => {
-    const response = await api.get(`/api/v1/regions?page=${page}&size=${size}`);
+const getAllRegions = async (page = 0, size = 10, search = '') => {
+    let url = `/api/v1/regions?page=${page}&size=${size}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const response = await api.get(url);
     return response.data;
 };
 
@@ -22,8 +24,10 @@ const deleteRegion = async (id) => {
 };
 
 // District Services
-const getAllDistricts = async () => {
-    const response = await api.get('/api/v1/districts');
+const getAllDistricts = async (page = 0, size = 10, search = '') => {
+    let url = `/api/v1/districts?page=${page}&size=${size}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const response = await api.get(url);
     return response.data;
 };
 
@@ -48,8 +52,10 @@ const deleteDistrict = async (id) => {
 };
 
 // Depot Services
-const getAllDepots = async () => {
-    const response = await api.get('/api/v1/depots');
+const getAllDepots = async (page = 0, size = 10, search = '') => {
+    let url = `/api/v1/depots?page=${page}&size=${size}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const response = await api.get(url);
     return response.data;
 };
 

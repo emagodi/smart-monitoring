@@ -13,6 +13,8 @@ import com.safalifter.authservice.repository.DistrictRepository;
 import com.safalifter.authservice.service.DepotService;
 
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @Transactional
@@ -38,8 +40,11 @@ public class DepotServiceImpl implements DepotService {
     }
 
     @Override
-    public List<DepotResponse> getAll() {
-        return depotRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<DepotResponse> getAll(String search, Pageable pageable) {
+        if (search != null && !search.trim().isEmpty()) {
+            return depotRepository.findByNameContainingIgnoreCase(search, pageable).map(this::toResponse);
+        }
+        return depotRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override
@@ -69,6 +74,7 @@ public class DepotServiceImpl implements DepotService {
                 .id(depot.getId())
                 .name(depot.getName())
                 .districtId(depot.getDistrict() != null ? depot.getDistrict().getId() : null)
+                .districtName(depot.getDistrict() != null ? depot.getDistrict().getName() : null)
                 .build();
     }
 }

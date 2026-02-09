@@ -1,6 +1,7 @@
 package com.safalifter.transformerservice.client;
 
 import com.safalifter.transformerservice.payload.response.UserResponse;
+import com.safalifter.transformerservice.payload.response.DepotResponse;
 import com.safalifter.transformerservice.enums.Role;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,4 +18,7 @@ public interface AuthClient {
 
     @GetMapping("/api/v1/auth/user/email/{email}")
     Role getRoleByEmail(@PathVariable("email") String email);
+
+    @GetMapping("/api/v1/depots/{id}")
+    DepotResponse getDepotById(@PathVariable("id") Long id);
 }

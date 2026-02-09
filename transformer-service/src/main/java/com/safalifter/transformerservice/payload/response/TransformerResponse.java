@@ -18,6 +18,7 @@ public class TransformerResponse {
     private Integer capacity;
     private Boolean isActive;
     private Long depotId;
+    private String depotName;
     private BigDecimal lat;
     private BigDecimal lng;
     private List<SensorResponse> sensors;

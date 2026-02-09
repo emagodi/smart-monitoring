@@ -37,7 +37,15 @@ const CrudScreen = ({
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isPagination, setIsPagination] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     
+    // Selector Modal State
+    const [selectorVisible, setSelectorVisible] = useState(false);
+    const [currentSelectorField, setCurrentSelectorField] = useState(null);
+    const [selectorOptions, setSelectorOptions] = useState([]);
+    const [selectorSearchQuery, setSelectorSearchQuery] = useState('');
+    const [selectorLoading, setSelectorLoading] = useState(false);
+
     // Success Modal State
     const [successModalVisible, setSuccessModalVisible] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
@@ -53,7 +61,7 @@ const CrudScreen = ({
         else setLoadingMore(true);
 
         try {
-            const result = await fetchData(nextPage, 10);
+            const result = await fetchData(nextPage, 10, searchQuery);
             
             let newItems = [];
             let isPaged = false;
@@ -90,8 +98,81 @@ const CrudScreen = ({
     };
 
     useEffect(() => {
-        loadData(0, false);
-    }, []);
+        const delayDebounceFn = setTimeout(() => {
+            loadData(0, false);
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchQuery]);
+    
+    // Selector Logic
+    const handleOpenSelector = async (field) => {
+        setCurrentSelectorField(field);
+        setSelectorSearchQuery('');
+        setSelectorVisible(true);
+        setSelectorLoading(true);
+        try {
+            // Initial fetch for selector
+            if (field.fetchOptions) {
+                const result = await field.fetchOptions(0, 20, '');
+                let options = [];
+                if (result && result.content) options = result.content;
+                else if (Array.isArray(result)) options = result;
+                setSelectorOptions(options);
+            }
+        } catch (error) {
+            console.error('Error loading selector options:', error);
+            Alert.alert('Error', 'Failed to load options');
+        } finally {
+            setSelectorLoading(false);
+        }
+    };
+    
+    const handleSelectorSearchDebounced = async (text) => {
+         if (!currentSelectorField || !currentSelectorField.fetchOptions) return;
+         setSelectorLoading(true);
+         try {
+             const result = await currentSelectorField.fetchOptions(0, 20, text);
+             let options = [];
+             if (result && result.content) options = result.content;
+             else if (Array.isArray(result)) options = result;
+             setSelectorOptions(options);
+         } catch (error) {
+             console.error('Error searching options:', error);
+         } finally {
+             setSelectorLoading(false);
+         }
+    };
+
+    useEffect(() => {
+        if (selectorVisible) {
+            const delay = setTimeout(() => {
+                handleSelectorSearchDebounced(selectorSearchQuery);
+            }, 500);
+            return () => clearTimeout(delay);
+        }
+    }, [selectorSearchQuery, selectorVisible]);
+
+    const handleSelectOption = (option) => {
+        if (currentSelectorField) {
+            setFormData({
+                ...formData,
+                [currentSelectorField.name]: option[currentSelectorField.valueKey || 'id']
+            });
+            // Update label map if we want to show name instead of ID
+            // For now, we rely on the option being in the list if we re-open, 
+            // but for the main form input display, we need to handle it.
+            // We can store a separate "labels" state or just use the formData.
+            // Let's store it in a special labels object in formData? No, cleaner to use separate state.
+            setSelectorLabels(prev => ({
+                ...prev,
+                [currentSelectorField.name]: option[currentSelectorField.displayKey || 'name']
+            }));
+            setSelectorVisible(false);
+        }
+    };
+    
+    const [selectorLabels, setSelectorLabels] = useState({});
 
     const handleLoadMore = () => {
         if (hasMore && !loadingMore && isPagination) {
@@ -110,6 +191,7 @@ const CrudScreen = ({
     const handleOpenEdit = (item) => {
         setEditingItem(item);
         const initialData = {};
+        const initialLabels = {};
         fields.forEach(field => {
             // Handle nested objects if needed (e.g., region.id)
             if (field.name.includes('.')) {
@@ -118,8 +200,13 @@ const CrudScreen = ({
             } else {
                 initialData[field.name] = String(item[field.name] || '');
             }
+
+            if (field.type === 'selector' && field.labelKey) {
+                initialLabels[field.name] = item[field.labelKey] || '';
+            }
         });
         setFormData(initialData);
+        setSelectorLabels(initialLabels);
         setModalVisible(true);
     };
 
@@ -226,10 +313,20 @@ const CrudScreen = ({
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.contentContainer}>
-                <TouchableOpacity onPress={handleOpenCreate} style={styles.addRegionButton}>
-                    <Ionicons name="add-circle-outline" size={24} color="#fff" />
-                    <Text style={styles.addRegionButtonText}>{addButtonLabel || `Add ${title.slice(0, -1)}`}</Text>
-                </TouchableOpacity>
+                <View style={styles.topBar}>
+                     <View style={styles.searchContainer}>
+                        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder={`Search ${title}...`}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                     </View>
+                     <TouchableOpacity onPress={handleOpenCreate} style={styles.addButtonSmall}>
+                        <Ionicons name="add" size={24} color="#fff" />
+                    </TouchableOpacity>
+                </View>
 
                 {loading ? (
                     <View style={styles.centered}>
@@ -279,13 +376,27 @@ const CrudScreen = ({
                         {fields.map(field => (
                             <View key={field.name} style={styles.inputContainer}>
                                 <Text style={styles.label}>{field.label}</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={formData[field.name]}
-                                    onChangeText={text => setFormData({ ...formData, [field.name]: text })}
-                                    placeholder={field.placeholder}
-                                    keyboardType={field.keyboardType || 'default'}
-                                />
+                                {field.type === 'selector' ? (
+                                    <TouchableOpacity 
+                                        style={styles.selectorInput} 
+                                        onPress={() => handleOpenSelector(field)}
+                                    >
+                                        <Text style={[styles.selectorInputText, !formData[field.name] && styles.placeholderText]}>
+                                            {formData[field.name] 
+                                                ? (selectorLabels[field.name] || formData[field.name]) 
+                                                : field.placeholder}
+                                        </Text>
+                                        <Ionicons name="chevron-down" size={20} color="#666" />
+                                    </TouchableOpacity>
+                                ) : (
+                                    <TextInput
+                                        style={styles.input}
+                                        value={formData[field.name]}
+                                        onChangeText={text => setFormData({ ...formData, [field.name]: text })}
+                                        placeholder={field.placeholder}
+                                        keyboardType={field.keyboardType || 'default'}
+                                    />
+                                )}
                             </View>
                         ))}
 
@@ -305,6 +416,60 @@ const CrudScreen = ({
                                 </>
                             )}
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                visible={selectorVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setSelectorVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Select {currentSelectorField?.label}</Text>
+                            <TouchableOpacity onPress={() => setSelectorVisible(false)} style={styles.closeButton}>
+                                <Ionicons name="close" size={24} color="#EF6C00" />
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.searchContainer}>
+                            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="Search..."
+                                value={selectorSearchQuery}
+                                onChangeText={setSelectorSearchQuery}
+                            />
+                        </View>
+
+                        {selectorLoading ? (
+                            <ActivityIndicator size="large" color="#0067A5" style={{margin: 20}} />
+                        ) : (
+                            <FlatList
+                                data={selectorOptions}
+                                keyExtractor={item => String(item[currentSelectorField?.valueKey || 'id'])}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity 
+                                        style={styles.selectorItem}
+                                        onPress={() => handleSelectOption(item)}
+                                    >
+                                        <Text style={styles.selectorItemText}>
+                                            {item[currentSelectorField?.displayKey || 'name']}
+                                        </Text>
+                                        {formData[currentSelectorField?.name] === item[currentSelectorField?.valueKey || 'id'] && (
+                                            <Ionicons name="checkmark" size={20} color="#0067A5" />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                                ListEmptyComponent={
+                                    <Text style={styles.emptyText}>No options found</Text>
+                                }
+                                style={{ maxHeight: 300 }}
+                            />
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -562,14 +727,80 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderRadius: 12,
         alignItems: 'center',
+        flexDirection: 'row',
         justifyContent: 'center',
         marginTop: 12,
-        flexDirection: 'row',
         elevation: 4,
         shadowColor: '#0067A5',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 6,
+    },
+    topBar: {
+        flexDirection: 'row',
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    searchContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        marginRight: 12,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        height: 48,
+    },
+    searchIcon: {
+        marginRight: 8,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        color: '#333',
+        height: '100%',
+    },
+    addButtonSmall: {
+        width: 48,
+        height: 48,
+        backgroundColor: '#0067A5',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+    },
+    selectorInput: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        borderColor: '#e1e1e1',
+        borderRadius: 12,
+        padding: 14,
+        backgroundColor: '#fff',
+    },
+    selectorInputText: {
+        fontSize: 16,
+        color: '#333',
+    },
+    placeholderText: {
+        color: '#999',
+    },
+    selectorItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    selectorItemText: {
+        fontSize: 16,
+        color: '#333',
     },
     disabledButton: {
         opacity: 0.7,

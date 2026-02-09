@@ -1,20 +1,17 @@
-package com.safalifter.authservice.payload.response;
+package com.safalifter.transformerservice.payload.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DistrictResponse {
+public class DepotResponse {
     private Long id;
     private String name;
-    private Long regionId;
-    private String regionName;
-    private List<DepotResponse> depots;
+    private Long districtId;
+    private String districtName;
 }

@@ -1,5 +1,7 @@
 package com.safalifter.authservice.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import com.safalifter.authservice.entities.District;
 
@@ -9,4 +11,5 @@ import java.util.Optional;
 public interface DistrictRepository extends JpaRepository<District, Long> {
     List<District> findByRegionId(Long regionId);
     Optional<District> findByRegionIdAndName(Long regionId, String name);
+    Page<District> findByNameContainingIgnoreCase(String name, Pageable pageable);
 }
