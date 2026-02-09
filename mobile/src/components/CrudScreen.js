@@ -172,10 +172,6 @@ const CrudScreen = ({
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>{title}</Text>
-            </View>
-
             <View style={styles.contentContainer}>
                 <TouchableOpacity onPress={handleOpenCreate} style={styles.addRegionButton}>
                     <Ionicons name="add-circle-outline" size={24} color="#fff" />
