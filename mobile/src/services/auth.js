@@ -3,10 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 
 const login = async (email, password) => {
     try {
-        // Auth service is at /auth via gateway
-        // The endpoint is likely /auth/authenticate or /auth/login based on standard spring security
-        // Let's assume /auth/authenticate based on common patterns or check the controller
-        const response = await api.post('/auth/authenticate', { email, password });
+        // Auth service is at /api/v1/auth via gateway
+        const response = await api.post('/api/v1/auth/authenticate', { email, password });
         if (response.data.access_token) {
             await SecureStore.setItemAsync('token', response.data.access_token);
             await SecureStore.setItemAsync('user', JSON.stringify(response.data.user || {}));

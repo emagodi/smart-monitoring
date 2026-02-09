@@ -1,12 +1,12 @@
 import api from './api';
 
 const getSensorsByTransformer = async (transformerId) => {
-    const response = await api.get(`/transformer/api/v1/sensors/transformer/${transformerId}`);
+    const response = await api.get(`/api/v1/sensors/transformer/${transformerId}`);
     return response.data;
 };
 
 const getSensorById = async (id) => {
-    const response = await api.get(`/transformer/api/v1/sensors/${id}`);
+    const response = await api.get(`/api/v1/sensors/${id}`);
     return response.data;
 };
 
