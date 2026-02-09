@@ -21,8 +21,19 @@ const LoginScreen = () => {
     try {
       await signIn(email, password);
     } catch (error) {
-      console.log(error);
-      const message = error.response?.data?.message || error.message || 'Invalid credentials';
+      console.log('Login error:', error);
+      let message = 'Invalid credentials';
+      
+      if (error.code === 'ECONNABORTED') {
+        message = 'Connection timed out. Please check your network.';
+      } else if (error.message === 'Network Error') {
+        message = 'Could not connect to server. Please check your network connection.';
+      } else if (error.response?.data?.message) {
+        message = error.response.data.message;
+      } else if (error.message) {
+        message = error.message;
+      }
+      
       Alert.alert('Login Failed', message);
     } finally {
       setLoading(false);

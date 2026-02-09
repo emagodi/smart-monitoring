@@ -13,6 +13,10 @@ import TransformerDetailsScreen from '../screens/TransformerDetailsScreen';
 import AlertsScreen from '../screens/AlertsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import MapScreen from '../screens/MapScreen';
+import RegionListScreen from '../screens/RegionListScreen';
+import DistrictListScreen from '../screens/DistrictListScreen';
+import DepotListScreen from '../screens/DepotListScreen';
+import TransformerCrudScreen from '../screens/TransformerCrudScreen';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -31,7 +35,7 @@ const CustomDrawerContent = (props) => {
           <Ionicons name="log-out-outline" size={size} color={color} />
         )}
         onPress={() => signOut()}
-        labelStyle={{ marginLeft: -20, fontSize: 16 }}
+        labelStyle={{ marginLeft: 0, fontSize: 16 }}
         inactiveTintColor="#333"
       />
     </DrawerContentScrollView>
@@ -71,7 +75,7 @@ const DrawerNavigator = () => {
         drawerActiveTintColor: '#0067A5',
         drawerInactiveTintColor: '#333',
         drawerLabelStyle: {
-          marginLeft: -20,
+          marginLeft: 0,
           fontSize: 16,
         },
         drawerIcon: ({ focused, color, size }) => {
@@ -87,6 +91,14 @@ const DrawerNavigator = () => {
             iconName = focused ? 'person' : 'person-outline';
           } else if (route.name === 'Map') {
             iconName = focused ? 'map' : 'map-outline';
+          } else if (route.name === 'Regions') {
+            iconName = focused ? 'globe' : 'globe-outline';
+          } else if (route.name === 'Districts') {
+            iconName = focused ? 'business' : 'business-outline';
+          } else if (route.name === 'Depots') {
+            iconName = focused ? 'cube' : 'cube-outline';
+          } else if (route.name === 'Transformers Mgmt') {
+            iconName = focused ? 'settings' : 'settings-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -101,6 +113,10 @@ const DrawerNavigator = () => {
       <Drawer.Screen name="Alerts" component={AlertsScreen} />
       <Drawer.Screen name="Simulation" component={SimulationScreen} />
       <Drawer.Screen name="Map" component={MapScreen} />
+      <Drawer.Screen name="Regions" component={RegionListScreen} />
+      <Drawer.Screen name="Districts" component={DistrictListScreen} />
+      <Drawer.Screen name="Depots" component={DepotListScreen} />
+      <Drawer.Screen name="Transformers Mgmt" component={TransformerCrudScreen} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
     </Drawer.Navigator>
   );

@@ -10,8 +10,18 @@ const getTransformersByDepot = async (depotId) => {
     return response.data;
 };
 
+const createTransformer = async (data) => {
+    const response = await api.post('/api/v1/transformers/create', data);
+    return response.data;
+};
+
 const updateTransformer = async (id, data) => {
     const response = await api.put(`/api/v1/transformers/${id}`, data);
+    return response.data;
+};
+
+const deleteTransformer = async (id) => {
+    const response = await api.delete(`/api/v1/transformers/${id}`);
     return response.data;
 };
 
@@ -23,6 +33,8 @@ const getTransformerById = async (id) => {
 export default {
     getAllTransformers,
     getTransformersByDepot,
+    createTransformer,
     updateTransformer,
+    deleteTransformer,
     getTransformerById
 };
