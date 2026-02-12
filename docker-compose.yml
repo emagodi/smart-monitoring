@@ -55,6 +55,18 @@ services:
     depends_on:
       - config-server
 
+  mosquitto:
+    image: eclipse-mosquitto
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
   auth-service:
     build: ./auth-service
     container_name: auth-service
@@ -87,6 +99,8 @@ services:
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
       - "8083:8083"
+    volumes:
+      - "C:\\Users\\Edwin Magodi\\Desktop\\uploads:/uploads/monitor"
     depends_on:
       - mysql
       - eureka-server

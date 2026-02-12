@@ -17,6 +17,7 @@ import RegionListScreen from '../screens/RegionListScreen';
 import DistrictListScreen from '../screens/DistrictListScreen';
 import DepotListScreen from '../screens/DepotListScreen';
 import TransformerCrudScreen from '../screens/TransformerCrudScreen';
+import NewSensorsScreen from '../screens/NewSensorsScreen';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -99,6 +100,8 @@ const DrawerNavigator = () => {
             iconName = focused ? 'cube' : 'cube-outline';
           } else if (route.name === 'Transformers Mgmt') {
             iconName = focused ? 'settings' : 'settings-outline';
+          } else if (route.name === 'New Sensors') {
+            iconName = focused ? 'hardware-chip' : 'hardware-chip-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -117,6 +120,7 @@ const DrawerNavigator = () => {
       <Drawer.Screen name="Districts" component={DistrictListScreen} />
       <Drawer.Screen name="Depots" component={DepotListScreen} />
       <Drawer.Screen name="Transformers Mgmt" component={TransformerCrudScreen} />
+      <Drawer.Screen name="New Sensors" component={NewSensorsScreen} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
     </Drawer.Navigator>
   );

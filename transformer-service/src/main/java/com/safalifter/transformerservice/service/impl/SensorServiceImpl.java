@@ -66,6 +66,11 @@ public class SensorServiceImpl implements SensorService {
     }
 
     @Override
+    public List<SensorResponse> getUnassignedSensors() {
+        return sensorRepository.findUnassignedSensors().stream().map(this::toResponse).toList();
+    }
+
+    @Override
     public List<SensorResponse> listByTransformerId(Long transformerId) {
         return sensorRepository.findByTransformerId(transformerId).stream()
                 .map(s -> {

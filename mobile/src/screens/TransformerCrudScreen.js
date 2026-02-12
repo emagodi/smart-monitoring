@@ -6,19 +6,50 @@ import infrastructureService from '../services/infrastructure';
 const TransformerCrudScreen = () => {
     const fields = [
         { name: 'name', label: 'Transformer Name', placeholder: 'Enter transformer name', required: true },
-        { name: 'depotId', label: 'Depot', type: 'selector', selectorFunc: infrastructureService.getAllDepots, labelKey: 'depotName' },
-        // Add other transformer fields as needed based on TransformerRequest
-        // For now, assuming name and depotId are primary required fields
+        { name: 'depotId', label: 'Depot', type: 'selector', fetchOptions: infrastructureService.getAllDepots, labelKey: 'depotName' },
+        { name: 'capacity', label: 'Capacity (KVA)', placeholder: 'Enter capacity', keyboardType: 'numeric' },
+        { 
+            name: 'location', 
+            label: 'Location', 
+            type: 'location', 
+            latField: 'lat', 
+            lngField: 'lng',
+            placeholder: 'Tap to select location' 
+        },
+        { 
+            name: 'status', 
+            label: 'Status', 
+            type: 'selector', 
+            fetchOptions: async () => [
+                { id: 'active', name: 'Active' }, 
+                { id: 'maintenance', name: 'Maintenance' }
+            ],
+            labelKey: 'statusLabel',
+            valueKey: 'id'
+        }
     ];
 
-    const transformDataBeforeSubmit = (data, editingItem) => {
+    const fetchTransformers = async (page, size, search) => {
+        const result = await transformerService.getAllTransformers(page, size, search);
+        if (result && result.content) {
+            result.content = result.content.map(t => ({
+                ...t,
+                status: t.isActive ? 'active' : 'maintenance',
+                statusLabel: t.isActive ? 'Active' : 'Maintenance'
+            }));
+        }
+        return result;
+    };
+
+    const transformDataBeforeSubmit = (data, editingItem, selectorLabels) => {
         return {
             name: data.name,
             depotId: parseInt(data.depotId, 10),
-            capacity: 0, // Default value
-            isActive: true, // Default value
-            lat: 0.0, // Default value
-            lng: 0.0 // Default value
+            depotName: selectorLabels?.depotId,
+            capacity: parseInt(data.capacity, 10) || 0,
+            isActive: data.status === 'active',
+            lat: parseFloat(data.lat) || 0.0,
+            lng: parseFloat(data.lng) || 0.0
         };
     };
 
@@ -26,7 +57,7 @@ const TransformerCrudScreen = () => {
         <CrudScreen
             title="Transformers Management"
             addButtonLabel="Add Transformer"
-            fetchData={transformerService.getAllTransformers}
+            fetchData={fetchTransformers}
             createItem={transformerService.createTransformer}
             updateItem={transformerService.updateTransformer}
             deleteItem={transformerService.deleteTransformer}

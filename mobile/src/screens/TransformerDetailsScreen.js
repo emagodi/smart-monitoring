@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Switch, Button, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Switch, Button, Alert, Dimensions } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import transformerService from '../services/transformer';
 import sensorService from '../services/sensor';
 import alertService from '../services/alert';
@@ -36,12 +37,10 @@ const TransformerDetailsScreen = ({ route, navigation }) => {
     setUpdating(true);
     try {
         // Toggle active status
-        const newStatus = !transformer.active;
-        // Need to send full object or specific fields depending on API
-        // Assuming update takes the request body with fields to update
+        const newStatus = !transformer.isActive;
         const updated = await transformerService.updateTransformer(transformerId, {
             ...transformer,
-            active: newStatus
+            isActive: newStatus
         });
         setTransformer(updated);
         Alert.alert('Success', `Transformer is now ${newStatus ? 'Active' : 'in Maintenance'}`);
@@ -72,19 +71,44 @@ const TransformerDetailsScreen = ({ route, navigation }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>{transformer.code || `Transformer #${transformer.id}`}</Text>
-        <Text>Address: {transformer.address}</Text>
-        <Text>Region: {transformer.region?.name}</Text>
-        <Text>District: {transformer.district?.name}</Text>
+        <Text style={styles.title}>{transformer.name}</Text>
+        <Text style={styles.detailText}>Depot: {transformer.depotName || transformer.depotId}</Text>
+        <Text style={styles.detailText}>Capacity: {transformer.capacity} KVA</Text>
         
         <View style={styles.row}>
-            <Text style={styles.label}>Status: {transformer.active ? 'Active' : 'Maintenance'}</Text>
+            <Text style={styles.label}>Status: {transformer.isActive ? 'Active' : 'Maintenance'}</Text>
             <Switch
-                value={transformer.active}
+                value={transformer.isActive}
                 onValueChange={toggleStatus}
                 disabled={updating}
             />
         </View>
+
+        {transformer.lat && transformer.lng && (
+            <View style={styles.mapContainer}>
+                <Text style={styles.label}>Location</Text>
+                <Text style={styles.coordinatesText}>
+                    Lat: {transformer.lat}, Lng: {transformer.lng}
+                </Text>
+                <MapView
+                    style={styles.map}
+                    initialRegion={{
+                        latitude: parseFloat(transformer.lat),
+                        longitude: parseFloat(transformer.lng),
+                        latitudeDelta: 0.005,
+                        longitudeDelta: 0.005,
+                    }}
+                >
+                    <Marker
+                        coordinate={{
+                            latitude: parseFloat(transformer.lat),
+                            longitude: parseFloat(transformer.lng),
+                        }}
+                        title={transformer.name}
+                    />
+                </MapView>
+            </View>
+        )}
       </View>
 
       <Text style={styles.sectionTitle}>Sensors</Text>
@@ -93,11 +117,9 @@ const TransformerDetailsScreen = ({ route, navigation }) => {
       ) : (
           sensors.map(sensor => (
               <View key={sensor.id} style={styles.sensorCard}>
-                  <Text style={styles.sensorName}>{sensor.sensorType} Sensor</Text>
+                  <Text style={styles.sensorName}>{sensor.type} Sensor</Text>
                   <Text>ID: {sensor.id}</Text>
-                  {sensor.readings && sensor.readings.length > 0 && (
-                      <Text>Latest Reading: {sensor.readings[sensor.readings.length-1].value}</Text>
-                  )}
+                  <Text>Device EUI: {sensor.devEui}</Text>
               </View>
           ))
       )}
@@ -127,6 +149,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 10,
+    color: '#0067A5',
+  },
+  detailText: {
+    fontSize: 16,
+    marginBottom: 5,
+    color: '#333',
   },
   row: {
     flexDirection: 'row',
@@ -139,28 +167,50 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  mapContainer: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  coordinatesText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 10,
+  },
+  map: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
     marginTop: 10,
+    color: '#333',
   },
   sensorCard: {
     backgroundColor: 'white',
     padding: 15,
     borderRadius: 8,
     marginBottom: 10,
+    elevation: 1,
   },
   sensorName: {
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 5,
+    color: '#0067A5',
   },
   emptyText: {
     fontStyle: 'italic',
     color: 'gray',
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
 

@@ -1,0 +1,29 @@
+1770879324: mosquitto version 2.1.2 starting
+1770879324: Config loaded from /mosquitto/config/mosquitto.conf.
+1770879324: Bridge support available.
+1770879324: Persistence support available.
+1770879324: TLS support available.
+1770879324: TLS-PSK support available.
+1770879324: Websockets support available.
+1770879324: Opening ipv4 listen socket on port 1883.
+1770879324: Opening ipv6 listen socket on port 1883.
+1770879324: mosquitto version 2.1.2 running
+1770881125: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1770893270: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1770895086: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1770898937: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1770900738: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1770902539: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1770903275: New connection from 172.19.0.1:58914 on port 1883.
+1770903275: New connection from 172.19.0.1:58920 on port 1883.
+1770903275: Protocol error from 172.19.0.1:58914: First packet not CONNECT (47).
+1770903275: Client 172.19.0.1 [172.19.0.1:58914] disconnected: protocol error.
+1770903276: Protocol error from 172.19.0.1:58920: First packet not CONNECT (47).
+1770903276: Client 172.19.0.1 [172.19.0.1:58920] disconnected: protocol error.
+1770903276: New connection from 172.19.0.1:58934 on port 1883.
+1770903276: Protocol error from 172.19.0.1:58934: First packet not CONNECT (47).
+1770903276: Client 172.19.0.1 [172.19.0.1:58934] disconnected: protocol error.
+1770903276: New connection from 172.19.0.1:58938 on port 1883.
+1770903276: Protocol error from 172.19.0.1:58938: First packet not CONNECT (47).
+1770903276: Client 172.19.0.1 [172.19.0.1:58938] disconnected: protocol error.
+1770904498: Saving in-memory database to /mosquitto/data//mosquitto.db.

@@ -33,12 +33,14 @@ public class TransformerServiceImpl implements TransformerService {
     public TransformerResponse create(TransformerRequest request) {
         transformerRepository.findByDepotIdAndName(request.getDepotId(), request.getName()).ifPresent(t -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists in depot"); });
         
-        String depotName = null;
-        try {
-            DepotResponse depot = authClient.getDepotById(request.getDepotId());
-            if (depot != null) depotName = depot.getName();
-        } catch (Exception e) {
-            // Log error but proceed
+        String depotName = request.getDepotName();
+        if (depotName == null || depotName.isEmpty()) {
+            try {
+                DepotResponse depot = authClient.getDepotById(request.getDepotId());
+                if (depot != null) depotName = depot.getName();
+            } catch (Exception e) {
+                // Log error but proceed
+            }
         }
 
         Transformer transformer = Transformer.builder()
@@ -78,13 +80,17 @@ public class TransformerServiceImpl implements TransformerService {
         Transformer transformer = transformerRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
         transformerRepository.findByDepotIdAndName(request.getDepotId(), request.getName()).ifPresent(existing -> { if (!existing.getId().equals(id)) throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists in depot"); });
         
-        String depotName = transformer.getDepotName();
-        if (!request.getDepotId().equals(transformer.getDepotId())) {
-             try {
-                DepotResponse depot = authClient.getDepotById(request.getDepotId());
-                if (depot != null) depotName = depot.getName();
-            } catch (Exception e) {
-                depotName = null;
+        String depotName = request.getDepotName();
+        if (depotName == null || depotName.isEmpty()) {
+            if (!request.getDepotId().equals(transformer.getDepotId()) || transformer.getDepotName() == null) {
+                 try {
+                    DepotResponse depot = authClient.getDepotById(request.getDepotId());
+                    if (depot != null) depotName = depot.getName();
+                } catch (Exception e) {
+                    depotName = null;
+                }
+            } else {
+                depotName = transformer.getDepotName();
             }
         }
         

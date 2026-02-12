@@ -5,6 +5,7 @@ com\safalifter\transformerservice\config\JwtServiceImpl.class
 com\safalifter\transformerservice\entities\SensorReading.class
 com\safalifter\transformerservice\service\SmsService.class
 com\safalifter\transformerservice\client\AuthClient.class
+com\safalifter\transformerservice\payload\response\DepotResponse$DepotResponseBuilder.class
 com\safalifter\transformerservice\service\EmailSender.class
 com\safalifter\transformerservice\entities\Alert.class
 com\safalifter\transformerservice\payload\request\SensorRequest.class
@@ -14,11 +15,14 @@ com\safalifter\transformerservice\service\AlertService.class
 com\safalifter\transformerservice\payload\request\TransformerRequest$TransformerRequestBuilder.class
 com\safalifter\transformerservice\service\SensorReadingService.class
 com\safalifter\transformerservice\controller\AlertController.class
+com\safalifter\transformerservice\payload\response\DepotResponse.class
 com\safalifter\transformerservice\config\ApplicationSecurityConfig.class
 com\safalifter\transformerservice\entities\EmailNotification.class
 com\safalifter\transformerservice\service\SensorService.class
 com\safalifter\transformerservice\config\OpenApiConfig.class
 com\safalifter\transformerservice\entities\Alert$AlertBuilder.class
+com\safalifter\transformerservice\service\CameraIntegrationService.class
+com\safalifter\transformerservice\config\MqttConfig.class
 com\safalifter\transformerservice\ingest\LoriotWebSocketIngestor$Listener.class
 com\safalifter\transformerservice\payload\response\UserResponse.class
 com\safalifter\transformerservice\service\impl\TransformerServiceImpl.class
@@ -71,6 +75,7 @@ com\safalifter\transformerservice\entities\Transformer.class
 com\safalifter\transformerservice\client\VisionClient.class
 com\safalifter\transformerservice\config\JwtAuthenticationFilter.class
 com\safalifter\transformerservice\service\impl\EmailServiceImpl$1.class
+com\safalifter\transformerservice\service\impl\CameraIntegrationServiceImpl.class
 com\safalifter\transformerservice\service\impl\EmailServiceImpl.class
 com\safalifter\transformerservice\service\impl\SensorServiceImpl.class
 com\safalifter\transformerservice\config\JwtService.class

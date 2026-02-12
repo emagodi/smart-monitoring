@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -8,10 +8,15 @@ import {
     Modal,
     TextInput,
     Alert,
-    ActivityIndicator
+    ActivityIndicator,
+    Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from 'react-native-maps';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+
+const GOOGLE_API_KEY = 'AIzaSyBJOkU9Iv88i6h8-hxjSN1wLUYCITmkOQQ';
 
 const CrudScreen = ({
     title,
@@ -55,6 +60,40 @@ const CrudScreen = ({
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
+
+
+    // Map Modal State
+    const [mapModalVisible, setMapModalVisible] = useState(false);
+    const [mapLocation, setMapLocation] = useState({ latitude: -17.82, longitude: 31.05 });
+    const [currentMapField, setCurrentMapField] = useState(null);
+    const mapRef = useRef(null);
+
+    const handleOpenMap = (field) => {
+        setCurrentMapField(field);
+        let lat = -17.82;
+        let lng = 31.05;
+
+        if (field.latField && field.lngField) {
+            lat = parseFloat(formData[field.latField]) || -17.82;
+            lng = parseFloat(formData[field.lngField]) || 31.05;
+        }
+
+        setMapLocation({ latitude: lat, longitude: lng });
+        setMapModalVisible(true);
+    };
+
+    const handleConfirmLocation = () => {
+        if (currentMapField) {
+            const updates = {};
+            if (currentMapField.latField) updates[currentMapField.latField] = String(mapLocation.latitude);
+            if (currentMapField.lngField) updates[currentMapField.lngField] = String(mapLocation.longitude);
+            
+            updates[currentMapField.name] = `${mapLocation.latitude.toFixed(6)}, ${mapLocation.longitude.toFixed(6)}`;
+
+            setFormData({ ...formData, ...updates });
+            setMapModalVisible(false);
+        }
+    };
 
     const loadData = async (nextPage = 0, shouldAppend = false) => {
         if (!shouldAppend) setLoading(true);
@@ -204,6 +243,15 @@ const CrudScreen = ({
             if (field.type === 'selector' && field.labelKey) {
                 initialLabels[field.name] = item[field.labelKey] || '';
             }
+
+            if (field.type === 'location') {
+                if (field.latField) initialData[field.latField] = String(item[field.latField] || '');
+                if (field.lngField) initialData[field.lngField] = String(item[field.lngField] || '');
+                
+                if (item[field.latField] && item[field.lngField]) {
+                     initialData[field.name] = `${item[field.latField]}, ${item[field.lngField]}`;
+                }
+            }
         });
         setFormData(initialData);
         setSelectorLabels(initialLabels);
@@ -223,7 +271,7 @@ const CrudScreen = ({
         try {
             let dataToSubmit = { ...formData };
             if (transformDataBeforeSubmit) {
-                dataToSubmit = transformDataBeforeSubmit(dataToSubmit, editingItem);
+                dataToSubmit = transformDataBeforeSubmit(dataToSubmit, editingItem, selectorLabels);
             }
 
             if (editingItem) {
@@ -302,9 +350,11 @@ const CrudScreen = ({
                     <TouchableOpacity onPress={() => handleOpenEdit(item)} style={styles.actionButton}>
                         <Ionicons name="create-outline" size={24} color="#0067A5" />
                     </TouchableOpacity>
+                    {deleteItem && (
                     <TouchableOpacity onPress={() => handleDelete(item)} style={styles.actionButton}>
                         <Ionicons name="trash-outline" size={24} color="#FF3B30" />
                     </TouchableOpacity>
+                    )}
                 </View>
             </View>
         );
@@ -323,9 +373,11 @@ const CrudScreen = ({
                             onChangeText={setSearchQuery}
                         />
                      </View>
+                     {createItem && (
                      <TouchableOpacity onPress={handleOpenCreate} style={styles.addButtonSmall}>
                         <Ionicons name="add" size={24} color="#fff" />
                     </TouchableOpacity>
+                    )}
                 </View>
 
                 {loading ? (
@@ -387,6 +439,16 @@ const CrudScreen = ({
                                                 : field.placeholder}
                                         </Text>
                                         <Ionicons name="chevron-down" size={20} color="#666" />
+                                    </TouchableOpacity>
+                                ) : field.type === 'location' ? (
+                                    <TouchableOpacity 
+                                        style={styles.selectorInput} 
+                                        onPress={() => handleOpenMap(field)}
+                                    >
+                                        <Text style={[styles.selectorInputText, !formData[field.name] && styles.placeholderText]}>
+                                            {formData[field.name] || 'Select Location on Map'}
+                                        </Text>
+                                        <Ionicons name="map-outline" size={20} color="#666" />
                                     </TouchableOpacity>
                                 ) : (
                                     <TextInput
@@ -470,6 +532,88 @@ const CrudScreen = ({
                                 style={{ maxHeight: 300 }}
                             />
                         )}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Map Picker Modal */}
+            <Modal
+                visible={mapModalVisible}
+                animationType="slide"
+                onRequestClose={() => setMapModalVisible(false)}
+            >
+                <View style={styles.mapContainer}>
+                    <View style={styles.placesAutocompleteContainer}>
+                        <GooglePlacesAutocomplete
+                            placeholder='Search location...'
+                            onPress={(data, details = null) => {
+                                if (details) {
+                                    const { lat, lng } = details.geometry.location;
+                                    const newLocation = { latitude: lat, longitude: lng };
+                                    setMapLocation(newLocation);
+                                    mapRef.current?.animateToRegion({
+                                        ...newLocation,
+                                        latitudeDelta: 0.005,
+                                        longitudeDelta: 0.005,
+                                    }, 1000);
+                                }
+                            }}
+                            query={{
+                                key: GOOGLE_API_KEY,
+                                language: 'en',
+                            }}
+                            fetchDetails={true}
+                            styles={{
+                                container: {
+                                    flex: 0,
+                                },
+                                textInput: {
+                                    height: 44,
+                                    borderRadius: 5,
+                                    backgroundColor: '#fff',
+                                    paddingHorizontal: 10,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.1,
+                                    shadowRadius: 2,
+                                    elevation: 2,
+                                },
+                                listView: {
+                                    position: 'absolute',
+                                    top: 45,
+                                    left: 0,
+                                    right: 0,
+                                    backgroundColor: '#fff',
+                                    borderRadius: 5,
+                                    zIndex: 1000,
+                                    elevation: 1000,
+                                }
+                            }}
+                            enablePoweredByContainer={false}
+                        />
+                    </View>
+
+                    <MapView
+                        ref={mapRef}
+                        style={styles.map}
+                        initialRegion={{
+                            latitude: mapLocation.latitude,
+                            longitude: mapLocation.longitude,
+                            latitudeDelta: 0.0922,
+                            longitudeDelta: 0.0421,
+                        }}
+                        onPress={(e) => setMapLocation(e.nativeEvent.coordinate)}
+                    >
+                        <Marker coordinate={mapLocation} draggable onDragEnd={(e) => setMapLocation(e.nativeEvent.coordinate)} />
+                    </MapView>
+                    
+                    <View style={styles.mapActions}>
+                        <TouchableOpacity style={styles.mapCancelButton} onPress={() => setMapModalVisible(false)}>
+                            <Text style={styles.mapCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.mapConfirmButton} onPress={handleConfirmLocation}>
+                            <Text style={styles.mapConfirmText}>Confirm Location</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -603,6 +747,51 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
+    },
+    mapContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    placesAutocompleteContainer: {
+        position: 'absolute',
+        top: 10,
+        left: 10,
+        right: 10,
+        zIndex: 100,
+    },
+    map: {
+        width: Dimensions.get('window').width,
+        height: Dimensions.get('window').height - 100,
+    },
+    mapActions: {
+        position: 'absolute',
+        bottom: 20,
+        left: 20,
+        right: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        padding: 15,
+        borderRadius: 10,
+    },
+    mapCancelButton: {
+        padding: 10,
+    },
+    mapCancelText: {
+        color: '#FF3B30',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    mapConfirmButton: {
+        backgroundColor: '#0067A5',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 5,
+    },
+    mapConfirmText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
     },
     addRegionButtonText: {
         color: '#fff',
