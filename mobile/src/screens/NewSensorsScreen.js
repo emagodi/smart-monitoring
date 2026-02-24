@@ -11,12 +11,10 @@ const NewSensorsScreen = () => {
             label: 'Sensor Type', 
             type: 'selector', 
             fetchOptions: async () => [
-                { id: 'voltage', name: 'Voltage' },
-                { id: 'current', name: 'Current' },
+                { id: 'motion', name: 'Motion' },
+                { id: 'contact', name: 'Contact' },
                 { id: 'temperature', name: 'Temperature' },
-                { id: 'oil_level', name: 'Oil Level' },
-                { id: 'vibration', name: 'Vibration' },
-                { id: 'humidity', name: 'Humidity' }
+                { id: 'tilt', name: 'Tilt' }
             ],
             labelKey: 'name',
             valueKey: 'id',

@@ -33,7 +33,7 @@ public class SensorServiceImpl implements SensorService {
                 .deviceId(request.getDeviceId())
                 .devEui(request.getDevEui())
                 .name(request.getName())
-                .type(request.getType())
+                .type(request.getType() != null ? request.getType().toLowerCase() : null)
                 .transformerId(request.getTransformerId())
                 .build();
         Sensor saved = sensorRepository.save(sensor);
@@ -88,7 +88,7 @@ public class SensorServiceImpl implements SensorService {
         sensor.setDeviceId(request.getDeviceId());
         sensor.setDevEui(request.getDevEui());
         sensor.setName(request.getName());
-        sensor.setType(request.getType());
+        sensor.setType(request.getType() != null ? request.getType().toLowerCase() : null);
         sensor.setTransformerId(request.getTransformerId());
         Sensor saved = sensorRepository.save(sensor);
         return toResponse(saved);

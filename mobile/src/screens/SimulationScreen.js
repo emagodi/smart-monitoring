@@ -81,7 +81,8 @@ const SimulationScreen = () => {
       let key = selectedSensor.sensorType.toLowerCase();
       if (key.includes('temp')) key = 'temperature';
       else if (key.includes('contact')) key = 'contact';
-      else if (key.includes('suspicious')) key = 'suspicious_till';
+      else if (key.includes('motion')) key = 'motion';
+      else if (key.includes('tilt')) key = 'tilt';
 
       // Parse value if numeric
       let value = sensorValue;
