@@ -404,6 +404,9 @@ const CrudScreen = ({
                         contentContainerStyle={styles.listContent}
                         refreshing={loading}
                         onRefresh={() => loadData(0, false)}
+                        showsVerticalScrollIndicator={true}
+                        persistentScrollbar={true}
+                        indicatorStyle="black"
                         ListEmptyComponent={
                             <View style={styles.centered}>
                                 <Text style={styles.emptyText}>No items found</Text>

@@ -99,13 +99,12 @@ const TransformerCrudScreen = () => {
     const renderRegionItem = (item, onSelect) => (
         <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.regionCard]}>
             <View style={[styles.iconContainer, { backgroundColor: '#e3f2fd' }]}>
-                <Ionicons name="map" size={24} color="#2196F3" />
+                <Ionicons name="map" size={20} color="#2196F3" />
             </View>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text style={styles.cardSubtitle}>Region</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#bdbdbd" />
+            <Ionicons name="chevron-forward" size={18} color="#bdbdbd" />
         </TouchableOpacity>
     );
 
@@ -113,13 +112,12 @@ const TransformerCrudScreen = () => {
     const renderDistrictItem = (item, onSelect) => (
         <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.districtCard]}>
              <View style={[styles.iconContainer, { backgroundColor: '#e8f5e9' }]}>
-                <Ionicons name="business" size={24} color="#4CAF50" />
+                <Ionicons name="business" size={20} color="#4CAF50" />
             </View>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text style={styles.cardSubtitle}>District</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#bdbdbd" />
+            <Ionicons name="chevron-forward" size={18} color="#bdbdbd" />
         </TouchableOpacity>
     );
 
@@ -127,13 +125,12 @@ const TransformerCrudScreen = () => {
     const renderDepotItem = (item, onSelect) => (
         <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.depotCard]}>
              <View style={[styles.iconContainer, { backgroundColor: '#fff3e0' }]}>
-                <Ionicons name="home" size={24} color="#FF9800" />
+                <Ionicons name="home" size={20} color="#FF9800" />
             </View>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text style={styles.cardSubtitle}>Depot</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#bdbdbd" />
+            <Ionicons name="chevron-forward" size={18} color="#bdbdbd" />
         </TouchableOpacity>
     );
 
@@ -141,7 +138,7 @@ const TransformerCrudScreen = () => {
     const renderTransformerItem = (item) => (
         <View style={[styles.card, styles.transformerCard]}>
              <View style={[styles.iconContainer, { backgroundColor: item.isActive ? '#e8f5e9' : '#ffebee' }]}>
-                <Ionicons name="flash" size={24} color={item.isActive ? '#4CAF50' : '#F44336'} />
+                <Ionicons name="flash" size={20} color={item.isActive ? '#4CAF50' : '#F44336'} />
             </View>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
@@ -231,26 +228,26 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: 12,
         backgroundColor: '#fff',
         marginHorizontal: 16,
-        marginVertical: 8,
-        borderRadius: 16,
+        marginVertical: 4,
+        borderRadius: 12,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 3,
+        shadowRadius: 4,
+        elevation: 2,
         borderWidth: 1,
         borderColor: '#f0f0f0'
     },
     iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
+        width: 36,
+        height: 36,
+        borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 16,
+        marginRight: 12,
     },
     cardContent: {
         flex: 1,
