@@ -13,19 +13,6 @@ services:
       - mysql_data:/var/lib/mysql
       - ./db-init:/docker-entrypoint-initdb.d:ro
 
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
-    restart: unless-stopped
-    environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      PMA_USER: root
-      PMA_PASSWORD: secret
-    ports:
-      - "8090:80"
-    depends_on:
-      - mysql
 
   config-server:
     build: ./config-server
@@ -55,18 +42,6 @@ services:
     depends_on:
       - config-server
 
-  mosquitto:
-    image: eclipse-mosquitto
-    container_name: mosquitto
-    restart: unless-stopped
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - ./mosquitto/data:/mosquitto/data
-      - ./mosquitto/log:/mosquitto/log
-
   auth-service:
     build: ./auth-service
     container_name: auth-service
@@ -78,7 +53,7 @@ services:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
-      - "8084:8084"
+      - "8082:8082"
     volumes:
       - ./uploads:/uploads/monitor
     depends_on:
@@ -93,28 +68,47 @@ services:
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
-      LORIOT_WS_URL: ${LORIOT_WS_URL}
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
       - "8083:8083"
-    volumes:
-      - "C:\\Users\\Edwin Magodi\\Desktop\\uploads:/uploads/monitor"
     depends_on:
       - mysql
       - eureka-server
       - config-server
 
-  vision-ai-service:
-    build: ./vision-ai-service
-    container_name: vision-ai-service
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      SERVER_PORT: 8085
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888/
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+    depends_on:
+      - mysql
+      - eureka-server
+      - config-server
+    ports:
+      - "8085:8085"
+    
+  mosquitto:
+    image: eclipse-mosquitto
+    container_name: mosquitto
     restart: unless-stopped
     ports:
-      - "8000:8000"
-    environment:
-      - TZ=Africa/Harare
-    
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
   gateway:
     build: ./gateway
     container_name: api-gateway

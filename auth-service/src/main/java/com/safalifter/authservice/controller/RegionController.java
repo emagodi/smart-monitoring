@@ -5,9 +5,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,8 +12,6 @@ import org.springframework.web.bind.annotation.*;
 import com.safalifter.authservice.payload.request.RegionRequest;
 import com.safalifter.authservice.payload.response.RegionResponse;
 import com.safalifter.authservice.service.RegionService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -31,7 +26,7 @@ public class RegionController {
 
     @PostMapping("/create")
     @Operation(summary = "Create a new region")
-    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<RegionResponse> create(@Valid @RequestBody RegionRequest request) {
         log.info("Create region: {}", request);
         RegionResponse response = regionService.create(request);
@@ -40,7 +35,7 @@ public class RegionController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get region by id")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<RegionResponse> getById(@PathVariable Long id) {
         log.info("Get region id: {}", id);
         return ResponseEntity.ok(regionService.getById(id));
@@ -48,16 +43,15 @@ public class RegionController {
 
     @GetMapping
     @Operation(summary = "List regions")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
-    public ResponseEntity<Page<RegionResponse>> getAll(
-            @RequestParam(required = false) String search,
-            @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(regionService.getAll(search, pageable));
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<List<RegionResponse>> getAll() {
+        log.info("List regions");
+        return ResponseEntity.ok(regionService.getAll());
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Update region")
-    @PreAuthorize("hasAuthority('UPDATE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('UPDATE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<RegionResponse> update(@PathVariable Long id, @Valid @RequestBody RegionRequest request) {
         log.info("Update region id: {} with {}", id, request);
         return ResponseEntity.ok(regionService.update(id, request));
@@ -65,7 +59,7 @@ public class RegionController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete region")
-    @PreAuthorize("hasAuthority('DELETE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('DELETE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         log.info("Delete region id: {}", id);
         regionService.delete(id);

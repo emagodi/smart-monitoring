@@ -15,6 +15,5 @@ public class DistrictResponse {
     private Long id;
     private String name;
     private Long regionId;
-    private String regionName;
     private List<DepotResponse> depots;
 }

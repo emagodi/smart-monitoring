@@ -1,67 +1,43 @@
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorReadingResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\AlertRequest.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\TransformerRepository.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\SensorRepository.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\CameraIntegrationService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\EmailSenderImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\enums\SmsStatus.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Transformer.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\OpenApiConfig.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\SensorReading.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\EmailService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtAuthenticationFilter.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\TransformerRequest.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\SensorReadingController.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\EmailNotificationRepository.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\TransformerServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\SmsNotification.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\AppConfig.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\client\VisionClient.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SensorServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\TestController.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\enums\EmailStatus.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorReadingDetailResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\EmailServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SmsServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\EmailSender.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\EmailNotification.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\ingest\LoriotWebSocketIngestor.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SensorReadingServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\ApplicationSecurityConfig.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SmsSenderImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\client\AuthClient.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\handlers\BaseEntity.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\AlertRepository.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\SecurityConfiguration.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\enums\Role.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\MqttConfig.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\TransformerResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\SmsSender.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\DepotResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\SensorReadingService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\SensorRequest.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\SensorService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\SensorController.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\CustomAccessDeniedHandler.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\VisionAnalysisResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\AlertServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\SensorReadingRepository.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\SmsService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\SensorReadingRequest.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\TransformerController.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\Http401UnauthorizedEntryPoint.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Sensor.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\SensorAnalysisRequest.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\AlertController.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\UserResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Alert.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\AlertResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\TransformerServiceApplication.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorValueResponse.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\AlertService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\CameraIntegrationServiceImpl.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\TransformerService.java
-C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\SmsNotificationRepository.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\handlers\BaseEntity.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\SecurityConfiguration.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\SensorController.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\AlertRepository.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorReadingResponse.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\ApplicationSecurityConfig.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\SensorReadingRequest.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Alert.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Transformer.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\AlertResponse.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\TransformerRepository.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\TransformerServiceImpl.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\Http401UnauthorizedEntryPoint.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Sensor.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\SensorReading.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SensorServiceImpl.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorValueResponse.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\CustomAccessDeniedHandler.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtServiceImpl.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\AlertController.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtService.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\RemoteUserService.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\SensorService.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\SensorRequest.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\TransformerResponse.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\TransformerRequest.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\TransformerController.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\TransformerService.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\controller\SensorReadingController.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\enums\Role.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\AlertService.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorResponse.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\SensorRepository.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\OpenApiConfig.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\AlertServiceImpl.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorReadingDetailResponse.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\TransformerServiceApplication.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\config\JwtAuthenticationFilter.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\SensorReadingService.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\SensorReadingRepository.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\service\impl\SensorReadingServiceImpl.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\AlertRequest.java
+C:\Users\emagodi\IdeaProjects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\ingest\LoriotWebSocketIngestor.java

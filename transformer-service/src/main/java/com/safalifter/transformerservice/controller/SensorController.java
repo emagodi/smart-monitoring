@@ -26,7 +26,7 @@ public class SensorController {
 
     @PostMapping("/create")
     @Operation(summary = "Create a new sensor")
-    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<SensorResponse> create(@Valid @RequestBody SensorRequest request) {
         SensorResponse response = sensorService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -34,23 +34,16 @@ public class SensorController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get sensor by id")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<SensorResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(sensorService.getWithReadings(id));
     }
 
     @GetMapping
     @Operation(summary = "List sensors")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<List<SensorResponse>> getAll() {
         return ResponseEntity.ok(sensorService.getAll());
-    }
-
-    @GetMapping("/unassigned")
-    @Operation(summary = "List unassigned sensors (null or empty type)")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
-    public ResponseEntity<List<SensorResponse>> getUnassigned() {
-        return ResponseEntity.ok(sensorService.getUnassignedSensors());
     }
 
     @GetMapping("/transformer/{transformerId}")
@@ -69,7 +62,7 @@ public class SensorController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete sensor")
-    @PreAuthorize("hasAuthority('DELETE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('DELETE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         sensorService.delete(id);
         return ResponseEntity.noContent().build();

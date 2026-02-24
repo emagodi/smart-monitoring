@@ -38,7 +38,6 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     private final SensorRepository sensorRepository;
     private final SensorReadingRepository sensorReadingRepository;
     private final SensorReadingService sensorReadingService;
-    private final com.safalifter.transformerservice.repository.TransformerRepository transformerRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Value("${loriot.ws.log:false}")
     private boolean logWs;
@@ -46,9 +45,6 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     private long defaultTransformerId;
     @Value("${loriot.default.sensor-type:}")
     private String defaultSensorType;
-
-    private WebSocket webSocket;
-    private final java.util.concurrent.ScheduledExecutorService scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
 
     @Override
     public void run(ApplicationArguments args) {
@@ -61,36 +57,14 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             return;
         }
 
-        final String targetUrl = url;
-        // Initial connection
-        connect(targetUrl);
-        
-        // Schedule reconnection check
-        scheduler.scheduleAtFixedRate(() -> {
-            if (webSocket == null || webSocket.isOutputClosed() || webSocket.isInputClosed()) {
-                log.warn("LORIOT WebSocket is closed or null. Attempting reconnection...");
-                connect(targetUrl);
-            }
-        }, 30, 30, java.util.concurrent.TimeUnit.SECONDS);
-    }
-
-    private void connect(String url) {
         try {
             HttpClient client = HttpClient.newHttpClient();
             client.newWebSocketBuilder()
-                .buildAsync(URI.create(url), new Listener())
-                .thenAccept(ws -> {
-                    this.webSocket = ws;
-                    log.info("Connected to LORIOT WebSocket");
-                })
-                .exceptionally(ex -> {
-                    log.error("Failed to connect to LORIOT WebSocket", ex);
-                    this.webSocket = null;
-                    return null;
-                });
+                    .buildAsync(URI.create(url), new Listener())
+                    .thenAccept(ws -> log.info("Connected to LORIOT WebSocket"))
+                    .exceptionally(ex -> { log.error("Failed to connect to LORIOT WebSocket", ex); return null; });
         } catch (Exception e) {
             log.error("Error starting LORIOT WebSocket client", e);
-            this.webSocket = null;
         }
     }
 
@@ -127,13 +101,11 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
             log.error("LORIOT WebSocket error", error);
-            LoriotWebSocketIngestor.this.webSocket = null;
         }
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             log.info("LORIOT WebSocket closed: code={} reason={}", statusCode, reason);
-            LoriotWebSocketIngestor.this.webSocket = null;
             return CompletableFuture.completedFuture(null);
         }
 
@@ -166,22 +138,25 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             }
             Sensor sensor = sensorOpt.get();
 
-            if (sensor.getTransformerId() != null) {
-                // We check transformer status later for alerts, but we continue to ingest data for AI/History
-                // var transformer = transformerRepository.findById(sensor.getTransformerId()).orElse(null);
-            }
-
             try {
                 String decoded = buildDecodedSummary(msg);
-                // ALWAYS save a new reading (Historical Data)
-                SensorReading reading = SensorReading.builder()
-                        .sensorId(sensor.getId())
-                        .rawPayload(rawMessage)
-                        .decoded(decoded)
-                        .build();
-                SensorReading saved = sensorReadingRepository.save(reading);
-                log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
-
+                java.util.Optional<SensorReading> latestOpt = sensorReadingRepository.findTopBySensorIdOrderByUpdatedAtDesc(sensor.getId());
+                SensorReading saved;
+                if (latestOpt.isPresent()) {
+                    SensorReading existing = latestOpt.get();
+                    existing.setRawPayload(rawMessage);
+                    existing.setDecoded(decoded);
+                    saved = sensorReadingRepository.save(existing);
+                    log.info("Updated SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
+                } else {
+                    SensorReading reading = SensorReading.builder()
+                            .sensorId(sensor.getId())
+                            .rawPayload(rawMessage)
+                            .decoded(decoded)
+                            .build();
+                    saved = sensorReadingRepository.save(reading);
+                    log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
+                }
                 try { sensorReadingService.processTriggers(saved); } catch (Exception ignored) {}
                 if (logWs) log.info("DECODE {}", saved.getDecoded());
             } catch (Exception e) {

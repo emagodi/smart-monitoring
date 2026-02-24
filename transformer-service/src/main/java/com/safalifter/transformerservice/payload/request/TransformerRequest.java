@@ -21,7 +21,6 @@ public class TransformerRequest {
     private Boolean isActive;
     @NotNull(message = "depotId is required")
     private Long depotId;
-    private String depotName;
     private BigDecimal lat;
     private BigDecimal lng;
 }

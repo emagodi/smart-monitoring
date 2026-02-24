@@ -15,8 +15,6 @@ import com.safalifter.authservice.repository.DepotRepository;
 import com.safalifter.authservice.service.RegionService;
 
 import java.util.List;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 @Service
 @Transactional
@@ -42,11 +40,8 @@ public class RegionServiceImpl implements RegionService {
     }
 
     @Override
-    public Page<RegionResponse> getAll(String search, Pageable pageable) {
-        if (search != null && !search.trim().isEmpty()) {
-            return regionRepository.findByNameContainingIgnoreCase(search, pageable).map(this::toResponse);
-        }
-        return regionRepository.findAll(pageable).map(this::toResponse);
+    public List<RegionResponse> getAll() {
+        return regionRepository.findAll().stream().map(this::toResponse).toList();
     }
 
     @Override

@@ -21,6 +21,10 @@ public class GatewayConfig {
     @Bean
     public RouteLocator routes(RouteLocatorBuilder builder) {
         return builder.routes()
+                .route("notification-service", r -> r.path("/v1/notification/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://notification-service"))
+
                 .route("auth-service", r -> r.path("/api/v1/auth/**")
                         .uri("lb://auth-service"))
 
@@ -69,13 +73,21 @@ public class GatewayConfig {
                 .route("transformer-openapi", r -> r.path("/transformer/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/transformer/(?<segment>.*)", "/${segment}"))
                         .uri("lb://transformer-service"))
+                .route("notification-swagger-ui", r -> r.path("/notification/swagger-ui/**", "/notification/swagger-ui.html")
+                        .filters(f -> f.rewritePath("/notification/(?<segment>.*)", "/${segment}"))
+                        .uri("lb://notification-service"))
+                .route("notification-openapi", r -> r.path("/notification/v3/api-docs/**")
+                        .filters(f -> f.rewritePath("/notification/(?<segment>.*)", "/${segment}"))
+                        .uri("lb://notification-service"))
                 .build();
     }
 
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.addAllowedOriginPattern("*");
+        config.setAllowedOrigins(List.of(
+                "http://localhost:3000"
+        ));
         config.addAllowedMethod("*");
         config.addAllowedHeader("*");
         config.setAllowCredentials(true);

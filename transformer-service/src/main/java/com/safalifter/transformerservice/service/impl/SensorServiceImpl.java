@@ -33,7 +33,7 @@ public class SensorServiceImpl implements SensorService {
                 .deviceId(request.getDeviceId())
                 .devEui(request.getDevEui())
                 .name(request.getName())
-                .type(request.getType() != null ? request.getType().toLowerCase() : null)
+                .type(request.getType())
                 .transformerId(request.getTransformerId())
                 .build();
         Sensor saved = sensorRepository.save(sensor);
@@ -66,11 +66,6 @@ public class SensorServiceImpl implements SensorService {
     }
 
     @Override
-    public List<SensorResponse> getUnassignedSensors() {
-        return sensorRepository.findUnassignedSensors().stream().map(this::toResponse).toList();
-    }
-
-    @Override
     public List<SensorResponse> listByTransformerId(Long transformerId) {
         return sensorRepository.findByTransformerId(transformerId).stream()
                 .map(s -> {
@@ -88,7 +83,7 @@ public class SensorServiceImpl implements SensorService {
         sensor.setDeviceId(request.getDeviceId());
         sensor.setDevEui(request.getDevEui());
         sensor.setName(request.getName());
-        sensor.setType(request.getType() != null ? request.getType().toLowerCase() : null);
+        sensor.setType(request.getType());
         sensor.setTransformerId(request.getTransformerId());
         Sensor saved = sensorRepository.save(sensor);
         return toResponse(saved);

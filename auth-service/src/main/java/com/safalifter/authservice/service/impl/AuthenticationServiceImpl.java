@@ -46,13 +46,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     public AuthenticationResponse register(RegisterRequest request) {
-        String password = request.getPassword();
+        String generatedPassword = generateRandomPassword(12);
 
         User user = User.builder()
                 .firstname(request.getFirstname())
                 .lastname(request.getLastname())
                 .email(request.getEmail())
-                .password(passwordEncoder.encode(password))
+                .password(passwordEncoder.encode(generatedPassword))
                 .phone(request.getPhone())
                 .role(request.getRole())
                 .region(request.getRegion())
@@ -61,7 +61,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .districtId(request.getDistrictId())
                 .depot(request.getDepot())
                 .depotId(request.getDepotId())
-                .temporaryPassword(false)
+                .temporaryPassword(true)
                 .build();
 
         user = userRepository.save(user);
@@ -97,7 +97,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .id(user.getId())
                 .firstname(user.getFirstname())
                 .lastname(user.getLastname())
-                .password(password)
+                .password(generatedPassword)
                 .phone(user.getPhone())
                 .region(user.getRegion())
                 .district(user.getDistrict())
@@ -118,6 +118,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         Random random = new Random();
         int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
+    }
+
+    private String generateRandomPassword(int length) {
+        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+";
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            password.append(characters.charAt(random.nextInt(characters.length())));
+        }
+        return password.toString();
     }
 
     @Override
@@ -207,10 +217,5 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         } else {
             throw new IllegalArgumentException("User not found with the provided email");
         }
-    }
-
-    @Override
-    public List<User> getUsersByRoleAndDepot(com.safalifter.authservice.enums.Role role, Long depotId) {
-        return userRepository.findByRoleAndDepotId(role, depotId);
     }
 }

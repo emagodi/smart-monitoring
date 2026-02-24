@@ -26,7 +26,7 @@ public class AlertController {
 
     @PostMapping("/create")
     @Operation(summary = "Create an alert")
-    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<AlertResponse> create(@Valid @RequestBody AlertRequest request) {
         AlertResponse response = alertService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -34,14 +34,14 @@ public class AlertController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get alert by id")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<AlertResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(alertService.getById(id));
     }
 
     @GetMapping
     @Operation(summary = "List alerts")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<List<AlertResponse>> getAll() {
         return ResponseEntity.ok(alertService.getAll());
     }
@@ -62,7 +62,7 @@ public class AlertController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete alert")
-    @PreAuthorize("hasAuthority('DELETE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','LOSS_CONTROL','USER')")
+    @PreAuthorize("hasAuthority('DELETE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         alertService.delete(id);
         return ResponseEntity.noContent().build();

@@ -19,6 +19,4 @@ public interface AuthenticationService {
     public void changePassword(String email, String currentPassword, String newPassword);
 
     public String generateOtp();
-
-    java.util.List<User> getUsersByRoleAndDepot(com.safalifter.authservice.enums.Role role, Long depotId);
 }

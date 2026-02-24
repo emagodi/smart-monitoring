@@ -88,7 +88,6 @@ class AuthenticationServiceImplTest {
                 .firstname("F")
                 .lastname("L")
                 .email("new@example.com")
-                .password("password")
                 .phone("+263")
                 .role(Role.USER)
                 .region("Harare")

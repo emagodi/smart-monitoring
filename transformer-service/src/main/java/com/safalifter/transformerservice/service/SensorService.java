@@ -10,7 +10,6 @@ public interface SensorService {
     SensorResponse getById(Long id);
     SensorResponse getWithReadings(Long id);
     List<SensorResponse> getAll();
-    List<SensorResponse> getUnassignedSensors();
     List<SensorResponse> listByTransformerId(Long transformerId);
     SensorResponse update(Long id, SensorRequest request);
     void delete(Long id);
