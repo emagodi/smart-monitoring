@@ -1,15 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 import CrudScreen from '../components/CrudScreen';
 import transformerService from '../services/transformer';
 import infrastructureService from '../services/infrastructure';
 
 const TransformerCrudScreen = () => {
+    const navigation = useNavigation();
     const [viewLevel, setViewLevel] = useState('regions'); // 'regions', 'districts', 'depots', 'transformers'
     const [selectedRegion, setSelectedRegion] = useState(null);
     const [selectedDistrict, setSelectedDistrict] = useState(null);
     const [selectedDepot, setSelectedDepot] = useState(null);
+
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerTitle: 'Transformer Management',
+            headerRight: () => (
+                <Image
+                    source={require('../../assets/images/powertel_logo.jpg')}
+                    style={{ width: 40, height: 40, marginRight: 15, borderRadius: 8 }}
+                    resizeMode="contain"
+                />
+            ),
+        });
+    }, [navigation]);
 
     // Transformer fields
     const transformerFields = [
@@ -98,9 +114,9 @@ const TransformerCrudScreen = () => {
     // Render custom item for Regions
     const renderRegionItem = (item, onSelect) => (
         <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.regionCard]}>
-            <View style={[styles.iconContainer, { backgroundColor: '#e3f2fd' }]}>
-                <Ionicons name="map" size={20} color="#2196F3" />
-            </View>
+            <LinearGradient colors={['#4fc3f7', '#0288d1']} style={styles.iconContainer}>
+                <Ionicons name="map" size={20} color="#fff" />
+            </LinearGradient>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
             </View>
@@ -111,9 +127,9 @@ const TransformerCrudScreen = () => {
     // Render custom item for Districts
     const renderDistrictItem = (item, onSelect) => (
         <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.districtCard]}>
-             <View style={[styles.iconContainer, { backgroundColor: '#e8f5e9' }]}>
-                <Ionicons name="business" size={20} color="#4CAF50" />
-            </View>
+             <LinearGradient colors={['#66bb6a', '#388e3c']} style={styles.iconContainer}>
+                <Ionicons name="business" size={20} color="#fff" />
+            </LinearGradient>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
             </View>
@@ -124,9 +140,9 @@ const TransformerCrudScreen = () => {
     // Render custom item for Depots
     const renderDepotItem = (item, onSelect) => (
         <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.depotCard]}>
-             <View style={[styles.iconContainer, { backgroundColor: '#fff3e0' }]}>
-                <Ionicons name="home" size={20} color="#FF9800" />
-            </View>
+             <LinearGradient colors={['#ffca28', '#f57c00']} style={styles.iconContainer}>
+                <Ionicons name="home" size={20} color="#fff" />
+            </LinearGradient>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
             </View>
@@ -135,11 +151,14 @@ const TransformerCrudScreen = () => {
     );
 
     // Render custom item for Transformers
-    const renderTransformerItem = (item) => (
+    const renderTransformerItem = (item, onEdit, onDelete) => (
         <View style={[styles.card, styles.transformerCard]}>
-             <View style={[styles.iconContainer, { backgroundColor: item.isActive ? '#e8f5e9' : '#ffebee' }]}>
-                <Ionicons name="flash" size={20} color={item.isActive ? '#4CAF50' : '#F44336'} />
-            </View>
+             <LinearGradient 
+                colors={item.isActive ? ['#66bb6a', '#2e7d32'] : ['#ef5350', '#c62828']} 
+                style={styles.iconContainer}
+             >
+                <Ionicons name="flash" size={20} color="#fff" />
+            </LinearGradient>
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
                 <Text style={styles.cardSubtitle}>{item.capacity} KVA • {item.depotName}</Text>
@@ -149,6 +168,14 @@ const TransformerCrudScreen = () => {
                         {item.isActive ? 'Active' : 'Maintenance'}
                      </Text>
                 </View>
+            </View>
+            <View style={styles.cardActions}>
+                <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                    <Ionicons name="create-outline" size={24} color="#0067A5" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                    <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -220,6 +247,8 @@ const TransformerCrudScreen = () => {
         <CrudScreen
             key={viewLevel} 
             {...screenProps}
+            showLogo={false}
+            showTitle={false}
         />
     );
 };
@@ -229,25 +258,29 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)', // Slightly transparent
         marginHorizontal: 16,
         marginVertical: 4,
         borderRadius: 12,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
         shadowRadius: 4,
-        elevation: 2,
-        borderWidth: 1,
-        borderColor: '#f0f0f0'
+        elevation: 3,
+        borderWidth: 0, // Removed border for cleaner look
     },
     iconContainer: {
         width: 36,
         height: 36,
-        borderRadius: 8,
+        borderRadius: 10, // Squircle
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
     },
     cardContent: {
         flex: 1,
@@ -255,12 +288,14 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 16,
         fontWeight: '600',
+        fontFamily: 'Inter_600SemiBold',
         color: '#1a1a1a',
         marginBottom: 4,
     },
     cardSubtitle: {
         fontSize: 13,
         color: '#757575',
+        fontFamily: 'Inter_400Regular',
     },
     statusBadge: {
         flexDirection: 'row',
@@ -276,7 +311,16 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 12,
         fontWeight: '500',
-    }
+        fontFamily: 'Inter_500Medium',
+    },
+    cardActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    actionButton: {
+        padding: 8,
+        marginLeft: 4,
+    },
 });
 
 export default TransformerCrudScreen;

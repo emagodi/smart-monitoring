@@ -9,10 +9,12 @@ import {
     TextInput,
     Alert,
     ActivityIndicator,
-    Dimensions
+    Dimensions,
+    Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 
@@ -32,7 +34,9 @@ const CrudScreen = ({
     transformDataBeforeSubmit = null, // Function to transform data before create/update
     addButtonLabel, // Label for the add button
     entityName = 'Item', // Name of the entity being managed (e.g., 'Region', 'District')
-    onBack = null // Optional back handler
+    onBack = null, // Optional back handler
+    showLogo = true, // Whether to show the logo in the header
+    showTitle = true // Whether to show the title in the header
 }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -363,36 +367,51 @@ const CrudScreen = ({
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.contentContainer}>
-                <View style={styles.topBar}>
-                    {onBack && (
-                        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                            <Ionicons name="arrow-back" size={24} color="#0067A5" />
-                        </TouchableOpacity>
-                    )}
-                     <View style={styles.searchContainer}>
-                        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder={`Search ${title}...`}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                     </View>
-                     {createItem && (
-                        <TouchableOpacity onPress={handleOpenCreate} style={styles.addButtonSmall}>
-                            <Ionicons name="add" size={24} color="#fff" />
-                        </TouchableOpacity>
-                    )}
-                </View>
+        <LinearGradient
+            colors={['#f0f4f8', '#cfd8dc']}
+            style={styles.container}
+        >
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.contentContainer}>
+                    <View style={styles.topBar}>
+                        {onBack && (
+                            <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                                <Ionicons name="arrow-back" size={24} color="#0067A5" />
+                            </TouchableOpacity>
+                        )}
+                         <View style={styles.searchContainer}>
+                            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder={`Search ${title || entityName}...`}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                         </View>
+                         {createItem && (
+                            <TouchableOpacity onPress={handleOpenCreate} style={styles.addButtonSmall}>
+                                <Ionicons name="add" size={24} color="#fff" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
-                <View style={styles.headerContainer}>
-                    {title ? <Text style={styles.headerTitle}>{title}</Text> : null}
-                    {subtitle && <Text style={styles.headerSubtitle}>{subtitle}</Text>}
-                </View>
+                    {(showTitle || showLogo) && (
+                        <View style={styles.headerContainer}>
+                            <View style={styles.headerTextContainer}>
+                                {showTitle && title ? <Text style={styles.headerTitle}>{title}</Text> : null}
+                                {showTitle && subtitle && <Text style={styles.headerSubtitle}>{subtitle}</Text>}
+                            </View>
+                            {showLogo && (
+                                <Image 
+                                    source={require('../../assets/images/powertel_logo.jpg')} 
+                                    style={styles.logo}
+                                    resizeMode="contain"
+                                />
+                            )}
+                        </View>
+                    )}
 
-                {loading ? (
+                    {loading ? (
                     <View style={styles.centered}>
                         <ActivityIndicator size="large" color="#0067A5" />
                     </View>
@@ -715,13 +734,16 @@ const CrudScreen = ({
                 </View>
             </Modal>
         </SafeAreaView>
+        </LinearGradient>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+    },
+    safeArea: {
+        flex: 1,
     },
     header: {
         flexDirection: 'row',
@@ -747,7 +769,6 @@ const styles = StyleSheet.create({
     },
     contentContainer: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
     },
     addRegionButton: {
         flexDirection: 'row',
@@ -836,14 +857,15 @@ const styles = StyleSheet.create({
     },
     cardTitle: {
         fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '600',
+        fontFamily: 'Inter_600SemiBold',
         color: '#333',
         marginBottom: 4,
     },
     cardSubtitle: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#666',
-        marginBottom: 2,
+        fontFamily: 'Inter_400Regular',
     },
     cardDetail: {
         fontSize: 14,
@@ -858,18 +880,36 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     headerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         paddingHorizontal: 20,
         paddingBottom: 15,
+        marginTop: 10,
+    },
+    headerTextContainer: {
+        flex: 1,
+    },
+    logo: {
+        width: 50,
+        height: 50,
+        borderRadius: 10,
     },
     headerTitle: {
         fontSize: 28,
         fontWeight: 'bold',
+        fontFamily: 'Inter_700Bold',
         color: '#1a1a1a',
+        textShadowColor: 'rgba(0, 0, 0, 0.1)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 2,
     },
     headerSubtitle: {
         fontSize: 16,
-        color: '#666',
+        color: '#546e7a',
         marginTop: 4,
+        fontWeight: '500',
+        fontFamily: 'Inter_500Medium',
     },
     centered: {
         flex: 1,
@@ -917,10 +957,11 @@ const styles = StyleSheet.create({
         borderRadius: 20,
     },
     modalTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#1a1a1a',
-        letterSpacing: 0.5,
+        fontSize: 20,
+        fontWeight: 'bold',
+        fontFamily: 'Inter_700Bold',
+        marginBottom: 16,
+        textAlign: 'center',
     },
     inputContainer: {
         marginBottom: 20,
@@ -968,13 +1009,17 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderRadius: 12,
         paddingHorizontal: 12,
         marginRight: 12,
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
+        borderWidth: 0,
         height: 48,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
     searchIcon: {
         marginRight: 8,
