@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Platform } from 'react-native';
 
 const GOOGLE_API_KEY = 'AIzaSyBJOkU9Iv88i6h8-hxjSN1wLUYCITmkOQQ';
 
@@ -30,13 +32,15 @@ const CrudScreen = ({
     fields, // Array of { name, label, type, placeholder, required }
     itemTitleKey = 'name', // Key to display as main title in list
     itemSubtitleKey = 'id', // Key to display as subtitle
+    keyExtractor, // Custom key extractor function
     renderCustomItem = null,
     transformDataBeforeSubmit = null, // Function to transform data before create/update
     addButtonLabel, // Label for the add button
     entityName = 'Item', // Name of the entity being managed (e.g., 'Region', 'District')
     onBack = null, // Optional back handler
     showLogo = true, // Whether to show the logo in the header
-    showTitle = true // Whether to show the title in the header
+    showTitle = true, // Whether to show the title in the header
+    filterType = 'search' // 'search' or 'date_range'
 }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -49,6 +53,8 @@ const CrudScreen = ({
     const [loadingMore, setLoadingMore] = useState(false);
     const [isPagination, setIsPagination] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     
     // Selector Modal State
     const [selectorVisible, setSelectorVisible] = useState(false);
@@ -56,6 +62,27 @@ const CrudScreen = ({
     const [selectorOptions, setSelectorOptions] = useState([]);
     const [selectorSearchQuery, setSelectorSearchQuery] = useState('');
     const [selectorLoading, setSelectorLoading] = useState(false);
+
+    // Date Picker State
+    const [showStartPicker, setShowStartPicker] = useState(false);
+    const [showEndPicker, setShowEndPicker] = useState(false);
+
+    const onDateChange = (event, selectedDate, type) => {
+        const setShow = type === 'start' ? setShowStartPicker : setShowEndPicker;
+        const setDate = type === 'start' ? setStartDate : setEndDate;
+        
+        if (Platform.OS === 'android') {
+            setShow(false);
+        }
+
+        if (event.type === 'set' && selectedDate) {
+             const year = selectedDate.getFullYear();
+             const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+             const day = String(selectedDate.getDate()).padStart(2, '0');
+             setDate(`${year}-${month}-${day}`);
+        }
+    };
+
 
     // Success Modal State
     const [successModalVisible, setSuccessModalVisible] = useState(false);
@@ -106,7 +133,19 @@ const CrudScreen = ({
         else setLoadingMore(true);
 
         try {
-            const result = await fetchData(nextPage, 10, searchQuery);
+            let filter = searchQuery;
+            if (filterType === 'date_range') {
+                // If only one is set, we can still pass it, or require both?
+                // For now, pass what we have.
+                // Format: YYYY-MM-DD
+                // But user input might be raw.
+                // Assuming backend expects ISO or YYYY-MM-DD.
+                // We'll construct full ISO timestamps for start and end of day if valid.
+                // Or just pass the string.
+                // Let's pass an object { startDate, endDate } and let fetchData handle formatting.
+                filter = { startDate, endDate };
+            }
+            const result = await fetchData(nextPage, 10, filter);
             
             let newItems = [];
             let isPaged = false;
@@ -148,7 +187,7 @@ const CrudScreen = ({
         }, 500);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery]);
+    }, [searchQuery, startDate, endDate]);
     
     // Selector Logic
     const handleOpenSelector = async (field) => {
@@ -379,15 +418,47 @@ const CrudScreen = ({
                                 <Ionicons name="arrow-back" size={24} color="#0067A5" />
                             </TouchableOpacity>
                         )}
-                         <View style={styles.searchContainer}>
-                            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-                            <TextInput
-                                style={styles.searchInput}
-                                placeholder={`Search ${title || entityName}...`}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
-                         </View>
+                        {filterType === 'date_range' ? (
+                             <View style={styles.dateFilterContainer}>
+                                <TouchableOpacity 
+                                    style={styles.dateButton} 
+                                    onPress={() => setShowStartPicker(true)}
+                                >
+                                    <Ionicons name="calendar-outline" size={18} color="#0067A5" style={{marginRight: 6}} />
+                                    <Text style={[styles.dateText, !startDate && styles.placeholderText]}>
+                                        {startDate || 'Start Date'}
+                                    </Text>
+                                </TouchableOpacity>
+                                
+                                <Text style={styles.dateSeparator}>to</Text>
+                                
+                                <TouchableOpacity 
+                                    style={styles.dateButton} 
+                                    onPress={() => setShowEndPicker(true)}
+                                >
+                                    <Ionicons name="calendar-outline" size={18} color="#0067A5" style={{marginRight: 6}} />
+                                    <Text style={[styles.dateText, !endDate && styles.placeholderText]}>
+                                        {endDate || 'End Date'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {(startDate || endDate) && (
+                                    <TouchableOpacity onPress={() => { setStartDate(''); setEndDate(''); }} style={styles.clearDateButton}>
+                                        <Ionicons name="close-circle" size={20} color="#999" />
+                                    </TouchableOpacity>
+                                )}
+                             </View>
+                        ) : (
+                             <View style={styles.searchContainer}>
+                                <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder={`Search ${title || entityName}...`}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                />
+                             </View>
+                        )}
                          {createItem && (
                             <TouchableOpacity onPress={handleOpenCreate} style={styles.addButtonSmall}>
                                 <Ionicons name="add" size={24} color="#fff" />
@@ -419,7 +490,7 @@ const CrudScreen = ({
                     <FlatList
                         data={data}
                         renderItem={renderItem}
-                        keyExtractor={item => String(item.id)}
+                        keyExtractor={keyExtractor || (item => String(item.id))}
                         contentContainerStyle={styles.listContent}
                         refreshing={loading}
                         onRefresh={() => loadData(0, false)}
@@ -733,6 +804,27 @@ const CrudScreen = ({
                     </View>
                 </View>
             </Modal>
+
+            {/* Date Pickers */}
+            {showStartPicker && (
+                <DateTimePicker
+                    value={startDate ? new Date(startDate) : new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => onDateChange(event, date, 'start')}
+                    maximumDate={new Date()}
+                />
+            )}
+            {showEndPicker && (
+                <DateTimePicker
+                    value={endDate ? new Date(endDate) : new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => onDateChange(event, date, 'end')}
+                    maximumDate={new Date()}
+                    minimumDate={startDate ? new Date(startDate) : undefined}
+                />
+            )}
         </SafeAreaView>
         </LinearGradient>
     );
@@ -1029,6 +1121,45 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#333',
         height: '100%',
+    },
+    dateFilterContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        flex: 1,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    dateButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 4,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#eee',
+    },
+    dateText: {
+        fontSize: 12,
+        color: '#333',
+        fontWeight: '600',
+    },
+    dateSeparator: {
+        marginHorizontal: 6,
+        color: '#666',
+        fontWeight: 'bold',
+        fontSize: 12,
+    },
+    clearDateButton: {
+        padding: 4,
+        marginLeft: 4,
     },
     addButtonSmall: {
         width: 48,

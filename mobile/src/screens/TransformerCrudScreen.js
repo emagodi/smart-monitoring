@@ -15,6 +15,7 @@ const TransformerCrudScreen = () => {
     const [selectedDistrict, setSelectedDistrict] = useState(null);
     const [selectedDepot, setSelectedDepot] = useState(null);
     const [selectedTransformer, setSelectedTransformer] = useState(null);
+    const [selectedSensor, setSelectedSensor] = useState(null);
 
     useLayoutEffect(() => {
         navigation.setOptions({
@@ -112,8 +113,14 @@ const TransformerCrudScreen = () => {
         setViewLevel('sensors');
     };
 
+    const handleSelectSensor = (sensor) => {
+        setSelectedSensor(sensor);
+        setViewLevel('sensor_readings');
+    };
+
     const handleBack = () => {
-        if (viewLevel === 'sensors') setViewLevel('transformers');
+        if (viewLevel === 'sensor_readings') setViewLevel('sensors');
+        else if (viewLevel === 'sensors') setViewLevel('transformers');
         else if (viewLevel === 'transformers') setViewLevel('depots');
         else if (viewLevel === 'depots') setViewLevel('districts');
         else if (viewLevel === 'districts') setViewLevel('regions');
@@ -158,19 +165,59 @@ const TransformerCrudScreen = () => {
         </TouchableOpacity>
     );
 
+    const getSensorIcon = (type) => {
+        const lowerType = type ? type.toLowerCase() : '';
+        if (lowerType.includes('temp')) return { name: 'thermometer', colors: ['#ff7043', '#d84315'] };
+        if (lowerType.includes('contact')) return { name: 'radio-button-on', colors: ['#5c6bc0', '#3949ab'] };
+        if (lowerType.includes('motion')) return { name: 'walk', colors: ['#ffa726', '#ef6c00'] };
+        if (lowerType.includes('tilt')) return { name: 'navigate', colors: ['#26c6da', '#0097a7'] };
+        if (lowerType.includes('oil')) return { name: 'water', colors: ['#42a5f5', '#1565c0'] };
+        if (lowerType.includes('vib')) return { name: 'pulse', colors: ['#ab47bc', '#7b1fa2'] };
+        if (lowerType.includes('sound') || lowerType.includes('noise')) return { name: 'volume-high', colors: ['#26a69a', '#00695c'] };
+        if (lowerType.includes('camera') || lowerType.includes('vision')) return { name: 'camera', colors: ['#7e57c2', '#512da8'] };
+        if (lowerType.includes('volt')) return { name: 'flash', colors: ['#fdd835', '#fbc02d'] };
+        return { name: 'hardware-chip', colors: ['#78909c', '#455a64'] };
+    };
+
     // Render custom item for Sensors
-    const renderSensorItem = (item, onEdit, onDelete) => (
-        <View style={[styles.card, { flexDirection: 'row', alignItems: 'center' }]}>
-            <LinearGradient colors={['#7e57c2', '#512da8']} style={styles.iconContainer}>
-                <Ionicons name="hardware-chip" size={16} color="#fff" />
-            </LinearGradient>
-            <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{item.type}</Text>
-                <Text style={styles.cardSubtitle}>ID: {item.id}</Text>
+    const renderSensorItem = (item, onEdit, onDelete) => {
+        const { name, colors } = getSensorIcon(item.type);
+        return (
+            <TouchableOpacity onPress={() => handleSelectSensor(item)} style={[styles.card, { flexDirection: 'row', alignItems: 'center' }]}>
+                <LinearGradient colors={colors} style={styles.iconContainer}>
+                    <Ionicons name={name} size={16} color="#fff" />
+                </LinearGradient>
+                <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle}>{item.type}</Text>
+                </View>
+                 <Ionicons name="chevron-forward" size={18} color="#bdbdbd" />
+            </TouchableOpacity>
+        );
+    };
+
+    // Render custom item for Sensor Readings
+    const renderReadingItem = (item) => {
+        let dateStr = 'N/A';
+        try {
+            if (item.timestamp) {
+                const d = new Date(item.timestamp);
+                if (!isNaN(d.getTime())) {
+                    dateStr = d.toLocaleString();
+                } else {
+                    dateStr = item.timestamp; // Show raw string if parsing fails but exists
+                }
+            }
+        } catch (e) {}
+
+        return (
+            <View style={[styles.card, { flexDirection: 'column', alignItems: 'flex-start', paddingVertical: 12 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
+                    <Text style={styles.readingValue}>{String(item.value)}</Text>
+                    <Text style={styles.readingTime}>{dateStr}</Text>
+                </View>
             </View>
-             {/* Read-only for now or add edit/delete if needed */}
-        </View>
-    );
+        );
+    };
 
     // Render custom item for Transformers
     const renderTransformerItem = (item, onEdit, onDelete) => (
@@ -286,8 +333,28 @@ const TransformerCrudScreen = () => {
                      // Sensor service typically returns a list, not a Page object, so we wrap it
                      try {
                         const data = await sensorService.getSensorsByTransformer(selectedTransformer.id);
-                        if (search) return data.filter(s => s.type.toLowerCase().includes(search.toLowerCase()) || s.id.toString().includes(search));
-                        return data;
+                        let result = data;
+                        if (search) {
+                            result = data.filter(s => s.type.toLowerCase().includes(search.toLowerCase()) || s.id.toString().includes(search));
+                        }
+
+                        // Sort order: Temperature -> Contact -> Motion -> Tilt -> Others
+                        const priority = ['temp', 'contact', 'motion', 'tilt'];
+                        return result.sort((a, b) => {
+                            const typeA = a.type ? a.type.toLowerCase() : '';
+                            const typeB = b.type ? b.type.toLowerCase() : '';
+                            
+                            const getPriority = (t) => {
+                                const index = priority.findIndex(p => t.includes(p));
+                                return index === -1 ? 999 : index;
+                            };
+                            
+                            const pA = getPriority(typeA);
+                            const pB = getPriority(typeB);
+                            
+                            if (pA !== pB) return pA - pB;
+                            return typeA.localeCompare(typeB);
+                        });
                      } catch (error) {
                          console.error("Error fetching sensors", error);
                          return [];
@@ -297,6 +364,46 @@ const TransformerCrudScreen = () => {
                 renderCustomItem: (item) => renderSensorItem(item),
                 createItem: null, // Read-only for now as per request "open all sensors"
                 onBack: handleBack
+            };
+            break;
+        case 'sensor_readings':
+            screenProps = {
+                title: 'Readings',
+                subtitle: selectedSensor?.type,
+                filterType: 'date_range',
+                fetchData: async (page, size, filters) => {
+                     try {
+                        let startDate = null;
+                        let endDate = null;
+
+                        if (filters && typeof filters === 'object') {
+                             if (filters.startDate && filters.startDate.length === 10) startDate = `${filters.startDate}T00:00:00`;
+                             if (filters.endDate && filters.endDate.length === 10) endDate = `${filters.endDate}T23:59:59`;
+                        }
+
+                        const data = await sensorService.getReadingsBySensor(selectedSensor.id, startDate, endDate);
+                        // Sort by timestamp desc
+                        const sorted = data.sort((a, b) => {
+                            const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                            const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                            return (tB || 0) - (tA || 0);
+                        });
+
+                        // If filtered, return all. If not, return top 10.
+                        if (startDate && endDate) {
+                            return sorted;
+                        }
+                        return sorted.slice(0, 10);
+                     } catch (error) {
+                         console.error("Error fetching readings", error);
+                         return [];
+                     }
+                },
+                fields: [{ name: 'value', label: 'Value' }], // Not really used for list
+                renderCustomItem: (item) => renderReadingItem(item),
+                createItem: null,
+                onBack: handleBack,
+                keyExtractor: (item, index) => item.id ? `${item.id}-${index}` : `reading-${index}`
             };
             break;
     }
@@ -397,6 +504,15 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontFamily: 'Inter_600SemiBold',
         marginRight: 4,
+    },
+    readingValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    readingTime: {
+        fontSize: 12,
+        color: '#666',
     },
 });
 

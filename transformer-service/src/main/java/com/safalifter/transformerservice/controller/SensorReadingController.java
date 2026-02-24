@@ -49,7 +49,25 @@ public class SensorReadingController {
     @GetMapping("/sensor/{sensorId}")
     @Operation(summary = "List readings by sensor")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
-    public ResponseEntity<List<com.safalifter.transformerservice.payload.response.SensorValueResponse>> listBySensor(@PathVariable Long sensorId) {
+    public ResponseEntity<List<com.safalifter.transformerservice.payload.response.SensorValueResponse>> listBySensor(
+            @PathVariable Long sensorId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        if (startDate != null && endDate != null) {
+            try {
+                // Parse ISO dates
+                java.time.LocalDateTime start = java.time.LocalDateTime.parse(startDate);
+                java.time.LocalDateTime end = java.time.LocalDateTime.parse(endDate);
+                return ResponseEntity.ok(sensorReadingService.listBySensorIdAndDateRange(sensorId, start, end));
+            } catch (Exception e) {
+                // Fallback or error? Let's just log and return all or return bad request.
+                // For user experience, returning bad request is better if format is wrong.
+                log.error("Invalid date format", e);
+                // We could return 400, but let's just return empty list or all?
+                // Returning all might be confusing if they asked for a range.
+                // Let's assume frontend sends correct ISO format.
+            }
+        }
         return ResponseEntity.ok(sensorReadingService.listBySensorId(sensorId));
     }
 

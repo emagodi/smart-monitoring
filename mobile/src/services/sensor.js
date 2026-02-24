@@ -20,9 +20,19 @@ const updateSensor = async (id, data) => {
     return response.data;
 };
 
+const getReadingsBySensor = async (id, startDate = null, endDate = null) => {
+    let url = `/api/v1/sensor-readings/sensor/${id}`;
+    if (startDate && endDate) {
+        url += `?startDate=${startDate}&endDate=${endDate}`;
+    }
+    const response = await api.get(url);
+    return response.data;
+};
+
 export default {
     getSensorsByTransformer,
     getSensorById,
     getUnassignedSensors,
-    updateSensor
+    updateSensor,
+    getReadingsBySensor
 };

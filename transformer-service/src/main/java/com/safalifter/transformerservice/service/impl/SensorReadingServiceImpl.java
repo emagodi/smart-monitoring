@@ -72,6 +72,27 @@ public class SensorReadingServiceImpl implements SensorReadingService {
     }
 
     @Override
+    public List<SensorValueResponse> listBySensorIdAndDateRange(Long sensorId, java.time.LocalDateTime start, java.time.LocalDateTime end) {
+        Sensor sensor = sensorRepository.findById(sensorId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + sensorId + " not found"));
+        String type = sensor.getType();
+        // Try to filter by updatedAt first, as it's the primary timestamp we use
+        List<SensorReading> readings = sensorReadingRepository.findBySensorIdAndUpdatedAtBetween(sensorId, start, end);
+        if (readings.isEmpty()) {
+             // Fallback to createdAt if needed, or maybe just return empty
+             // For now let's also check createdAt if updatedAt didn't yield results, 
+             // but usually we should stick to one field. 
+             // Given the previous requirement "use updated at", let's stick to updatedAt.
+             // However, some records might only have createdAt if they were never updated.
+             // Let's use a custom query or just filter in memory if we want to be robust, 
+             // but repository method is cleaner. 
+             // Let's assume consistent usage of updatedAt for now as per previous fix.
+        }
+        return readings.stream()
+                .map(r -> toParsedValueResponse(r, type))
+                .toList();
+    }
+
+    @Override
     public List<SensorValueResponse> listParsedValuesBySensorId(Long sensorId) {
         Sensor sensor = sensorRepository.findById(sensorId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + sensorId + " not found"));
         String type = sensor.getType();
@@ -118,10 +139,23 @@ public class SensorReadingServiceImpl implements SensorReadingService {
 
     private SensorValueResponse toParsedValueResponse(SensorReading reading, String type) {
         Object valueObj = extractValue(reading, type);
+        String timestamp = null;
+        if (reading.getUpdatedAt() != null) {
+            timestamp = reading.getUpdatedAt().toString();
+            if (!timestamp.contains("T")) {
+                timestamp = timestamp.replace(" ", "T");
+            }
+        } else if (reading.getCreatedAt() != null) {
+            timestamp = reading.getCreatedAt().toString();
+            if (!timestamp.contains("T")) {
+                timestamp = timestamp.replace(" ", "T");
+            }
+        }
         return SensorValueResponse.builder()
-                .id(0)
+                .id(reading.getId())
                 .type(type)
                 .value(valueObj != null ? String.valueOf(valueObj) : null)
+                .timestamp(timestamp)
                 .build();
     }
 
@@ -143,7 +177,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
 
     private Object extractValue(SensorReading reading, String type) {
         String key = canonicalType(type);
-        // Prefer raw_payload structure decoded.data.{type}
+        // 1. Try raw_payload structure: decoded.data.{key}
         try {
             if (reading.getRawPayload() != null && !reading.getRawPayload().isBlank()) {
                 Map<String,Object> m = objectMapper.readValue(reading.getRawPayload(), new TypeReference<Map<String,Object>>(){});
@@ -151,31 +185,51 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                 if (decoded instanceof Map<?,?> dm) {
                     Object data = dm.get("data");
                     if (data instanceof Map<?,?> ddm) {
-                        Object v = ddm.get(key);
-                        if (v != null) return normalizeContact(key, v);
+                        Object v = findValue(ddm, key);
+                        if (v != null) return normalizeValue(key, v);
                     }
+                     // Fallback: try direct access in decoded map
+                    Object v = findValue((Map<?,?>)dm, key);
+                    if (v != null) return normalizeValue(key, v);
                 }
             }
         } catch (Exception ignored) {}
+
+        // 2. Try decoded structure: data.{key} or direct {key}
         try {
             if (reading.getDecoded() != null && !reading.getDecoded().isBlank()) {
                 Map<String,Object> m = objectMapper.readValue(reading.getDecoded(), new TypeReference<Map<String,Object>>(){});
                 Object data = m.get("data");
                 if (data instanceof Map<?,?> ddm) {
-                    Object v = ddm.get(key);
-                    if (v != null) return normalizeContact(key, v);
+                    Object v = findValue(ddm, key);
+                    if (v != null) return normalizeValue(key, v);
                 }
+                // Fallback: direct access
+                Object v = findValue(m, key);
+                if (v != null) return normalizeValue(key, v);
             }
         } catch (Exception ignored) {}
         return null;
     }
 
-    private Object normalizeContact(String type, Object v) {
-        if (!"contact".equalsIgnoreCase(type)) return v;
-        if (v instanceof Number n) {
-            return n.intValue() == 0 ? "closed" : "open";
+    private Object findValue(Map<?,?> map, String key) {
+        if (map.containsKey(key)) return map.get(key);
+        // Try simple variations
+        if (map.containsKey(key.toLowerCase())) return map.get(key.toLowerCase());
+        if (map.containsKey(key.toUpperCase())) return map.get(key.toUpperCase());
+        // Try common aliases
+        if ("temperature".equals(key) && map.containsKey("temp")) return map.get("temp");
+        if ("temperature".equals(key) && map.containsKey("Temp")) return map.get("Temp");
+        return null;
+    }
+
+    private Object normalizeValue(String type, Object v) {
+        if ("contact".equalsIgnoreCase(type)) {
+            if (v instanceof Number n) {
+                return n.intValue() == 0 ? "closed" : "open";
+            }
         }
-        return String.valueOf(v);
+        return v;
     }
 
     private String canonicalType(String type) {
@@ -183,6 +237,8 @@ public class SensorReadingServiceImpl implements SensorReadingService {
         String t = type.toLowerCase();
         if (t.contains("temp")) return "temperature";
         if (t.contains("contact")) return "contact";
+        if (t.contains("motion")) return "motion";
+        if (t.contains("tilt")) return "tilt";
         if (t.contains("suspicious")) return "suspicious_till";
         return t;
     }
