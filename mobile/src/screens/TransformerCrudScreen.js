@@ -152,30 +152,38 @@ const TransformerCrudScreen = () => {
 
     // Render custom item for Transformers
     const renderTransformerItem = (item, onEdit, onDelete) => (
-        <View style={[styles.card, styles.transformerCard]}>
-             <LinearGradient 
-                colors={item.isActive ? ['#66bb6a', '#2e7d32'] : ['#ef5350', '#c62828']} 
-                style={styles.iconContainer}
-             >
-                <Ionicons name="flash" size={20} color="#fff" />
-            </LinearGradient>
-            <View style={styles.cardContent}>
+        <View style={[styles.card, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <View style={{ marginBottom: 4 }}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text style={styles.cardSubtitle}>{item.capacity} KVA • {item.depotName}</Text>
-                <View style={styles.statusBadge}>
-                     <View style={[styles.statusDot, { backgroundColor: item.isActive ? '#4CAF50' : '#F44336' }]} />
-                     <Text style={[styles.statusText, { color: item.isActive ? '#4CAF50' : '#F44336' }]}>
-                        {item.isActive ? 'Active' : 'Maintenance'}
-                     </Text>
-                </View>
             </View>
-            <View style={styles.cardActions}>
-                <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
-                    <Ionicons name="create-outline" size={24} color="#0067A5" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
-                    <Ionicons name="trash-outline" size={24} color="#FF3B30" />
-                </TouchableOpacity>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <LinearGradient 
+                        colors={item.isActive ? ['#66bb6a', '#2e7d32'] : ['#ef5350', '#c62828']} 
+                        style={styles.iconContainer}
+                    >
+                        <Ionicons name="flash" size={16} color="#fff" />
+                    </LinearGradient>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.cardSubtitle}>{item.capacity} KVA • {item.depotName}</Text>
+                        <View style={styles.statusBadge}>
+                             <View style={[styles.statusDot, { backgroundColor: item.isActive ? '#4CAF50' : '#F44336' }]} />
+                             <Text style={[styles.statusText, { color: item.isActive ? '#4CAF50' : '#F44336' }]}>
+                                {item.isActive ? 'Active' : 'Maintenance'}
+                             </Text>
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.cardActions}>
+                    <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                        <Ionicons name="create-outline" size={20} color="#4CAF50" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                        <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -257,59 +265,59 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 12,
+        padding: 8,
         backgroundColor: 'rgba(255, 255, 255, 0.95)', // Slightly transparent
         marginHorizontal: 16,
-        marginVertical: 4,
-        borderRadius: 12,
+        marginVertical: 2,
+        borderRadius: 8,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowRadius: 2,
+        elevation: 2,
         borderWidth: 0, // Removed border for cleaner look
     },
     iconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 10, // Squircle
+        width: 30,
+        height: 30,
+        borderRadius: 8, // Squircle
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
+        marginRight: 8,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 2,
+        shadowRadius: 1,
+        elevation: 1,
     },
     cardContent: {
         flex: 1,
     },
     cardTitle: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
         fontFamily: 'Inter_600SemiBold',
         color: '#1a1a1a',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     cardSubtitle: {
-        fontSize: 13,
+        fontSize: 11,
         color: '#757575',
         fontFamily: 'Inter_400Regular',
     },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 6,
+        marginTop: 2,
     },
     statusDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        marginRight: 6,
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        marginRight: 4,
     },
     statusText: {
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: '500',
         fontFamily: 'Inter_500Medium',
     },
@@ -318,8 +326,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     actionButton: {
-        padding: 8,
-        marginLeft: 4,
+        padding: 4,
+        marginLeft: 2,
     },
 });
 
