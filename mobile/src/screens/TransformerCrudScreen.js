@@ -6,13 +6,15 @@ import { useNavigation } from '@react-navigation/native';
 import CrudScreen from '../components/CrudScreen';
 import transformerService from '../services/transformer';
 import infrastructureService from '../services/infrastructure';
+import sensorService from '../services/sensor';
 
 const TransformerCrudScreen = () => {
     const navigation = useNavigation();
-    const [viewLevel, setViewLevel] = useState('regions'); // 'regions', 'districts', 'depots', 'transformers'
+    const [viewLevel, setViewLevel] = useState('regions'); // 'regions', 'districts', 'depots', 'transformers', 'sensors'
     const [selectedRegion, setSelectedRegion] = useState(null);
     const [selectedDistrict, setSelectedDistrict] = useState(null);
     const [selectedDepot, setSelectedDepot] = useState(null);
+    const [selectedTransformer, setSelectedTransformer] = useState(null);
 
     useLayoutEffect(() => {
         navigation.setOptions({
@@ -105,8 +107,14 @@ const TransformerCrudScreen = () => {
         setViewLevel('transformers');
     };
 
+    const handleSelectTransformer = (transformer) => {
+        setSelectedTransformer(transformer);
+        setViewLevel('sensors');
+    };
+
     const handleBack = () => {
-        if (viewLevel === 'transformers') setViewLevel('depots');
+        if (viewLevel === 'sensors') setViewLevel('transformers');
+        else if (viewLevel === 'transformers') setViewLevel('depots');
         else if (viewLevel === 'depots') setViewLevel('districts');
         else if (viewLevel === 'districts') setViewLevel('regions');
     };
@@ -150,6 +158,20 @@ const TransformerCrudScreen = () => {
         </TouchableOpacity>
     );
 
+    // Render custom item for Sensors
+    const renderSensorItem = (item, onEdit, onDelete) => (
+        <View style={[styles.card, { flexDirection: 'row', alignItems: 'center' }]}>
+            <LinearGradient colors={['#7e57c2', '#512da8']} style={styles.iconContainer}>
+                <Ionicons name="hardware-chip" size={16} color="#fff" />
+            </LinearGradient>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{item.type}</Text>
+                <Text style={styles.cardSubtitle}>ID: {item.id}</Text>
+            </View>
+             {/* Read-only for now or add edit/delete if needed */}
+        </View>
+    );
+
     // Render custom item for Transformers
     const renderTransformerItem = (item, onEdit, onDelete) => (
         <View style={[styles.card, { flexDirection: 'column', alignItems: 'stretch' }]}>
@@ -185,6 +207,14 @@ const TransformerCrudScreen = () => {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            <TouchableOpacity 
+                style={styles.viewSensorsButton}
+                onPress={() => handleSelectTransformer(item)}
+            >
+                <Text style={styles.viewSensorsText}>View Sensors</Text>
+                <Ionicons name="chevron-forward" size={12} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 
@@ -246,6 +276,27 @@ const TransformerCrudScreen = () => {
                 onBack: handleBack,
                 addButtonLabel: 'Add Transformer',
                 renderCustomItem: renderTransformerItem // Override default render to show nice card
+            };
+            break;
+        case 'sensors':
+            screenProps = {
+                title: 'Sensors',
+                subtitle: selectedTransformer?.name,
+                fetchData: async (page, size, search) => {
+                     // Sensor service typically returns a list, not a Page object, so we wrap it
+                     try {
+                        const data = await sensorService.getSensorsByTransformer(selectedTransformer.id);
+                        if (search) return data.filter(s => s.type.toLowerCase().includes(search.toLowerCase()) || s.id.toString().includes(search));
+                        return data;
+                     } catch (error) {
+                         console.error("Error fetching sensors", error);
+                         return [];
+                     }
+                },
+                fields: [{ name: 'type', label: 'Sensor Type' }], // Basic field for now
+                renderCustomItem: (item) => renderSensorItem(item),
+                createItem: null, // Read-only for now as per request "open all sensors"
+                onBack: handleBack
             };
             break;
     }
@@ -328,6 +379,24 @@ const styles = StyleSheet.create({
     actionButton: {
         padding: 4,
         marginLeft: 2,
+    },
+    viewSensorsButton: {
+        marginTop: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#0067A5',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        alignSelf: 'center', // Center align the button
+    },
+    viewSensorsText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '600',
+        fontFamily: 'Inter_600SemiBold',
+        marginRight: 4,
     },
 });
 
