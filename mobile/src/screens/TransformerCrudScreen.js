@@ -95,15 +95,65 @@ const TransformerCrudScreen = () => {
         else if (viewLevel === 'districts') setViewLevel('regions');
     };
 
-    // Render custom item for selection lists
-    const renderSelectionItem = (item, onSelect) => (
-        <TouchableOpacity onPress={() => onSelect(item)} style={styles.itemContainer}>
-            <View>
-                <Text style={styles.itemTitle}>{item.name}</Text>
-                {item.code && <Text style={styles.itemSubtitle}>{item.code}</Text>}
+    // Render custom item for Regions
+    const renderRegionItem = (item, onSelect) => (
+        <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.regionCard]}>
+            <View style={[styles.iconContainer, { backgroundColor: '#e3f2fd' }]}>
+                <Ionicons name="map" size={24} color="#2196F3" />
             </View>
-            <Ionicons name="chevron-forward" size={24} color="#ccc" />
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardSubtitle}>Region</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#bdbdbd" />
         </TouchableOpacity>
+    );
+
+    // Render custom item for Districts
+    const renderDistrictItem = (item, onSelect) => (
+        <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.districtCard]}>
+             <View style={[styles.iconContainer, { backgroundColor: '#e8f5e9' }]}>
+                <Ionicons name="business" size={24} color="#4CAF50" />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardSubtitle}>District</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#bdbdbd" />
+        </TouchableOpacity>
+    );
+
+    // Render custom item for Depots
+    const renderDepotItem = (item, onSelect) => (
+        <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.depotCard]}>
+             <View style={[styles.iconContainer, { backgroundColor: '#fff3e0' }]}>
+                <Ionicons name="home" size={24} color="#FF9800" />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardSubtitle}>Depot</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#bdbdbd" />
+        </TouchableOpacity>
+    );
+
+    // Render custom item for Transformers
+    const renderTransformerItem = (item) => (
+        <View style={[styles.card, styles.transformerCard]}>
+             <View style={[styles.iconContainer, { backgroundColor: item.isActive ? '#e8f5e9' : '#ffebee' }]}>
+                <Ionicons name="flash" size={24} color={item.isActive ? '#4CAF50' : '#F44336'} />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardSubtitle}>{item.capacity} KVA • {item.depotName}</Text>
+                <View style={styles.statusBadge}>
+                     <View style={[styles.statusDot, { backgroundColor: item.isActive ? '#4CAF50' : '#F44336' }]} />
+                     <Text style={[styles.statusText, { color: item.isActive ? '#4CAF50' : '#F44336' }]}>
+                        {item.isActive ? 'Active' : 'Maintenance'}
+                     </Text>
+                </View>
+            </View>
+        </View>
     );
 
     // Dynamic props for CrudScreen
@@ -112,45 +162,48 @@ const TransformerCrudScreen = () => {
     switch (viewLevel) {
         case 'regions':
             screenProps = {
-                title: 'Select Region',
+                title: '',
                 fetchData: infrastructureService.getAllRegions, // Returns Page object
                 fields: [{ name: 'name', label: 'Name' }], // Minimal fields for search
-                renderCustomItem: (item) => renderSelectionItem(item, handleSelectRegion),
+                renderCustomItem: (item) => renderRegionItem(item, handleSelectRegion),
                 createItem: null, // Read-only
                 onBack: null // Root level
             };
             break;
         case 'districts':
             screenProps = {
-                title: `Select District (${selectedRegion?.name})`,
+                title: '',
+                subtitle: selectedRegion?.name,
                 fetchData: async (page, size, search) => {
                     const data = await infrastructureService.getDistrictsByRegion(selectedRegion.id);
                     if (search) return data.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
                     return data;
                 },
                 fields: [{ name: 'name', label: 'Name' }],
-                renderCustomItem: (item) => renderSelectionItem(item, handleSelectDistrict),
+                renderCustomItem: (item) => renderDistrictItem(item, handleSelectDistrict),
                 createItem: null,
                 onBack: handleBack
             };
             break;
         case 'depots':
             screenProps = {
-                title: `Select Depot (${selectedDistrict?.name})`,
+                title: '',
+                subtitle: selectedDistrict?.name,
                 fetchData: async (page, size, search) => {
                     const data = await infrastructureService.getDepotsByDistrict(selectedDistrict.id);
                     if (search) return data.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
                     return data;
                 },
                 fields: [{ name: 'name', label: 'Name' }],
-                renderCustomItem: (item) => renderSelectionItem(item, handleSelectDepot),
+                renderCustomItem: (item) => renderDepotItem(item, handleSelectDepot),
                 createItem: null,
                 onBack: handleBack
             };
             break;
         case 'transformers':
             screenProps = {
-                title: `Transformers (${selectedDepot?.name})`,
+                title: `Transformers`,
+                subtitle: selectedDepot?.name,
                 fetchData: fetchTransformers,
                 fields: transformerFields,
                 createItem: transformerService.createTransformer,
@@ -159,7 +212,8 @@ const TransformerCrudScreen = () => {
                 transformDataBeforeSubmit: transformDataBeforeSubmit,
                 entityName: 'Transformer',
                 onBack: handleBack,
-                addButtonLabel: 'Add Transformer'
+                addButtonLabel: 'Add Transformer',
+                renderCustomItem: renderTransformerItem // Override default render to show nice card
             };
             break;
     }
@@ -174,28 +228,57 @@ const TransformerCrudScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    itemContainer: {
+    card: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 15,
+        padding: 16,
         backgroundColor: '#fff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        marginHorizontal: 10,
-        marginVertical: 5,
-        borderRadius: 8,
-        elevation: 2
+        marginHorizontal: 16,
+        marginVertical: 8,
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#f0f0f0'
     },
-    itemTitle: {
+    iconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    cardContent: {
+        flex: 1,
+    },
+    cardTitle: {
         fontSize: 16,
-        fontWeight: '500',
-        color: '#333'
+        fontWeight: '600',
+        color: '#1a1a1a',
+        marginBottom: 4,
     },
-    itemSubtitle: {
+    cardSubtitle: {
+        fontSize: 13,
+        color: '#757575',
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 6,
+    },
+    statusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 6,
+    },
+    statusText: {
         fontSize: 12,
-        color: '#666',
-        marginTop: 2
+        fontWeight: '500',
     }
 });
 

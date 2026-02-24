@@ -20,6 +20,7 @@ const GOOGLE_API_KEY = 'AIzaSyBJOkU9Iv88i6h8-hxjSN1wLUYCITmkOQQ';
 
 const CrudScreen = ({
     title,
+    subtitle,
     fetchData,
     createItem,
     updateItem,
@@ -380,10 +381,15 @@ const CrudScreen = ({
                         />
                      </View>
                      {createItem && (
-                     <TouchableOpacity onPress={handleOpenCreate} style={styles.addButtonSmall}>
-                        <Ionicons name="add" size={24} color="#fff" />
-                    </TouchableOpacity>
+                        <TouchableOpacity onPress={handleOpenCreate} style={styles.addButtonSmall}>
+                            <Ionicons name="add" size={24} color="#fff" />
+                        </TouchableOpacity>
                     )}
+                </View>
+
+                <View style={styles.headerContainer}>
+                    {title ? <Text style={styles.headerTitle}>{title}</Text> : null}
+                    {subtitle && <Text style={styles.headerSubtitle}>{subtitle}</Text>}
                 </View>
 
                 {loading ? (
@@ -847,6 +853,20 @@ const styles = StyleSheet.create({
     actionButton: {
         padding: 8,
         marginLeft: 8,
+    },
+    headerContainer: {
+        paddingHorizontal: 20,
+        paddingBottom: 15,
+    },
+    headerTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#1a1a1a',
+    },
+    headerSubtitle: {
+        fontSize: 16,
+        color: '#666',
+        marginTop: 4,
     },
     centered: {
         flex: 1,
