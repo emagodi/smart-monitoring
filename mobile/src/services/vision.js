@@ -13,6 +13,7 @@ const analyzeImage = async (imageUri) => {
     const response = await axios.post(`${config.VISION_AI_URL}/analyze/upload`, formData, {
         headers: {
             'Content-Type': 'multipart/form-data',
+            'Bypass-Tunnel-Reminder': 'true',
         },
     });
     return response.data;

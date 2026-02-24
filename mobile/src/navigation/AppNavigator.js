@@ -17,7 +17,7 @@ import RegionListScreen from '../screens/RegionListScreen';
 import DistrictListScreen from '../screens/DistrictListScreen';
 import DepotListScreen from '../screens/DepotListScreen';
 import TransformerCrudScreen from '../screens/TransformerCrudScreen';
-import NewSensorsScreen from '../screens/NewSensorsScreen';
+import NewSensorsScreen from '../screens/NewSensorsScreen'; // Re-verified
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();

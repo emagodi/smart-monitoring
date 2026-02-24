@@ -30,7 +30,8 @@ const CrudScreen = ({
     renderCustomItem = null,
     transformDataBeforeSubmit = null, // Function to transform data before create/update
     addButtonLabel, // Label for the add button
-    entityName = 'Item' // Name of the entity being managed (e.g., 'Region', 'District')
+    entityName = 'Item', // Name of the entity being managed (e.g., 'Region', 'District')
+    onBack = null // Optional back handler
 }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -364,6 +365,11 @@ const CrudScreen = ({
         <SafeAreaView style={styles.container}>
             <View style={styles.contentContainer}>
                 <View style={styles.topBar}>
+                    {onBack && (
+                        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                            <Ionicons name="arrow-back" size={24} color="#0067A5" />
+                        </TouchableOpacity>
+                    )}
                      <View style={styles.searchContainer}>
                         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
                         <TextInput
@@ -930,6 +936,10 @@ const styles = StyleSheet.create({
         padding: 16,
         alignItems: 'center',
         justifyContent: 'space-between',
+    },
+    backButton: {
+        padding: 10,
+        marginRight: 5,
     },
     searchContainer: {
         flex: 1,
