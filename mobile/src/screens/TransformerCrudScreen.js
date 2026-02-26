@@ -20,7 +20,7 @@ const TransformerCrudScreen = () => {
 
     useLayoutEffect(() => {
         navigation.setOptions({
-            headerTitle: 'Transformer Management',
+            headerTitle: 'Transformers',
             headerRight: () => <LogoutButton />,
         });
     }, [navigation]);

@@ -152,7 +152,11 @@ const DrawerNavigator = () => {
       <Drawer.Screen name="Regions" component={RegionListScreen} />
       <Drawer.Screen name="Districts" component={DistrictListScreen} />
       <Drawer.Screen name="Depots" component={DepotListScreen} />
-      <Drawer.Screen name="Transformers Mgmt" component={TransformerCrudScreen} />
+      <Drawer.Screen 
+        name="Transformers Mgmt" 
+        component={TransformerCrudScreen} 
+        options={{ title: 'Transformers' }}
+      />
       <Drawer.Screen name="New Sensors" component={NewSensorsScreen} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
     </Drawer.Navigator>
