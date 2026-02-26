@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import CrudScreen from '../components/CrudScreen';
+import HeaderLogo from '../components/HeaderLogo';
 import transformerService from '../services/transformer';
 import infrastructureService from '../services/infrastructure';
 import sensorService from '../services/sensor';
@@ -20,13 +21,7 @@ const TransformerCrudScreen = () => {
     useLayoutEffect(() => {
         navigation.setOptions({
             headerTitle: 'Transformer Management',
-            headerRight: () => (
-                <Image
-                    source={require('../../assets/images/powertel_logo.jpg')}
-                    style={{ width: 40, height: 40, marginRight: 15, borderRadius: 8 }}
-                    resizeMode="contain"
-                />
-            ),
+            headerRight: () => <HeaderLogo />,
         });
     }, [navigation]);
 

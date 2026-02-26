@@ -18,6 +18,7 @@ const RegionListScreen = () => {
             fields={fields}
             itemTitleKey="name"
             entityName="Region"
+            showLogo={false}
         />
     );
 };

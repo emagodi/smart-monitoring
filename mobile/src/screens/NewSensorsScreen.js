@@ -56,6 +56,7 @@ const NewSensorsScreen = () => {
             itemSubtitleKey="devEui"
             transformDataBeforeSubmit={transformDataBeforeSubmit}
             entityName="Sensor"
+            showLogo={false}
         />
     );
 };

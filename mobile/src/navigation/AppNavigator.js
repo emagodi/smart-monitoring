@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList, DrawerItem } from '@react-navigation/drawer';
-import { ActivityIndicator, View, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, TouchableOpacity, Image } from 'react-native';
 import { AuthContext } from '../contexts/AuthContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -18,6 +18,7 @@ import DistrictListScreen from '../screens/DistrictListScreen';
 import DepotListScreen from '../screens/DepotListScreen';
 import TransformerCrudScreen from '../screens/TransformerCrudScreen';
 import NewSensorsScreen from '../screens/NewSensorsScreen'; // Re-verified
+import HeaderLogo from '../components/HeaderLogo';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -56,12 +57,16 @@ const TransformersStackNavigator = () => {
               <Ionicons name="menu" size={24} color="#000" />
             </TouchableOpacity>
           ),
+          headerRight: () => <HeaderLogo />,
         })} 
       />
       <TransformersStack.Screen 
         name="TransformerDetails" 
         component={TransformerDetailsScreen} 
-        options={{ title: 'Transformer Details' }} 
+        options={{ 
+            title: 'Transformer Details',
+            headerRight: () => <HeaderLogo />,
+        }} 
       />
     </TransformersStack.Navigator>
   );
@@ -73,6 +78,7 @@ const DrawerNavigator = () => {
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={({ route }) => ({
         headerShown: true,
+        headerRight: () => <HeaderLogo />,
         drawerActiveTintColor: '#0067A5',
         drawerInactiveTintColor: '#333',
         drawerLabelStyle: {

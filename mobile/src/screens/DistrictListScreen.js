@@ -45,6 +45,7 @@ const DistrictListScreen = () => {
             itemTitleKey="name"
             transformDataBeforeSubmit={transformDataBeforeSubmit}
             entityName="District"
+            showLogo={false}
         />
     );
 };

@@ -37,6 +37,7 @@ const DepotListScreen = () => {
             itemTitleKey="name"
             transformDataBeforeSubmit={transformDataBeforeSubmit}
             entityName="Depot"
+            showLogo={false}
         />
     );
 };
