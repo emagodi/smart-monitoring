@@ -18,6 +18,10 @@ SAVE_DIR = os.path.join(os.getcwd(), "uploads")
 VISION_AI_URL = "http://localhost:8000/analyze/upload"
 ENABLE_AI_PROCESSING = True
 
+# Cooldown Configuration
+last_processed_time = 0
+COOLDOWN_SECONDS = 5
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print(f"Connected to MQTT Broker at {MQTT_BROKER}:{MQTT_PORT}")
@@ -54,6 +58,14 @@ def send_to_vision_ai(filepath):
         print("Ensure Vision AI service is running on port 8000")
 
 def on_message(client, userdata, msg):
+    global last_processed_time
+    current_time = time.time()
+    
+    # Simple cooldown to prevent burst captures
+    if current_time - last_processed_time < COOLDOWN_SECONDS:
+        print(f"Ignored burst message (Cooldown: {COOLDOWN_SECONDS}s)")
+        return
+
     print(f"Received message on topic: {msg.topic}")
     try:
         # Parse the JSON payload
@@ -63,6 +75,7 @@ def on_message(client, userdata, msg):
         # Extract the Base64 image string
         # The structure seems to be: {"values": {"image": "data:image/jpeg;base64,..."}}
         if "values" in data and "image" in data["values"]:
+            last_processed_time = current_time  # Update cooldown timestamp
             base64_img = data["values"]["image"]
             
             # Remove the data URL prefix if present
@@ -104,6 +117,7 @@ def on_message(client, userdata, msg):
             with open(filepath, "wb") as f:
                 f.write(msg.payload)
             print(f"[{timestamp}] Raw image saved: {filename}")
+            last_processed_time = current_time # Update timestamp for raw saves too
         except Exception as e:
             print(f"Error saving raw fallback: {e}")
 
@@ -120,7 +134,7 @@ def main():
             print(f"Error creating directory {SAVE_DIR}: {e}")
             return
 
-    client = mqtt.Client()
+    client = mqtt.Client(client_id="NE101_Image_Receiver", clean_session=True)
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
     client.on_message = on_message
