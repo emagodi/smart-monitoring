@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import CrudScreen from '../components/CrudScreen';
-import HeaderLogo from '../components/HeaderLogo';
+import LogoutButton from '../components/LogoutButton';
 import transformerService from '../services/transformer';
 import infrastructureService from '../services/infrastructure';
 import sensorService from '../services/sensor';
@@ -21,7 +21,7 @@ const TransformerCrudScreen = () => {
     useLayoutEffect(() => {
         navigation.setOptions({
             headerTitle: 'Transformer Management',
-            headerRight: () => <HeaderLogo />,
+            headerRight: () => <LogoutButton />,
         });
     }, [navigation]);
 

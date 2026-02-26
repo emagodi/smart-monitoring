@@ -1,5 +1,10 @@
 import api from './api';
 
+const getAllSensors = async (page = 0, size = 1000) => {
+    const response = await api.get(`/api/v1/sensors?page=${page}&size=${size}`);
+    return response.data;
+};
+
 const getSensorsByTransformer = async (transformerId) => {
     const response = await api.get(`/api/v1/sensors/transformer/${transformerId}`);
     return response.data;
@@ -30,6 +35,7 @@ const getReadingsBySensor = async (id, startDate = null, endDate = null) => {
 };
 
 export default {
+    getAllSensors,
     getSensorsByTransformer,
     getSensorById,
     getUnassignedSensors,
