@@ -1,15 +1,36 @@
-import React from 'react';
-import { Image, View, StyleSheet } from 'react-native';
+import React, { useContext } from 'react';
+import { Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { AuthContext } from '../contexts/AuthContext';
 
 const HeaderLogo = () => {
+    const { signOut } = useContext(AuthContext);
+
+    const handleLogout = () => {
+        Alert.alert(
+            "Logout",
+            "Are you sure you want to logout?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                { 
+                    text: "Logout", 
+                    onPress: () => signOut(),
+                    style: "destructive"
+                }
+            ]
+        );
+    };
+
     return (
-        <View style={styles.container}>
+        <TouchableOpacity onPress={handleLogout} style={styles.container}>
             <Image 
                 source={require('../../assets/images/powertel_logo.jpg')} 
                 style={styles.logo}
                 resizeMode="contain"
             />
-        </View>
+        </TouchableOpacity>
     );
 };
 
