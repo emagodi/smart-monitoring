@@ -23,6 +23,7 @@ import RegionFormScreen from '../screens/RegionFormScreen';
 import DistrictFormScreen from '../screens/DistrictFormScreen';
 import DepotFormScreen from '../screens/DepotFormScreen';
 import TransformerFormScreen from '../screens/TransformerFormScreen';
+import CameraImagesScreen from '../screens/CameraImagesScreen';
 // import LogoutButton from '../components/LogoutButton';
 
 const Stack = createNativeStackNavigator();
@@ -211,6 +212,11 @@ const AppNavigator = () => {
           name="TransformerForm" 
           component={TransformerFormScreen} 
           options={{ headerShown: true, title: 'Transformer' }}
+        />
+        <Stack.Screen 
+          name="CameraImages" 
+          component={CameraImagesScreen} 
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

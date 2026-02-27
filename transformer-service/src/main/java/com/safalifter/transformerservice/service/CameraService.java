@@ -2,7 +2,10 @@ package com.safalifter.transformerservice.service;
 
 import com.safalifter.transformerservice.payload.request.CameraEventRequest;
 import com.safalifter.transformerservice.payload.request.CameraRequest;
+import com.safalifter.transformerservice.payload.response.CameraImageResponse;
 import com.safalifter.transformerservice.payload.response.CameraResponse;
+import org.springframework.core.io.Resource;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -14,4 +17,7 @@ public interface CameraService {
     CameraResponse getById(Long id);
     CameraResponse update(Long id, CameraRequest request);
     void delete(Long id);
+    CameraImageResponse saveImage(Long cameraId, MultipartFile file);
+    List<CameraImageResponse> getLatestImages(Long cameraId);
+    Resource getImage(String filename);
 }

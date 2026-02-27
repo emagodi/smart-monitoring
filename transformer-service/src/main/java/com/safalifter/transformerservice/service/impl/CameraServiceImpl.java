@@ -3,13 +3,16 @@ package com.safalifter.transformerservice.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.safalifter.transformerservice.entities.Camera;
+import com.safalifter.transformerservice.entities.CameraImage;
 import com.safalifter.transformerservice.entities.Sensor;
 import com.safalifter.transformerservice.entities.SensorReading;
 import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.payload.request.CameraEventRequest;
 import com.safalifter.transformerservice.payload.request.CameraRequest;
+import com.safalifter.transformerservice.payload.response.CameraImageResponse;
 import com.safalifter.transformerservice.payload.response.CameraResponse;
+import com.safalifter.transformerservice.repository.CameraImageRepository;
 import com.safalifter.transformerservice.repository.CameraRepository;
 import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
@@ -18,10 +21,20 @@ import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.service.CameraService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -32,11 +45,15 @@ import java.util.stream.Collectors;
 public class CameraServiceImpl implements CameraService {
 
     private final CameraRepository cameraRepository;
+    private final CameraImageRepository cameraImageRepository;
     private final TransformerRepository transformerRepository;
     private final AlertService alertService;
     private final SensorRepository sensorRepository;
     private final SensorReadingRepository sensorReadingRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${app.image-storage-dir:uploads/images}")
+    private String imageStorageDir;
 
     @Override
     public CameraResponse register(CameraRequest request) {
@@ -185,6 +202,72 @@ public class CameraServiceImpl implements CameraService {
                 .wifiSsid(camera.getWifiSsid())
                 .macAddress(camera.getMacAddress())
                 .ipAddress(camera.getIpAddress())
+                .build();
+    }
+
+    @Override
+    public CameraImageResponse saveImage(Long cameraId, MultipartFile file) {
+        Camera camera = cameraRepository.findById(cameraId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Camera not found"));
+
+        try {
+            Path uploadPath = Paths.get(imageStorageDir);
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+
+            String filename = "camera_" + cameraId + "_" + System.currentTimeMillis() + "_" + file.getOriginalFilename();
+            Path filePath = uploadPath.resolve(filename);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            CameraImage image = CameraImage.builder()
+                    .camera(camera)
+                    .imagePath(filename)
+                    .build();
+
+            CameraImage savedImage = cameraImageRepository.save(image);
+            return toImageResponse(savedImage);
+
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file", e);
+        }
+    }
+
+    @Override
+    public List<CameraImageResponse> getLatestImages(Long cameraId) {
+        return cameraImageRepository.findTop5ByCameraIdOrderByCapturedAtDesc(cameraId).stream()
+                .map(this::toImageResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Resource getImage(String filename) {
+        try {
+            Path file = Paths.get(imageStorageDir).resolve(filename);
+            Resource resource = new UrlResource(file.toUri());
+            if (resource.exists() || resource.isReadable()) {
+                return resource;
+            } else {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Could not read file: " + filename);
+            }
+        } catch (MalformedURLException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error: " + e.getMessage());
+        }
+    }
+
+    private CameraImageResponse toImageResponse(CameraImage image) {
+        // Construct URL for the image
+        // Assuming the controller exposes /api/v1/cameras/images/{filename}
+        String imageUrl = "/api/v1/cameras/images/" + image.getImagePath();
+        
+        return CameraImageResponse.builder()
+                .id(image.getId())
+                .imageUrl(imageUrl)
+                .capturedAt(image.getCapturedAt())
+                .transformerId(image.getCamera().getTransformerId())
+                .cameraMacAddress(image.getCamera().getMacAddress())
+                .cameraModel(image.getCamera().getModel())
+                .cameraWifiSsid(image.getCamera().getWifiSsid())
                 .build();
     }
 }

@@ -30,11 +30,34 @@ const deleteCamera = async (id) => {
     return response.data;
 };
 
+const getLatestImages = async (id) => {
+    const response = await api.get(`/api/v1/cameras/${id}/images`);
+    return response.data;
+};
+
+const uploadImage = async (id, fileUri) => {
+    const formData = new FormData();
+    formData.append('file', {
+        uri: fileUri,
+        name: 'image.jpg',
+        type: 'image/jpeg',
+    });
+
+    const response = await api.post(`/api/v1/cameras/${id}/images`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return response.data;
+};
+
 export default {
     getAllCameras,
     getCameraById,
     getByTransformerId,
     registerCamera,
     updateCamera,
-    deleteCamera
+    deleteCamera,
+    getLatestImages,
+    uploadImage
 };

@@ -278,29 +278,41 @@ const TransformerCrudScreen = () => {
 
     // Render custom item for Cameras
     const renderCameraItem = (item, onEdit, onDelete) => (
-        <View style={[styles.card, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <LinearGradient colors={['#7e57c2', '#512da8']} style={styles.iconContainer}>
-                    <Ionicons name="camera" size={16} color="#fff" />
-                </LinearGradient>
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardSubtitle}>{item.model} • {item.topic}</Text>
-                    <View style={styles.statusBadge}>
-                         <View style={[styles.statusDot, { backgroundColor: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]} />
-                         <Text style={[styles.statusText, { color: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]}>
-                            {item.status || 'Unknown'}
-                         </Text>
+        <View style={[styles.card, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <LinearGradient colors={['#7e57c2', '#512da8']} style={styles.iconContainer}>
+                        <Ionicons name="camera" size={16} color="#fff" />
+                    </LinearGradient>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle}>{item.name}</Text>
+                        <Text style={styles.cardSubtitle}>{item.model} • {item.topic}</Text>
+                        <View style={styles.statusBadge}>
+                             <View style={[styles.statusDot, { backgroundColor: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]} />
+                             <Text style={[styles.statusText, { color: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]}>
+                                {item.status || 'Unknown'}
+                             </Text>
+                        </View>
                     </View>
+                </View>
+
+                <View style={styles.cardActions}>
+                    <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                        <Ionicons name="create-outline" size={20} color="#4CAF50" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                        <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                    </TouchableOpacity>
                 </View>
             </View>
 
-            <View style={styles.cardActions}>
-                <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
-                    <Ionicons name="create-outline" size={20} color="#4CAF50" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
-                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 }}>
+                <TouchableOpacity 
+                    style={[styles.viewSensorsButton, { backgroundColor: '#0067A5', paddingHorizontal: 16 }]}
+                    onPress={() => navigation.navigate('CameraImages', { cameraId: item.id, cameraName: item.name })}
+                >
+                    <Text style={styles.viewSensorsText}>Images</Text>
+                    <Ionicons name="images" size={14} color="#fff" style={{ marginLeft: 6 }} />
                 </TouchableOpacity>
             </View>
         </View>

@@ -1,18 +1,23 @@
 package com.safalifter.transformerservice.controller;
 
+import com.safalifter.transformerservice.payload.request.CameraEventRequest;
+import com.safalifter.transformerservice.payload.request.CameraRequest;
+import com.safalifter.transformerservice.payload.response.CameraImageResponse;
+import com.safalifter.transformerservice.payload.response.CameraResponse;
+import com.safalifter.transformerservice.service.CameraService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import com.safalifter.transformerservice.payload.request.CameraRequest;
-import com.safalifter.transformerservice.payload.request.CameraEventRequest;
-import com.safalifter.transformerservice.payload.response.CameraResponse;
-import com.safalifter.transformerservice.service.CameraService;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -90,5 +95,31 @@ public class CameraController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         cameraService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload camera image")
+    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<CameraImageResponse> uploadImage(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(cameraService.saveImage(id, file));
+    }
+
+    @GetMapping("/{id}/images")
+    @Operation(summary = "Get latest 5 images for a camera")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<List<CameraImageResponse>> getLatestImages(@PathVariable Long id) {
+        return ResponseEntity.ok(cameraService.getLatestImages(id));
+    }
+
+    @GetMapping("/images/{filename:.+}")
+    @Operation(summary = "Get image file")
+    // Allow reading images with standard read privilege
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<Resource> getImage(@PathVariable String filename) {
+        Resource file = cameraService.getImage(filename);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getFilename() + "\"")
+                .contentType(MediaType.IMAGE_JPEG)
+                .body(file);
     }
 }
