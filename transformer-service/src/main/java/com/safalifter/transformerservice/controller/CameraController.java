@@ -63,10 +63,32 @@ public class CameraController {
         return ResponseEntity.ok(cameraService.getAll());
     }
 
+    @GetMapping("/transformer/{transformerId}")
+    @Operation(summary = "List cameras by transformer")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<List<CameraResponse>> getByTransformerId(@PathVariable Long transformerId) {
+        return ResponseEntity.ok(cameraService.getByTransformerId(transformerId));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get camera by id")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<CameraResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(cameraService.getById(id));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Update camera")
+    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<CameraResponse> update(@PathVariable Long id, @Valid @RequestBody CameraRequest request) {
+        return ResponseEntity.ok(cameraService.update(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete camera")
+    @PreAuthorize("hasAuthority('WRITE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        cameraService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }

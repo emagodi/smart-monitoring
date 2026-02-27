@@ -18,6 +18,7 @@ import DistrictListScreen from '../screens/DistrictListScreen';
 import DepotListScreen from '../screens/DepotListScreen';
 import TransformerCrudScreen from '../screens/TransformerCrudScreen';
 import NewSensorsScreen from '../screens/NewSensorsScreen'; // Re-verified
+import CameraFormScreen from '../screens/CameraFormScreen';
 // import LogoutButton from '../components/LogoutButton';
 
 const Stack = createNativeStackNavigator();
@@ -182,6 +183,11 @@ const AppNavigator = () => {
         ) : (
           <Stack.Screen name="MainApp" component={DrawerNavigator} />
         )}
+        <Stack.Screen 
+          name="CameraForm" 
+          component={CameraFormScreen} 
+          options={{ headerShown: true, title: 'Camera' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

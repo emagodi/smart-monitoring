@@ -2,21 +2,34 @@ import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import CrudScreen from '../components/CrudScreen';
 import LogoutButton from '../components/LogoutButton';
 import transformerService from '../services/transformer';
 import infrastructureService from '../services/infrastructure';
 import sensorService from '../services/sensor';
+import cameraService from '../services/camera';
 
 const TransformerCrudScreen = () => {
     const navigation = useNavigation();
+    const route = useRoute();
+    const { transformer, viewLevel: initialViewLevel, action } = route.params || {};
+
     const [viewLevel, setViewLevel] = useState('regions'); // 'regions', 'districts', 'depots', 'transformers', 'sensors'
     const [selectedRegion, setSelectedRegion] = useState(null);
     const [selectedDistrict, setSelectedDistrict] = useState(null);
     const [selectedDepot, setSelectedDepot] = useState(null);
     const [selectedTransformer, setSelectedTransformer] = useState(null);
     const [selectedSensor, setSelectedSensor] = useState(null);
+
+    useEffect(() => {
+        if (transformer) {
+            setSelectedTransformer(transformer);
+        }
+        if (initialViewLevel) {
+            setViewLevel(initialViewLevel);
+        }
+    }, [transformer, initialViewLevel]);
 
     useLayoutEffect(() => {
         navigation.setOptions({
@@ -49,6 +62,16 @@ const TransformerCrudScreen = () => {
             labelKey: 'statusLabel',
             valueKey: 'id'
         }
+    ];
+
+    // Camera fields
+    const cameraFields = [
+        { name: 'name', label: 'Camera Name', placeholder: 'Enter camera name', required: true },
+        { name: 'topic', label: 'MQTT Topic', placeholder: 'Enter MQTT topic', required: true },
+        { name: 'model', label: 'Camera Model', placeholder: 'Enter camera model' },
+        { name: 'ipAddress', label: 'IP Address', placeholder: 'Enter IP address' },
+        { name: 'macAddress', label: 'MAC Address', placeholder: 'Enter MAC address' },
+        { name: 'wifiSsid', label: 'WiFi SSID', placeholder: 'Enter WiFi SSID' }
     ];
 
     const fetchTransformers = async (page, size, search) => {
@@ -103,9 +126,14 @@ const TransformerCrudScreen = () => {
         setViewLevel('transformers');
     };
 
-    const handleSelectTransformer = (transformer) => {
+    const handleSelectTransformerForSensors = (transformer) => {
         setSelectedTransformer(transformer);
         setViewLevel('sensors');
+    };
+
+    const handleSelectTransformerForCameras = (transformer) => {
+        setSelectedTransformer(transformer);
+        setViewLevel('cameras');
     };
 
     const handleSelectSensor = (sensor) => {
@@ -116,6 +144,7 @@ const TransformerCrudScreen = () => {
     const handleBack = () => {
         if (viewLevel === 'sensor_readings') setViewLevel('sensors');
         else if (viewLevel === 'sensors') setViewLevel('transformers');
+        else if (viewLevel === 'cameras') setViewLevel('transformers');
         else if (viewLevel === 'transformers') setViewLevel('depots');
         else if (viewLevel === 'depots') setViewLevel('districts');
         else if (viewLevel === 'districts') setViewLevel('regions');
@@ -214,6 +243,36 @@ const TransformerCrudScreen = () => {
         );
     };
 
+    // Render custom item for Cameras
+    const renderCameraItem = (item, onEdit, onDelete) => (
+        <View style={[styles.card, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <LinearGradient colors={['#7e57c2', '#512da8']} style={styles.iconContainer}>
+                    <Ionicons name="camera" size={16} color="#fff" />
+                </LinearGradient>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                    <Text style={styles.cardSubtitle}>{item.model} • {item.topic}</Text>
+                    <View style={styles.statusBadge}>
+                         <View style={[styles.statusDot, { backgroundColor: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]} />
+                         <Text style={[styles.statusText, { color: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]}>
+                            {item.status || 'Unknown'}
+                         </Text>
+                    </View>
+                </View>
+            </View>
+
+            <View style={styles.cardActions}>
+                <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                    <Ionicons name="create-outline" size={20} color="#4CAF50" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+
     // Render custom item for Transformers
     const renderTransformerItem = (item, onEdit, onDelete) => (
         <View style={[styles.card, { flexDirection: 'column', alignItems: 'stretch' }]}>
@@ -250,13 +309,23 @@ const TransformerCrudScreen = () => {
                 </View>
             </View>
 
-            <TouchableOpacity 
-                style={styles.viewSensorsButton}
-                onPress={() => handleSelectTransformer(item)}
-            >
-                <Text style={styles.viewSensorsText}>View Sensors</Text>
-                <Ionicons name="chevron-forward" size={12} color="#fff" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+                <TouchableOpacity 
+                    style={[styles.viewSensorsButton, { flex: 1, marginRight: 5 }]}
+                    onPress={() => handleSelectTransformerForSensors(item)}
+                >
+                    <Text style={styles.viewSensorsText}>View Sensors</Text>
+                    <Ionicons name="chevron-forward" size={12} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={[styles.viewSensorsButton, { flex: 1, marginLeft: 5, backgroundColor: '#7e57c2' }]}
+                    onPress={() => handleSelectTransformerForCameras(item)}
+                >
+                    <Text style={styles.viewSensorsText}>View Cameras</Text>
+                    <Ionicons name="chevron-forward" size={12} color="#fff" />
+                </TouchableOpacity>
+            </View>
         </View>
     );
 
@@ -359,6 +428,40 @@ const TransformerCrudScreen = () => {
                 renderCustomItem: (item) => renderSensorItem(item),
                 createItem: null, // Read-only for now as per request "open all sensors"
                 onBack: handleBack
+            };
+            break;
+        case 'cameras':
+            screenProps = {
+                title: 'Cameras',
+                subtitle: selectedTransformer?.name,
+                fetchData: async (page, size, search) => {
+                    try {
+                        const data = await cameraService.getByTransformerId(selectedTransformer.id);
+                        if (search) {
+                            const query = search.toLowerCase();
+                            return data.filter(c => c.name.toLowerCase().includes(query) || c.topic.toLowerCase().includes(query));
+                        }
+                        return data;
+                    } catch (error) {
+                        console.error("Error fetching cameras", error);
+                        return [];
+                    }
+                },
+                fields: cameraFields,
+                createItem: cameraService.registerCamera,
+                updateItem: cameraService.updateCamera,
+                deleteItem: null, // Handle manually via modal
+                onAddPress: () => navigation.navigate('CameraForm', { transformerId: selectedTransformer.id }),
+                onEditPress: (item) => navigation.navigate('CameraForm', { transformerId: selectedTransformer.id, camera: item }),
+                transformDataBeforeSubmit: (data) => ({
+                    ...data,
+                    transformerId: selectedTransformer.id
+                }),
+                entityName: 'Camera',
+                addButtonLabel: 'Add Camera',
+                renderCustomItem: renderCameraItem,
+                onBack: handleBack,
+                autoOpenCreate: action === 'add' // Auto open create if navigated with action='add'
             };
             break;
         case 'sensor_readings':
@@ -508,6 +611,75 @@ const styles = StyleSheet.create({
     readingTime: {
         fontSize: 12,
         color: '#666',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 24,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 10,
+        width: '100%',
+        maxWidth: 320,
+    },
+    warningIconContainer: {
+        marginBottom: 16,
+        backgroundColor: '#FEF2F2',
+        padding: 12,
+        borderRadius: 40,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontFamily: 'Inter_700Bold',
+        color: '#111827',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    modalMessage: {
+        fontSize: 15,
+        fontFamily: 'Inter_400Regular',
+        color: '#6B7280',
+        textAlign: 'center',
+        marginBottom: 24,
+        lineHeight: 22,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    modalCancelButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+    },
+    modalConfirmButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    modalCancelText: {
+        fontSize: 16,
+        fontFamily: 'Inter_600SemiBold',
+        color: '#374151',
+    },
+    modalConfirmText: {
+        fontSize: 16,
+        fontFamily: 'Inter_600SemiBold',
+        color: 'white',
     },
 });
 

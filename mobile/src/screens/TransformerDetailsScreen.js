@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Switch, Button, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Switch, Button, Alert, Dimensions, TouchableOpacity } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import transformerService from '../services/transformer';
 import sensorService from '../services/sensor';
@@ -82,6 +82,28 @@ const TransformerDetailsScreen = ({ route, navigation }) => {
                 onValueChange={toggleStatus}
                 disabled={updating}
             />
+        </View>
+
+        <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity 
+                style={[styles.actionButton, styles.sensorButton]}
+                onPress={() => navigation.navigate('TransformerCrud', { 
+                    transformer: transformer,
+                    viewLevel: 'sensors'
+                })}
+            >
+                <Text style={styles.actionButtonText}>View Sensors</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+                style={[styles.actionButton, styles.cameraButton]}
+                onPress={() => navigation.navigate('TransformerCrud', { 
+                    transformer: transformer,
+                    viewLevel: 'cameras'
+                })}
+            >
+                <Text style={styles.actionButtonText}>View Cameras</Text>
+            </TouchableOpacity>
         </View>
 
         {transformer.lat && transformer.lng && (
@@ -211,6 +233,31 @@ const styles = StyleSheet.create({
     color: 'gray',
     textAlign: 'center',
     marginTop: 20,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  sensorButton: {
+    backgroundColor: '#0067A5',
+  },
+  cameraButton: {
+    backgroundColor: '#2E7D32', // Green for cameras
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
 

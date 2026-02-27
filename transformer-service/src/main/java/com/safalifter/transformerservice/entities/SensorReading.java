@@ -36,4 +36,17 @@ public class SensorReading {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public Long getSensorId() { return sensorId; }
+    public void setSensorId(Long sensorId) { this.sensorId = sensorId; }
+    public String getRawPayload() { return rawPayload; }
+    public void setRawPayload(String rawPayload) { this.rawPayload = rawPayload; }
+    public String getDecoded() { return decoded; }
+    public void setDecoded(String decoded) { this.decoded = decoded; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

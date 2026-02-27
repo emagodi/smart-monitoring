@@ -10,6 +10,8 @@ public interface CameraService {
     CameraResponse register(CameraRequest request);
     void processEvent(CameraEventRequest event);
     List<CameraResponse> getAll();
+    List<CameraResponse> getByTransformerId(Long transformerId);
     CameraResponse getById(Long id);
+    CameraResponse update(Long id, CameraRequest request);
     void delete(Long id);
 }

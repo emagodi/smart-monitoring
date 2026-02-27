@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,7 +10,10 @@ import {
     Alert,
     ActivityIndicator,
     Dimensions,
-    Image
+    Image,
+    ScrollView,
+    KeyboardAvoidingView,
+    Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 const GOOGLE_API_KEY = 'AIzaSyBJOkU9Iv88i6h8-hxjSN1wLUYCITmkOQQ';
 
@@ -40,7 +43,10 @@ const CrudScreen = ({
     onBack = null, // Optional back handler
     showLogo = true, // Whether to show the logo in the header
     showTitle = true, // Whether to show the title in the header
-    filterType = 'search' // 'search' or 'date_range'
+    filterType = 'search', // 'search' or 'date_range'
+    autoOpenCreate = false, // Whether to automatically open the create modal
+    onAddPress = null, // Custom handler for add button
+    onEditPress = null // Custom handler for edit button
 }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -188,6 +194,12 @@ const CrudScreen = ({
 
         return () => clearTimeout(delayDebounceFn);
     }, [searchQuery, startDate, endDate]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadData(0, false);
+        }, [fetchData]) // Re-fetch when focused
+    );
     
     // Selector Logic
     const handleOpenSelector = async (field) => {
@@ -265,14 +277,31 @@ const CrudScreen = ({
     };
 
     const handleOpenCreate = () => {
+        if (onAddPress) {
+            onAddPress();
+            return;
+        }
         setEditingItem(null);
         const initialData = {};
-        fields.forEach(field => initialData[field.name] = '');
+        fields.forEach(field => {
+            initialData[field.name] = '';
+        });
         setFormData(initialData);
         setModalVisible(true);
     };
 
+    // Auto-open create modal if requested
+    useEffect(() => {
+        if (autoOpenCreate && createItem) {
+             handleOpenCreate();
+        }
+    }, [autoOpenCreate]);
+
     const handleOpenEdit = (item) => {
+        if (onEditPress) {
+            onEditPress(item);
+            return;
+        }
         setEditingItem(item);
         const initialData = {};
         const initialLabels = {};
@@ -522,69 +551,84 @@ const CrudScreen = ({
                 transparent={true}
                 onRequestClose={() => setModalVisible(false)}
             >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
-                                <Ionicons name="close" size={24} color="#EF6C00" />
-                            </TouchableOpacity>
-                        </View>
-
-                        {fields.map(field => (
-                            <View key={field.name} style={styles.inputContainer}>
-                                <Text style={styles.label}>{field.label}</Text>
-                                {field.type === 'selector' ? (
-                                    <TouchableOpacity 
-                                        style={styles.selectorInput} 
-                                        onPress={() => handleOpenSelector(field)}
-                                    >
-                                        <Text style={[styles.selectorInputText, !formData[field.name] && styles.placeholderText]}>
-                                            {formData[field.name] 
-                                                ? (selectorLabels[field.name] || formData[field.name]) 
-                                                : field.placeholder}
-                                        </Text>
-                                        <Ionicons name="chevron-down" size={20} color="#666" />
-                                    </TouchableOpacity>
-                                ) : field.type === 'location' ? (
-                                    <TouchableOpacity 
-                                        style={styles.selectorInput} 
-                                        onPress={() => handleOpenMap(field)}
-                                    >
-                                        <Text style={[styles.selectorInputText, !formData[field.name] && styles.placeholderText]}>
-                                            {formData[field.name] || 'Select Location on Map'}
-                                        </Text>
-                                        <Ionicons name="map-outline" size={20} color="#666" />
-                                    </TouchableOpacity>
-                                ) : (
-                                    <TextInput
-                                        style={styles.input}
-                                        value={formData[field.name]}
-                                        onChangeText={text => setFormData({ ...formData, [field.name]: text })}
-                                        placeholder={field.placeholder}
-                                        keyboardType={field.keyboardType || 'default'}
-                                    />
-                                )}
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={styles.keyboardAvoidingView}
+                >
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>
+                                    {editingItem ? `Edit ${entityName}` : `Add ${entityName}`}
+                                </Text>
+                                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                                    <Ionicons name="close" size={20} color="#EF6C00" />
+                                </TouchableOpacity>
                             </View>
-                        ))}
 
-                        <TouchableOpacity
-                            style={[styles.submitButton, submitting && styles.disabledButton]}
-                            onPress={handleSubmit}
-                            disabled={submitting}
-                        >
-                            {submitting ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <>
-                                    <Ionicons name={editingItem ? "save-outline" : "add-circle-outline"} size={24} color="#fff" />
-                                    <Text style={styles.submitButtonText}>
-                                        {editingItem ? 'Update' : 'Create'}
-                                    </Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
+                            <ScrollView 
+                                style={styles.modalScrollView} 
+                                contentContainerStyle={styles.modalScrollContent}
+                                showsVerticalScrollIndicator={true}
+                            >
+                                {fields.map(field => (
+                                    <View key={field.name} style={styles.inputContainer}>
+                                        <Text style={styles.label}>{field.label}</Text>
+                                        {field.type === 'selector' ? (
+                                            <TouchableOpacity 
+                                                style={styles.selectorInput} 
+                                                onPress={() => handleOpenSelector(field)}
+                                            >
+                                                <Text style={[styles.selectorInputText, !formData[field.name] && styles.placeholderText]}>
+                                                    {formData[field.name] 
+                                                        ? (selectorLabels[field.name] || formData[field.name]) 
+                                                        : field.placeholder}
+                                                </Text>
+                                                <Ionicons name="chevron-down" size={18} color="#666" />
+                                            </TouchableOpacity>
+                                        ) : field.type === 'location' ? (
+                                            <TouchableOpacity 
+                                                style={styles.selectorInput} 
+                                                onPress={() => handleOpenMap(field)}
+                                            >
+                                                <Text style={[styles.selectorInputText, !formData[field.name] && styles.placeholderText]}>
+                                                    {formData[field.name] || 'Select Location on Map'}
+                                                </Text>
+                                                <Ionicons name="map-outline" size={18} color="#666" />
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <TextInput
+                                                style={styles.input}
+                                                value={formData[field.name]}
+                                                onChangeText={text => setFormData({ ...formData, [field.name]: text })}
+                                                placeholder={field.placeholder}
+                                                keyboardType={field.keyboardType || 'default'}
+                                                placeholderTextColor="#999"
+                                            />
+                                        )}
+                                    </View>
+                                ))}
+
+                                <TouchableOpacity
+                                    style={[styles.submitButton, submitting && styles.disabledButton]}
+                                    onPress={handleSubmit}
+                                    disabled={submitting}
+                                >
+                                    {submitting ? (
+                                        <ActivityIndicator color="#fff" size="small" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name={editingItem ? "save-outline" : "add-circle-outline"} size={20} color="#fff" />
+                                            <Text style={styles.submitButtonText}>
+                                                {editingItem ? 'Update' : 'Create'}
+                                            </Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            </ScrollView>
+                        </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             <Modal
@@ -936,23 +980,25 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#fff',
         borderRadius: 8,
-        padding: 16,
-        marginBottom: 12,
-        elevation: 2,
+        padding: 12,
+        marginBottom: 8,
+        elevation: 1,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.05,
         shadowRadius: 2,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
     },
     cardContent: {
         flex: 1,
     },
     cardTitle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '600',
         fontFamily: 'Inter_600SemiBold',
-        color: '#333',
-        marginBottom: 4,
+        color: '#222',
+        marginBottom: 2,
     },
     cardSubtitle: {
         fontSize: 14,
@@ -988,13 +1034,10 @@ const styles = StyleSheet.create({
         borderRadius: 10,
     },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 22,
         fontWeight: 'bold',
         fontFamily: 'Inter_700Bold',
         color: '#1a1a1a',
-        textShadowColor: 'rgba(0, 0, 0, 0.1)',
-        textShadowOffset: { width: 1, height: 1 },
-        textShadowRadius: 2,
     },
     headerSubtitle: {
         fontSize: 16,
@@ -1017,75 +1060,86 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        padding: 20,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        padding: 5,
+    },
+    keyboardAvoidingView: {
+        flex: 1,
+        width: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     modalContent: {
         width: '100%',
+        maxHeight: '96%',
         backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 24,
+        borderRadius: 12,
+        padding: 0,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 10,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 8,
+        overflow: 'hidden',
     },
     modalHeader: {
         flexDirection: 'row',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
-        backgroundColor: '#FFF3E0', // Light Orange
-        padding: 16,
-        marginTop: -24,
-        marginHorizontal: -24,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        backgroundColor: '#f8f9fa',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
     },
     closeButton: {
-        backgroundColor: 'rgba(239, 108, 0, 0.1)', // Subtle orange tint
-        padding: 8,
+        padding: 4,
         borderRadius: 20,
     },
     modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
+        fontSize: 16,
+        fontWeight: '700',
         fontFamily: 'Inter_700Bold',
-        marginBottom: 16,
-        textAlign: 'center',
+        color: '#1a1a1a',
+    },
+    modalScrollView: {
+        width: '100%',
+    },
+    modalScrollContent: {
+        padding: 20,
     },
     inputContainer: {
-        marginBottom: 20,
+        marginBottom: 16,
     },
     label: {
-        fontSize: 15,
+        fontSize: 12,
         fontWeight: '600',
-        color: '#444',
-        marginBottom: 8,
+        fontFamily: 'Inter_600SemiBold',
+        color: '#555',
+        marginBottom: 6,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     input: {
-        borderWidth: 1.5,
-        borderColor: '#e1e1e1',
-        borderRadius: 12,
-        padding: 14,
-        fontSize: 16,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 14,
+        fontFamily: 'Inter_400Regular',
         backgroundColor: '#fff',
         color: '#333',
     },
     submitButton: {
         backgroundColor: '#0067A5',
-        paddingVertical: 16,
-        borderRadius: 12,
+        paddingVertical: 12,
+        borderRadius: 8,
         alignItems: 'center',
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 12,
-        elevation: 4,
-        shadowColor: '#0067A5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
+        marginTop: 8,
+        elevation: 0,
     },
     topBar: {
         flexDirection: 'row',
@@ -1162,27 +1216,29 @@ const styles = StyleSheet.create({
         marginLeft: 4,
     },
     addButtonSmall: {
-        width: 48,
-        height: 48,
+        width: 40,
+        height: 40,
         backgroundColor: '#0067A5',
         borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 2,
+        elevation: 0,
     },
     selectorInput: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: '#e1e1e1',
-        borderRadius: 12,
-        padding: 14,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         backgroundColor: '#fff',
     },
     selectorInputText: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#333',
+        fontFamily: 'Inter_400Regular',
     },
     placeholderText: {
         color: '#999',
@@ -1191,14 +1247,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 14,
+        paddingVertical: 12,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
     },
     selectorItemText: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#333',
+        fontFamily: 'Inter_400Regular',
     },
     disabledButton: {
         opacity: 0.7,
@@ -1206,10 +1263,10 @@ const styles = StyleSheet.create({
     },
     submitButtonText: {
         color: '#fff',
-        fontSize: 18,
+        fontSize: 14,
         fontWeight: '600',
-        marginLeft: 10,
-        letterSpacing: 0.5,
+        fontFamily: 'Inter_600SemiBold',
+        marginLeft: 8,
     },
     footer: {
         paddingVertical: 20,
@@ -1237,16 +1294,16 @@ const styles = StyleSheet.create({
     // Success Modal Styles
     successModalContent: {
         backgroundColor: '#fff',
-        borderRadius: 20,
+        borderRadius: 12,
         padding: 24,
         alignItems: 'center',
-        width: '80%',
+        width: '85%',
         maxWidth: 340,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 10,
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
     },
     successIconContainer: {
         marginBottom: 16,
@@ -1255,42 +1312,45 @@ const styles = StyleSheet.create({
         borderRadius: 50,
     },
     successTitle: {
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: 'bold',
+        fontFamily: 'Inter_700Bold',
         color: '#1a1a1a',
         marginBottom: 8,
     },
     successMessage: {
-        fontSize: 16,
-        color: '#666',
+        fontSize: 14,
+        color: '#555',
         textAlign: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
+        fontFamily: 'Inter_400Regular',
     },
     successButton: {
         backgroundColor: '#4CAF50',
         paddingVertical: 12,
         paddingHorizontal: 32,
-        borderRadius: 25,
-        elevation: 2,
+        borderRadius: 8,
+        elevation: 0,
     },
     successButtonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
+        fontFamily: 'Inter_600SemiBold',
     },
     // Delete Modal Styles
     deleteModalContent: {
         backgroundColor: '#fff',
-        borderRadius: 20,
+        borderRadius: 12,
         padding: 24,
         alignItems: 'center',
-        width: '80%',
+        width: '85%',
         maxWidth: 340,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 10,
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
     },
     deleteIconContainer: {
         marginBottom: 16,
@@ -1299,16 +1359,18 @@ const styles = StyleSheet.create({
         borderRadius: 50,
     },
     deleteTitle: {
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: 'bold',
+        fontFamily: 'Inter_700Bold',
         color: '#D32F2F',
         marginBottom: 8,
     },
     deleteMessage: {
-        fontSize: 16,
-        color: '#666',
+        fontSize: 14,
+        color: '#555',
         textAlign: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
+        fontFamily: 'Inter_400Regular',
     },
     deleteActions: {
         flexDirection: 'row',
@@ -1319,26 +1381,28 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 12,
         marginRight: 8,
-        borderRadius: 12,
+        borderRadius: 8,
         backgroundColor: '#f5f5f5',
         alignItems: 'center',
     },
     cancelDeleteText: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
-        color: '#666',
+        fontFamily: 'Inter_600SemiBold',
+        color: '#555',
     },
     confirmDeleteButton: {
         flex: 1,
         paddingVertical: 12,
         marginLeft: 8,
-        borderRadius: 12,
+        borderRadius: 8,
         backgroundColor: '#D32F2F',
         alignItems: 'center',
     },
     confirmDeleteText: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
+        fontFamily: 'Inter_600SemiBold',
         color: '#fff',
     },
 });

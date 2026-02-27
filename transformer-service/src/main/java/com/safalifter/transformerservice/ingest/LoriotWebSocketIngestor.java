@@ -7,7 +7,8 @@ import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.SensorReadingService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -29,8 +30,8 @@ import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
 public class LoriotWebSocketIngestor implements ApplicationRunner {
+    private static final Logger log = LoggerFactory.getLogger(LoriotWebSocketIngestor.class);
 
     @Value("${loriot.ws.url:}")
     private String loriotWsUrlProp;
@@ -125,13 +126,12 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             Optional<Sensor> sensorOpt = sensorRepository.findByDeviceId(sensorKey);
             if (sensorOpt.isEmpty()) {
                 long tfId = resolveDefaultTransformerId();
-                Sensor newSensor = Sensor.builder()
-                        .deviceId(sensorKey)
-                        .devEui(deveui)
-                        .name(deveui + " Port " + port)
-                        .type(defaultSensorType == null || defaultSensorType.isBlank() ? null : defaultSensorType)
-                        .transformerId(tfId)
-                        .build();
+                Sensor newSensor = new Sensor();
+                newSensor.setDeviceId(sensorKey);
+                newSensor.setDevEui(deveui);
+                newSensor.setName(deveui + " Port " + port);
+                newSensor.setType(defaultSensorType == null || defaultSensorType.isBlank() ? null : defaultSensorType);
+                newSensor.setTransformerId(tfId);
                 newSensor = sensorRepository.save(newSensor);
                 log.info("Auto-created sensor id={} deviceId={} transformerId={}", newSensor.getId(), newSensor.getDeviceId(), newSensor.getTransformerId());
                 sensorOpt = Optional.of(newSensor);
@@ -149,11 +149,10 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
                     saved = sensorReadingRepository.save(existing);
                     log.info("Updated SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
                 } else {
-                    SensorReading reading = SensorReading.builder()
-                            .sensorId(sensor.getId())
-                            .rawPayload(rawMessage)
-                            .decoded(decoded)
-                            .build();
+                    SensorReading reading = new SensorReading();
+                    reading.setSensorId(sensor.getId());
+                    reading.setRawPayload(rawMessage);
+                    reading.setDecoded(decoded);
                     saved = sensorReadingRepository.save(reading);
                     log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
                 }

@@ -54,6 +54,31 @@ public class CameraServiceImpl implements CameraService {
     }
 
     @Override
+    public CameraResponse update(Long id, CameraRequest request) {
+        Camera camera = cameraRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Camera not found"));
+
+        camera.setName(request.getName());
+        camera.setTopic(request.getTopic());
+        camera.setTransformerId(request.getTransformerId());
+        camera.setModel(request.getModel());
+        camera.setWifiSsid(request.getWifiSsid());
+        camera.setMacAddress(request.getMacAddress());
+        camera.setIpAddress(request.getIpAddress());
+        // Status updates can be handled separately if needed, but defaulting to existing or active
+
+        return toResponse(cameraRepository.save(camera));
+    }
+
+    @Override
+    public void delete(Long id) {
+        if (!cameraRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Camera not found");
+        }
+        cameraRepository.deleteById(id);
+    }
+
+    @Override
     public void processEvent(CameraEventRequest event) {
         Optional<Camera> cameraOpt = cameraRepository.findByTopic(event.getTopic());
         if (cameraOpt.isEmpty()) {
@@ -136,15 +161,17 @@ public class CameraServiceImpl implements CameraService {
     }
 
     @Override
+    public List<CameraResponse> getByTransformerId(Long transformerId) {
+        return cameraRepository.findByTransformerId(transformerId).stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public CameraResponse getById(Long id) {
         return cameraRepository.findById(id)
                 .map(this::toResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Camera not found"));
-    }
-
-    @Override
-    public void delete(Long id) {
-        cameraRepository.deleteById(id);
     }
 
     private CameraResponse toResponse(Camera camera) {
