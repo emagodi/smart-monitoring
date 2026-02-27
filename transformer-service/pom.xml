@@ -12,6 +12,7 @@
     <artifactId>transformer-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>transformer-service</name>
+    <!-- Cache buster 1 -->
     <properties>
         <java.version>17</java.version>
         <spring-cloud.version>2022.0.5</spring-cloud.version>

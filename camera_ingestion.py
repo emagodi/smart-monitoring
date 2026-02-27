@@ -16,6 +16,7 @@ SAVE_DIR = os.environ.get("SAVE_DIR", os.path.join(os.getcwd(), "uploads"))
 
 # Vision AI Service Configuration
 VISION_AI_URL = os.environ.get("VISION_AI_URL", "http://localhost:8000/analyze/upload")
+TRANSFORMER_SERVICE_URL = os.environ.get("TRANSFORMER_SERVICE_URL", "http://localhost:8080/api/v1/cameras/event")
 ENABLE_AI_PROCESSING = True
 
 # Cooldown Configuration
@@ -28,6 +29,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe(MQTT_TOPIC)
         print(f"Subscribed to topic: {MQTT_TOPIC}")
         print(f"Images will be saved to: {SAVE_DIR}")
+        print(f"Events will be sent to: {TRANSFORMER_SERVICE_URL}")
     else:
         print(f"Failed to connect, return code {rc}")
 
@@ -37,7 +39,24 @@ def on_disconnect(client, userdata, rc):
     else:
         print("Disconnected cleanly.")
 
-def send_to_vision_ai(filepath):
+def send_event_to_backend(topic, prediction):
+    try:
+        payload = {
+            "topic": topic,
+            "aiClass": prediction.get("class", "unknown"),
+            "confidence": prediction.get("confidence", 0.0),
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        print(f"Sending event to backend: {payload}")
+        response = requests.post(TRANSFORMER_SERVICE_URL, json=payload)
+        if response.status_code in [200, 201]:
+            print("Event sent successfully.")
+        else:
+            print(f"Backend Error ({response.status_code}): {response.text}")
+    except Exception as e:
+        print(f"Failed to send event to backend: {e}")
+
+def send_to_vision_ai(filepath, topic):
     if not ENABLE_AI_PROCESSING:
         return
 
@@ -49,7 +68,10 @@ def send_to_vision_ai(filepath):
             response = requests.post(VISION_AI_URL, files=files, headers=headers)
         
         if response.status_code == 200:
-            print(f"Vision AI Result: {response.json()}")
+            result = response.json()
+            print(f"Vision AI Result: {result}")
+            if "prediction" in result:
+                send_event_to_backend(topic, result["prediction"])
         else:
             print(f"Vision AI Error ({response.status_code}): {response.text}")
             
@@ -100,7 +122,7 @@ def on_message(client, userdata, msg):
             print(f"[{timestamp}] Image decoded and saved: {filename} ({len(img_data)} bytes)")
             
             # Forward to Vision AI
-            send_to_vision_ai(filepath)
+            send_to_vision_ai(filepath, msg.topic)
         else:
             print("Warning: JSON payload does not contain 'values.image' field.")
             print(f"Payload keys: {data.keys()}")

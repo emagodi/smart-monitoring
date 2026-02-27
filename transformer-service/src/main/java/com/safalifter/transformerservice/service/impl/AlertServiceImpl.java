@@ -24,9 +24,13 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public AlertResponse create(AlertRequest request) {
-        sensorRepository.findById(request.getSensorId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + request.getSensorId() + " not found"));
+        if (request.getSensorId() != null) {
+            sensorRepository.findById(request.getSensorId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + request.getSensorId() + " not found"));
+        }
+        
         Alert alert = Alert.builder()
                 .sensorId(request.getSensorId())
+                .cameraId(request.getCameraId())
                 .value(request.getValue())
                 .isAlert(Boolean.TRUE.equals(request.getIsAlert()))
                 .message(request.getMessage())
@@ -65,8 +69,11 @@ public class AlertServiceImpl implements AlertService {
     @Override
     public AlertResponse update(Long id, AlertRequest request) {
         Alert alert = alertRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Alert with id " + id + " not found"));
-        sensorRepository.findById(request.getSensorId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + request.getSensorId() + " not found"));
+        if (request.getSensorId() != null) {
+            sensorRepository.findById(request.getSensorId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + request.getSensorId() + " not found"));
+        }
         alert.setSensorId(request.getSensorId());
+        alert.setCameraId(request.getCameraId());
         alert.setValue(request.getValue());
         alert.setAlert(Boolean.TRUE.equals(request.getIsAlert()));
         alert.setMessage(request.getMessage());
@@ -95,6 +102,7 @@ public class AlertServiceImpl implements AlertService {
         return AlertResponse.builder()
                 .id(alert.getId())
                 .sensorId(alert.getSensorId())
+                .cameraId(alert.getCameraId())
                 .value(alert.getValue())
                 .isAlert(alert.isAlert())
                 .message(alert.getMessage())

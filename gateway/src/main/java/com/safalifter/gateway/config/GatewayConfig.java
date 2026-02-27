@@ -56,6 +56,10 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
 
+                .route("transformer-cameras", r -> r.path("/api/v1/cameras/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
                 .route("auth-swagger-ui", r -> r.path("/auth/swagger-ui/**", "/auth/swagger-ui.html")
                         .filters(f -> f.rewritePath("/auth/(?<segment>.*)", "/${segment}"))
                         .uri("lb://auth-service"))

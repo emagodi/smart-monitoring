@@ -57,15 +57,15 @@ const CustomDrawerContent = (props) => {
         <DrawerItemList {...props} />
       </View>
 
-      <View style={{ borderTopWidth: 1, borderTopColor: '#F3F4F6', marginTop: 8, paddingBottom: 20 }}>
+      <View style={{ borderTopWidth: 1, borderTopColor: '#F3F4F6', marginTop: 4, paddingBottom: 20 }}>
         <DrawerItem
           label="Logout"
           icon={({ color, size }) => (
             <Ionicons name="log-out-outline" size={22} color="#EF4444" />
           )}
           onPress={() => signOut()}
-          labelStyle={{ marginLeft: -20, fontSize: 15, fontFamily: 'Inter_500Medium', color: '#EF4444' }}
-          style={{ marginTop: 8 }}
+          labelStyle={{ marginLeft: -10, fontSize: 12, fontFamily: 'Inter_500Medium', color: '#EF4444' }}
+          style={{ marginTop: 0 }}
         />
       </View>
     </DrawerContentScrollView>
@@ -105,10 +105,10 @@ const DrawerNavigator = () => {
         drawerActiveBackgroundColor: '#F0F9FF',
         drawerActiveTintColor: '#0067A5',
         drawerInactiveTintColor: '#4B5563',
-        drawerItemStyle: { borderRadius: 8, marginHorizontal: 12, marginVertical: 4 },
+        drawerItemStyle: { borderRadius: 8, marginHorizontal: 12, marginVertical: 0 },
         drawerLabelStyle: {
           marginLeft: 0,
-          fontSize: 15,
+          fontSize: 12,
           fontFamily: 'Inter_500Medium',
         },
         drawerIcon: ({ focused, color, size }) => {

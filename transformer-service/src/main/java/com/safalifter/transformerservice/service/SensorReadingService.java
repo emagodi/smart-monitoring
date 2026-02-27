@@ -4,6 +4,7 @@ import com.safalifter.transformerservice.payload.request.SensorReadingRequest;
 import com.safalifter.transformerservice.payload.response.SensorReadingResponse;
 import com.safalifter.transformerservice.payload.response.SensorValueResponse;
 import com.safalifter.transformerservice.payload.response.SensorReadingDetailResponse;
+import com.safalifter.transformerservice.entities.SensorReading;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,4 +19,5 @@ public interface SensorReadingService {
     List<SensorReadingDetailResponse> listDetailedParsedBySensorId(Long sensorId);
     SensorReadingResponse update(Long id, SensorReadingRequest request);
     void delete(Long id);
+    void processTriggers(SensorReading reading);
 }

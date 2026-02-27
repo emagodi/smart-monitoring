@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -28,9 +29,9 @@ public class Transformer {
     @Column(name = "depot_id")
     private Long depotId;
 
-    private Double lat;
+    private BigDecimal lat;
 
-    private Double lng;
+    private BigDecimal lng;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

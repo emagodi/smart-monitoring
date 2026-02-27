@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findBySensorId(Long sensorId);
+    List<Alert> findByCameraId(Long cameraId);
 }

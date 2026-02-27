@@ -243,6 +243,18 @@ public class SensorReadingServiceImpl implements SensorReadingService {
         return t;
     }
 
+    private Object normalizeContact(String type, Object val) {
+        if ("contact".equalsIgnoreCase(type)) {
+            if (val instanceof Number n) {
+                return n.intValue() == 0 ? "closed" : "open";
+            }
+            String s = String.valueOf(val).toLowerCase();
+            if ("0".equals(s) || "false".equals(s) || "closed".equals(s)) return "closed";
+            if ("1".equals(s) || "true".equals(s) || "open".equals(s)) return "open";
+        }
+        return val;
+    }
+
     public void processTriggers(SensorReading reading) {
         Sensor sensor = sensorRepository.findById(reading.getSensorId()).orElse(null);
         if (sensor == null) return;
@@ -284,7 +296,6 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                     .transformerName(tf != null ? tf.getName() : null)
                     .transformerCapacity(tf != null ? tf.getCapacity() : null)
                     .depotId(tf != null ? tf.getDepotId() : null)
-                    .depotName(tf != null ? tf.getDepotName() : null)
                     .lat(tf != null ? tf.getLat() : null)
                     .lng(tf != null ? tf.getLng() : null)
                     .devEui(sensor.getDevEui())

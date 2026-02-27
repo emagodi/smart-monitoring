@@ -12,4 +12,5 @@ public interface SensorReadingRepository extends JpaRepository<SensorReading, Lo
     List<SensorReading> findBySensorId(Long sensorId);
     List<SensorReading> findBySensorIdAndCreatedAtBetween(Long sensorId, LocalDateTime start, LocalDateTime end);
     List<SensorReading> findBySensorIdAndUpdatedAtBetween(Long sensorId, LocalDateTime start, LocalDateTime end);
+    java.util.Optional<SensorReading> findTopBySensorIdOrderByUpdatedAtDesc(Long sensorId);
 }
