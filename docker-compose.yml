@@ -55,7 +55,7 @@ services:
     ports:
       - "8082:8082"
     volumes:
-      - ./uploads:/uploads/monitor
+      - "C:/Users/Edwin Magodi/Desktop/uploads:/uploads/monitor"
     depends_on:
       - mysql
       - eureka-server
@@ -124,6 +124,24 @@ services:
     depends_on:
       - eureka-server
       - config-server
+
+  camera-ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.camera
+    container_name: camera-ingestion
+    restart: unless-stopped
+    volumes:
+      - "C:/Users/Edwin Magodi/Desktop/uploads:/app/uploads"
+    environment:
+      - MQTT_BROKER=broker.hivemq.com
+      - MQTT_PORT=1883
+      - MQTT_TOPIC=NE101SensingCam/Snapshot
+      - SAVE_DIR=/app/uploads
+      - VISION_AI_URL=http://host.docker.internal:8000/analyze/upload
+      - TZ=Africa/Harare
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   mysql_data:

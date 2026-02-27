@@ -8,14 +8,14 @@ import re
 import requests
 
 # Configuration
-MQTT_BROKER = "broker.hivemq.com"
-MQTT_PORT = 1883
-MQTT_TOPIC = "NE101SensingCam/Snapshot"
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "broker.hivemq.com")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
+MQTT_TOPIC = os.environ.get("MQTT_TOPIC", "NE101SensingCam/Snapshot")
 # Use a local directory to avoid permission issues
-SAVE_DIR = os.path.join(os.getcwd(), "uploads")
+SAVE_DIR = os.environ.get("SAVE_DIR", os.path.join(os.getcwd(), "uploads"))
 
 # Vision AI Service Configuration
-VISION_AI_URL = "http://localhost:8000/analyze/upload"
+VISION_AI_URL = os.environ.get("VISION_AI_URL", "http://localhost:8000/analyze/upload")
 ENABLE_AI_PROCESSING = True
 
 # Cooldown Configuration
