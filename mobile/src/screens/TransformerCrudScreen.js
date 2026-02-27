@@ -151,41 +151,74 @@ const TransformerCrudScreen = () => {
     };
 
     // Render custom item for Regions
-    const renderRegionItem = (item, onSelect) => (
-        <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.regionCard]}>
-            <LinearGradient colors={['#4fc3f7', '#0288d1']} style={styles.iconContainer}>
-                <Ionicons name="map" size={20} color="#fff" />
-            </LinearGradient>
-            <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
+    const renderRegionItem = (item, onEdit, onDelete) => (
+        <TouchableOpacity onPress={() => handleSelectRegion(item)} style={[styles.card, styles.regionCard]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <LinearGradient colors={['#4fc3f7', '#0288d1']} style={styles.iconContainer}>
+                    <Ionicons name="map" size={20} color="#fff" />
+                </LinearGradient>
+                <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#bdbdbd" />
+            
+            <View style={styles.cardActions}>
+                 <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                    <Ionicons name="create-outline" size={20} color="#4CAF50" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                </TouchableOpacity>
+                 <Ionicons name="chevron-forward" size={18} color="#bdbdbd" style={{ marginLeft: 8 }} />
+            </View>
         </TouchableOpacity>
     );
 
     // Render custom item for Districts
-    const renderDistrictItem = (item, onSelect) => (
-        <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.districtCard]}>
-             <LinearGradient colors={['#66bb6a', '#388e3c']} style={styles.iconContainer}>
-                <Ionicons name="business" size={20} color="#fff" />
-            </LinearGradient>
-            <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
+    const renderDistrictItem = (item, onEdit, onDelete) => (
+        <TouchableOpacity onPress={() => handleSelectDistrict(item)} style={[styles.card, styles.districtCard]}>
+             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <LinearGradient colors={['#66bb6a', '#388e3c']} style={styles.iconContainer}>
+                    <Ionicons name="business" size={20} color="#fff" />
+                </LinearGradient>
+                <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#bdbdbd" />
+
+            <View style={styles.cardActions}>
+                 <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                    <Ionicons name="create-outline" size={20} color="#4CAF50" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={18} color="#bdbdbd" style={{ marginLeft: 8 }} />
+            </View>
         </TouchableOpacity>
     );
 
     // Render custom item for Depots
-    const renderDepotItem = (item, onSelect) => (
-        <TouchableOpacity onPress={() => onSelect(item)} style={[styles.card, styles.depotCard]}>
-             <LinearGradient colors={['#ffca28', '#f57c00']} style={styles.iconContainer}>
-                <Ionicons name="home" size={20} color="#fff" />
-            </LinearGradient>
-            <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
+    const renderDepotItem = (item, onEdit, onDelete) => (
+        <TouchableOpacity onPress={() => handleSelectDepot(item)} style={[styles.card, styles.depotCard]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <LinearGradient colors={['#ffca28', '#f57c00']} style={styles.iconContainer}>
+                    <Ionicons name="home" size={20} color="#fff" />
+                </LinearGradient>
+                <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#bdbdbd" />
+
+            <View style={styles.cardActions}>
+                 <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                    <Ionicons name="create-outline" size={20} color="#4CAF50" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={18} color="#bdbdbd" style={{ marginLeft: 8 }} />
+            </View>
         </TouchableOpacity>
     );
 
@@ -335,17 +368,21 @@ const TransformerCrudScreen = () => {
     switch (viewLevel) {
         case 'regions':
             screenProps = {
-                title: '',
+                title: 'Regions',
                 fetchData: infrastructureService.getAllRegions, // Returns Page object
                 fields: [{ name: 'name', label: 'Name' }], // Minimal fields for search
-                renderCustomItem: (item) => renderRegionItem(item, handleSelectRegion),
-                createItem: null, // Read-only
+                renderCustomItem: (item, onEdit, onDelete) => renderRegionItem(item, onEdit, onDelete),
+                createItem: infrastructureService.createRegion,
+                updateItem: infrastructureService.updateRegion,
+                deleteItem: infrastructureService.deleteRegion,
+                onAddPress: () => navigation.navigate('RegionForm'),
+                onEditPress: (item) => navigation.navigate('RegionForm', { region: item }),
                 onBack: null // Root level
             };
             break;
         case 'districts':
             screenProps = {
-                title: '',
+                title: 'Districts',
                 subtitle: selectedRegion?.name,
                 fetchData: async (page, size, search) => {
                     const data = await infrastructureService.getDistrictsByRegion(selectedRegion.id);
@@ -353,14 +390,18 @@ const TransformerCrudScreen = () => {
                     return data;
                 },
                 fields: [{ name: 'name', label: 'Name' }],
-                renderCustomItem: (item) => renderDistrictItem(item, handleSelectDistrict),
-                createItem: null,
+                renderCustomItem: (item, onEdit, onDelete) => renderDistrictItem(item, onEdit, onDelete),
+                createItem: infrastructureService.createDistrict,
+                updateItem: infrastructureService.updateDistrict,
+                deleteItem: infrastructureService.deleteDistrict,
+                onAddPress: () => navigation.navigate('DistrictForm', { regionId: selectedRegion?.id }),
+                onEditPress: (item) => navigation.navigate('DistrictForm', { district: item, regionId: selectedRegion?.id }),
                 onBack: handleBack
             };
             break;
         case 'depots':
             screenProps = {
-                title: '',
+                title: 'Depots',
                 subtitle: selectedDistrict?.name,
                 fetchData: async (page, size, search) => {
                     const data = await infrastructureService.getDepotsByDistrict(selectedDistrict.id);
@@ -368,8 +409,12 @@ const TransformerCrudScreen = () => {
                     return data;
                 },
                 fields: [{ name: 'name', label: 'Name' }],
-                renderCustomItem: (item) => renderDepotItem(item, handleSelectDepot),
-                createItem: null,
+                renderCustomItem: (item, onEdit, onDelete) => renderDepotItem(item, onEdit, onDelete),
+                createItem: infrastructureService.createDepot,
+                updateItem: infrastructureService.updateDepot,
+                deleteItem: infrastructureService.deleteDepot,
+                onAddPress: () => navigation.navigate('DepotForm', { districtId: selectedDistrict?.id }),
+                onEditPress: (item) => navigation.navigate('DepotForm', { depot: item, districtId: selectedDistrict?.id }),
                 onBack: handleBack
             };
             break;
@@ -386,7 +431,9 @@ const TransformerCrudScreen = () => {
                 entityName: 'Transformer',
                 onBack: handleBack,
                 addButtonLabel: 'Add Transformer',
-                renderCustomItem: renderTransformerItem // Override default render to show nice card
+                renderCustomItem: renderTransformerItem, // Override default render to show nice card
+                onAddPress: () => navigation.navigate('TransformerForm', { depotId: selectedDepot?.id, depotName: selectedDepot?.name }),
+                onEditPress: (item) => navigation.navigate('TransformerForm', { transformer: item, depotId: selectedDepot?.id, depotName: selectedDepot?.name })
             };
             break;
         case 'sensors':

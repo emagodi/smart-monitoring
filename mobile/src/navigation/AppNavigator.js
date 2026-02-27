@@ -19,6 +19,10 @@ import DepotListScreen from '../screens/DepotListScreen';
 import TransformerCrudScreen from '../screens/TransformerCrudScreen';
 import NewSensorsScreen from '../screens/NewSensorsScreen'; // Re-verified
 import CameraFormScreen from '../screens/CameraFormScreen';
+import RegionFormScreen from '../screens/RegionFormScreen';
+import DistrictFormScreen from '../screens/DistrictFormScreen';
+import DepotFormScreen from '../screens/DepotFormScreen';
+import TransformerFormScreen from '../screens/TransformerFormScreen';
 // import LogoutButton from '../components/LogoutButton';
 
 const Stack = createNativeStackNavigator();
@@ -187,6 +191,26 @@ const AppNavigator = () => {
           name="CameraForm" 
           component={CameraFormScreen} 
           options={{ headerShown: true, title: 'Camera' }}
+        />
+        <Stack.Screen 
+          name="RegionForm" 
+          component={RegionFormScreen} 
+          options={{ headerShown: true, title: 'Region' }}
+        />
+        <Stack.Screen 
+          name="DistrictForm" 
+          component={DistrictFormScreen} 
+          options={{ headerShown: true, title: 'District' }}
+        />
+        <Stack.Screen 
+          name="DepotForm" 
+          component={DepotFormScreen} 
+          options={{ headerShown: true, title: 'Depot' }}
+        />
+        <Stack.Screen 
+          name="TransformerForm" 
+          component={TransformerFormScreen} 
+          options={{ headerShown: true, title: 'Transformer' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

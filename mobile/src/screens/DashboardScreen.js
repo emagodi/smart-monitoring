@@ -6,6 +6,7 @@ import transformerService from '../services/transformer';
 import alertService from '../services/alert';
 import infrastructureService from '../services/infrastructure';
 import sensorService from '../services/sensor';
+import cameraService from '../services/camera';
 import LogoutButton from '../components/LogoutButton';
 
 const { width } = Dimensions.get('window');
@@ -21,6 +22,7 @@ const DashboardScreen = ({ navigation }) => {
     totalSensors: 0,
     unassignedSensors: 0,
     totalDepots: 0,
+    totalCameras: 0,
     recentAlerts: []
   });
   const [loading, setLoading] = useState(true);
@@ -28,12 +30,13 @@ const DashboardScreen = ({ navigation }) => {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const [transformersRes, alertsRes, depotsRes, sensorsRes, unassignedSensorsRes] = await Promise.all([
+      const [transformersRes, alertsRes, depotsRes, sensorsRes, unassignedSensorsRes, camerasRes] = await Promise.all([
         transformerService.getAllTransformers(0, 1000).catch(() => []),
         alertService.getAllAlerts().catch(() => []),
         infrastructureService.getAllDepots(0, 1000).catch(() => []),
         sensorService.getAllSensors(0, 1000).catch(() => []),
-        sensorService.getUnassignedSensors().catch(() => [])
+        sensorService.getUnassignedSensors().catch(() => []),
+        cameraService.getAllCameras().catch(() => [])
       ]);
 
       const transformers = Array.isArray(transformersRes) ? transformersRes : (transformersRes.content || []);
@@ -41,6 +44,7 @@ const DashboardScreen = ({ navigation }) => {
       const depots = Array.isArray(depotsRes) ? depotsRes : (depotsRes.content || []);
       const sensors = Array.isArray(sensorsRes) ? sensorsRes : (sensorsRes.content || []);
       const unassignedSensors = Array.isArray(unassignedSensorsRes) ? unassignedSensorsRes : [];
+      const cameras = Array.isArray(camerasRes) ? camerasRes : [];
 
       const active = transformers.filter(t => t.active === true || t.isActive === true).length;
       
@@ -59,6 +63,7 @@ const DashboardScreen = ({ navigation }) => {
         totalSensors: sensors.length,
         unassignedSensors: unassignedSensors.length,
         totalDepots: depots.length,
+        totalCameras: cameras.length,
         recentAlerts: sortedAlerts
       });
     } catch (error) {
@@ -180,14 +185,14 @@ const DashboardScreen = ({ navigation }) => {
         <SectionHeader title="Alert Status" actionText="View All" onAction={() => navigation.navigate('Alerts')} />
         <View style={styles.gridContainer}>
              <DashboardCard 
-                title="Total Alerts" 
-                value={stats.totalAlerts} 
-                icon="notifications" 
-                colors={['#475569', '#64748B']} 
-                onPress={() => navigation.navigate('Alerts')}
+                title="Cameras" 
+                value={stats.totalCameras} 
+                icon="camera" 
+                colors={['#7C3AED', '#8B5CF6']} 
+                onPress={() => navigation.navigate('Transformers Mgmt')} // Navigate to where cameras are managed
             />
              <DashboardCard 
-                title="Critical" 
+                title="Critical Alerts" 
                 value={stats.criticalAlerts} 
                 icon="alert-circle" 
                 colors={['#DC2626', '#EF4444']} 
@@ -359,8 +364,8 @@ const styles = StyleSheet.create({
   recentAlertsContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 4,
+    marginBottom: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -372,9 +377,10 @@ const styles = StyleSheet.create({
   },
   recentAlertsTitle: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontSize: 14,
     color: '#111827',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
     backgroundColor: '#F9FAFB',
@@ -385,13 +391,13 @@ const styles = StyleSheet.create({
   alertItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     backgroundColor: 'white',
   },
   alertIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -401,19 +407,19 @@ const styles = StyleSheet.create({
   },
   alertMessage: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 14,
+    fontSize: 13,
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   alertTime: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
+    fontSize: 11,
     color: '#6B7280',
   },
   divider: {
     height: 1,
     backgroundColor: '#F3F4F6',
-    marginLeft: 68,
+    marginLeft: 56,
   },
   emptyStateText: {
     padding: 24,
