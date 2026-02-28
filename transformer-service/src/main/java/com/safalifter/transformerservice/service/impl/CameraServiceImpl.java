@@ -105,6 +105,18 @@ public class CameraServiceImpl implements CameraService {
 
         Camera camera = cameraOpt.get();
         String aiClass = event.getAiClass();
+
+        // Save image record if imagePath is present
+        if (event.getImagePath() != null && !event.getImagePath().isEmpty()) {
+            // Extract filename from the path
+            String filename = Paths.get(event.getImagePath()).getFileName().toString();
+            String dbPath = "/api/v1/cameras/images/" + filename;
+            CameraImage image = CameraImage.builder()
+                    .camera(camera)
+                    .imagePath(dbPath)
+                    .build();
+            cameraImageRepository.save(image);
+        }
         
         // Logic to determine if alert is needed
         if (isCritical(aiClass)) {
@@ -220,9 +232,10 @@ public class CameraServiceImpl implements CameraService {
             Path filePath = uploadPath.resolve(filename);
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
+            String dbPath = "/api/v1/cameras/images/" + filename;
             CameraImage image = CameraImage.builder()
                     .camera(camera)
-                    .imagePath(filename)
+                    .imagePath(dbPath)
                     .build();
 
             CameraImage savedImage = cameraImageRepository.save(image);
@@ -258,7 +271,10 @@ public class CameraServiceImpl implements CameraService {
     private CameraImageResponse toImageResponse(CameraImage image) {
         // Construct URL for the image
         // Assuming the controller exposes /api/v1/cameras/images/{filename}
-        String imageUrl = "/api/v1/cameras/images/" + image.getImagePath();
+        String imageUrl = image.getImagePath();
+        if (!imageUrl.startsWith("/api/v1/cameras/images/")) {
+            imageUrl = "/api/v1/cameras/images/" + imageUrl;
+        }
         
         return CameraImageResponse.builder()
                 .id(image.getId())

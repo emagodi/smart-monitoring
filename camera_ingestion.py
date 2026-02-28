@@ -39,13 +39,14 @@ def on_disconnect(client, userdata, rc):
     else:
         print("Disconnected cleanly.")
 
-def send_event_to_backend(topic, prediction):
+def send_event_to_backend(topic, prediction, image_path):
     try:
         payload = {
             "topic": topic,
             "aiClass": prediction.get("class", "unknown"),
             "confidence": prediction.get("confidence", 0.0),
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.datetime.now().isoformat(),
+            "imagePath": os.path.basename(image_path)
         }
         print(f"Sending event to backend: {payload}")
         response = requests.post(TRANSFORMER_SERVICE_URL, json=payload)
@@ -71,7 +72,7 @@ def send_to_vision_ai(filepath, topic):
             result = response.json()
             print(f"Vision AI Result: {result}")
             if "prediction" in result:
-                send_event_to_backend(topic, result["prediction"])
+                send_event_to_backend(topic, result["prediction"], filepath)
         else:
             print(f"Vision AI Error ({response.status_code}): {response.text}")
             

@@ -10,6 +10,7 @@ public class CameraEventRequest {
     private String aiClass;
     private Double confidence;
     private String timestamp;
+    private String imagePath;
 
     public String getTopic() { return topic; }
     public void setTopic(String topic) { this.topic = topic; }
@@ -19,6 +20,8 @@ public class CameraEventRequest {
     public void setConfidence(Double confidence) { this.confidence = confidence; }
     public String getTimestamp() { return timestamp; }
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
+    public String getImagePath() { return imagePath; }
+    public void setImagePath(String imagePath) { this.imagePath = imagePath; }
 
     public static CameraEventRequestBuilder builder() {
         return new CameraEventRequestBuilder();
@@ -29,11 +32,13 @@ public class CameraEventRequest {
         private String aiClass;
         private Double confidence;
         private String timestamp;
+        private String imagePath;
 
         public CameraEventRequestBuilder topic(String topic) { this.topic = topic; return this; }
         public CameraEventRequestBuilder aiClass(String aiClass) { this.aiClass = aiClass; return this; }
         public CameraEventRequestBuilder confidence(Double confidence) { this.confidence = confidence; return this; }
         public CameraEventRequestBuilder timestamp(String timestamp) { this.timestamp = timestamp; return this; }
+        public CameraEventRequestBuilder imagePath(String imagePath) { this.imagePath = imagePath; return this; }
 
         public CameraEventRequest build() {
             CameraEventRequest request = new CameraEventRequest();
@@ -41,6 +46,7 @@ public class CameraEventRequest {
             request.setAiClass(aiClass);
             request.setConfidence(confidence);
             request.setTimestamp(timestamp);
+            request.setImagePath(imagePath);
             return request;
         }
     }

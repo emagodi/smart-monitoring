@@ -56,6 +56,12 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
 
+                .route("transformer-camera-events", r -> r.path("/api/v1/cameras/event")
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-camera-images", r -> r.path("/api/v1/cameras/images/**")
+                        .uri("lb://transformer-service"))
+
                 .route("transformer-cameras", r -> r.path("/api/v1/cameras/**")
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
