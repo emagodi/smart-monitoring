@@ -33,7 +33,8 @@ public class SecurityConfiguration {
                                 "/v2/api-docs", "/v3/api-docs/**",
                                 "/swagger-resources/**", "/swagger-ui/**",
                                 "/webjars/**", "/swagger-ui.html", "/error",
-                                "/api/v1/cameras/event").permitAll()
+                                "/api/v1/cameras/event",
+                                "/api/v1/cameras/images/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(STATELESS))

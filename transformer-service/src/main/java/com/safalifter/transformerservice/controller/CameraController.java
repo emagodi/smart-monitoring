@@ -114,7 +114,6 @@ public class CameraController {
     @GetMapping("/images/{filename:.+}")
     @Operation(summary = "Get image file")
     // Allow reading images with standard read privilege
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<Resource> getImage(@PathVariable String filename) {
         Resource file = cameraService.getImage(filename);
         return ResponseEntity.ok()

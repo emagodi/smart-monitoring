@@ -269,12 +269,22 @@ public class CameraServiceImpl implements CameraService {
     }
 
     private CameraImageResponse toImageResponse(CameraImage image) {
-        // Construct URL for the image
-        // Assuming the controller exposes /api/v1/cameras/images/{filename}
-        String imageUrl = image.getImagePath();
-        if (!imageUrl.startsWith("/api/v1/cameras/images/")) {
-            imageUrl = "/api/v1/cameras/images/" + imageUrl;
+        String imagePath = image.getImagePath();
+        String filename;
+        
+        // If it's already a relative URL, extract filename or keep it
+        if (imagePath != null && imagePath.startsWith("/api/v1/cameras/images/")) {
+             filename = imagePath.substring("/api/v1/cameras/images/".length());
+        } else if (imagePath != null) {
+            // It might be a filename or an absolute path
+            // Normalize path separators for cross-platform compatibility (Windows paths on Linux container)
+            String normalizedPath = imagePath.replace('\\', '/');
+            filename = Paths.get(normalizedPath).getFileName().toString();
+        } else {
+            filename = "unknown.jpg";
         }
+
+        String imageUrl = "/api/v1/cameras/images/" + filename;
         
         return CameraImageResponse.builder()
                 .id(image.getId())
