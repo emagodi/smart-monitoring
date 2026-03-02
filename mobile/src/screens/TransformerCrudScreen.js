@@ -306,7 +306,7 @@ const TransformerCrudScreen = () => {
                 </View>
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>
                 <TouchableOpacity 
                     style={[styles.viewSensorsButton, { backgroundColor: '#0067A5', paddingHorizontal: 16 }]}
                     onPress={() => navigation.navigate('CameraImages', { cameraId: item.id, cameraName: item.name })}
