@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -249,6 +250,13 @@ public class CameraServiceImpl implements CameraService {
     @Override
     public List<CameraImageResponse> getLatestImages(Long cameraId) {
         return cameraImageRepository.findTop5ByCameraIdOrderByCapturedAtDesc(cameraId).stream()
+                .map(this::toImageResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<CameraImageResponse> getImagesByDateRange(Long cameraId, LocalDateTime start, LocalDateTime end) {
+        return cameraImageRepository.findByCameraIdAndCapturedAtBetweenOrderByCapturedAtDesc(cameraId, start, end).stream()
                 .map(this::toImageResponse)
                 .collect(Collectors.toList());
     }

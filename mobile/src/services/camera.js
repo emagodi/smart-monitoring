@@ -35,6 +35,16 @@ const getLatestImages = async (id) => {
     return response.data;
 };
 
+const getImagesByDateRange = async (id, start, end) => {
+    const response = await api.get(`/api/v1/cameras/${id}/images/filter`, {
+        params: {
+            start: start,
+            end: end
+        }
+    });
+    return response.data;
+};
+
 const uploadImage = async (id, fileUri) => {
     const formData = new FormData();
     formData.append('file', {
@@ -59,5 +69,6 @@ export default {
     updateCamera,
     deleteCamera,
     getLatestImages,
+    getImagesByDateRange,
     uploadImage
 };
