@@ -534,8 +534,14 @@ const TransformerCrudScreen = () => {
                         let endDate = null;
 
                         if (filters && typeof filters === 'object') {
-                             if (filters.startDate && filters.startDate.length === 10) startDate = `${filters.startDate}T00:00:00`;
-                             if (filters.endDate && filters.endDate.length === 10) endDate = `${filters.endDate}T23:59:59`;
+                             if (filters.startDate) {
+                                 if (filters.startDate.length === 10) startDate = `${filters.startDate}T00:00:00`;
+                                 else startDate = filters.startDate;
+                             }
+                             if (filters.endDate) {
+                                 if (filters.endDate.length === 10) endDate = `${filters.endDate}T23:59:59`;
+                                 else endDate = filters.endDate;
+                             }
                         }
 
                         const data = await sensorService.getReadingsBySensor(selectedSensor.id, startDate, endDate);
@@ -665,11 +671,13 @@ const styles = StyleSheet.create({
     readingValue: {
         fontSize: 16,
         fontWeight: 'bold',
+        fontFamily: 'Inter_700Bold',
         color: '#333',
     },
     readingTime: {
         fontSize: 12,
         color: '#666',
+        fontFamily: 'Inter_400Regular',
     },
     modalOverlay: {
         flex: 1,

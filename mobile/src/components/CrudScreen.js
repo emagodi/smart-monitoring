@@ -59,9 +59,13 @@ const CrudScreen = ({
     const [loadingMore, setLoadingMore] = useState(false);
     const [isPagination, setIsPagination] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    
+    const [startDate, setStartDate] = useState(null);
+    const [endDate, setEndDate] = useState(null);
+    const [filterVisible, setFilterVisible] = useState(false);
+    const [pickerMode, setPickerMode] = useState('date');
+    const [activeField, setActiveField] = useState(null); // 'start' or 'end'
+    const [showPicker, setShowPicker] = useState(false);
+
     // Selector Modal State
     const [selectorVisible, setSelectorVisible] = useState(false);
     const [currentSelectorField, setCurrentSelectorField] = useState(null);
@@ -69,24 +73,90 @@ const CrudScreen = ({
     const [selectorSearchQuery, setSelectorSearchQuery] = useState('');
     const [selectorLoading, setSelectorLoading] = useState(false);
 
-    // Date Picker State
-    const [showStartPicker, setShowStartPicker] = useState(false);
-    const [showEndPicker, setShowEndPicker] = useState(false);
+    // Time input state
+    const [startTimeText, setStartTimeText] = useState('');
+    const [endTimeText, setEndTimeText] = useState('');
 
-    const onDateChange = (event, selectedDate, type) => {
-        const setShow = type === 'start' ? setShowStartPicker : setShowEndPicker;
-        const setDate = type === 'start' ? setStartDate : setEndDate;
-        
-        if (Platform.OS === 'android') {
-            setShow(false);
+    // Sync text inputs with date state
+    useEffect(() => {
+        if (startDate) {
+            setStartTimeText(startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
         }
+    }, [startDate]);
 
-        if (event.type === 'set' && selectedDate) {
-             const year = selectedDate.getFullYear();
-             const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-             const day = String(selectedDate.getDate()).padStart(2, '0');
-             setDate(`${year}-${month}-${day}`);
+    useEffect(() => {
+        if (endDate) {
+            setEndTimeText(endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
         }
+    }, [endDate]);
+
+    const handleTimeTextChange = (text, type) => {
+        if (type === 'start') setStartTimeText(text);
+        else setEndTimeText(text);
+
+        // Try to parse HH:mm
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+        if (timeRegex.test(text)) {
+            const [hours, minutes] = text.split(':').map(Number);
+            const baseDate = type === 'start' ? (startDate || new Date()) : (endDate || new Date());
+            const dateToUpdate = new Date(baseDate);
+            dateToUpdate.setHours(hours);
+            dateToUpdate.setMinutes(minutes);
+            
+            if (type === 'start') setStartDate(dateToUpdate);
+            else setEndDate(dateToUpdate);
+        }
+    };
+
+    const handleTimeBlur = (type) => {
+        const text = type === 'start' ? startTimeText : endTimeText;
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+        if (!timeRegex.test(text)) {
+            const date = type === 'start' ? startDate : endDate;
+            if (date) {
+                const validText = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                if (type === 'start') setStartTimeText(validText);
+                else setEndTimeText(validText);
+            } else {
+                 if (type === 'start') setStartTimeText('');
+                 else setEndTimeText('');
+            }
+        }
+    };
+
+    const onDateChange = (event, selectedDate) => {
+        setShowPicker(Platform.OS === 'ios');
+        if (selectedDate) {
+            if (activeField === 'start') {
+                setStartDate(selectedDate);
+            } else {
+                setEndDate(selectedDate);
+            }
+        } else {
+             setShowPicker(false);
+        }
+    };
+
+    const showMode = (currentMode, field) => {
+        setShowPicker(true);
+        setPickerMode(currentMode);
+        setActiveField(field);
+    };
+
+    const resetFilter = () => {
+        setStartDate(null);
+        setEndDate(null);
+        setStartTimeText('');
+        setEndTimeText('');
+        // We don't close filter here necessarily, or maybe we do? CameraImagesScreen does.
+        // But loadData depends on state. 
+        // We might need to trigger loadData manually if useEffect doesn't catch it fast enough or if we want to be explicit.
+        // Actually useEffect depends on startDate/endDate, so it should auto reload.
+    };
+
+    const applyFilter = () => {
+        setFilterVisible(false);
+        loadData(0, false);
     };
 
 
@@ -141,15 +211,24 @@ const CrudScreen = ({
         try {
             let filter = searchQuery;
             if (filterType === 'date_range') {
-                // If only one is set, we can still pass it, or require both?
-                // For now, pass what we have.
-                // Format: YYYY-MM-DD
-                // But user input might be raw.
-                // Assuming backend expects ISO or YYYY-MM-DD.
-                // We'll construct full ISO timestamps for start and end of day if valid.
-                // Or just pass the string.
-                // Let's pass an object { startDate, endDate } and let fetchData handle formatting.
-                filter = { startDate, endDate };
+                const formatDate = (date) => {
+                    if (!date) return null;
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    const seconds = String(date.getSeconds()).padStart(2, '0');
+                    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+                };
+
+                if (startDate && endDate) {
+                    let start = formatDate(startDate);
+                    let end = formatDate(endDate);
+                    filter = { startDate: start, endDate: end };
+                } else {
+                    filter = {}; // No date filter applied, let backend/service handle default (e.g. latest 10)
+                }
             }
             const result = await fetchData(nextPage, 10, filter);
             
@@ -193,7 +272,7 @@ const CrudScreen = ({
         }, 500);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery, startDate, endDate]);
+    }, [searchQuery, startDate, endDate, startTimeText, endTimeText]);
 
     useFocusEffect(
         useCallback(() => {
@@ -448,35 +527,13 @@ const CrudScreen = ({
                             </TouchableOpacity>
                         )}
                         {filterType === 'date_range' ? (
-                             <View style={styles.dateFilterContainer}>
-                                <TouchableOpacity 
-                                    style={styles.dateButton} 
-                                    onPress={() => setShowStartPicker(true)}
-                                >
-                                    <Ionicons name="calendar-outline" size={18} color="#0067A5" style={{marginRight: 6}} />
-                                    <Text style={[styles.dateText, !startDate && styles.placeholderText]}>
-                                        {startDate || 'Start Date'}
-                                    </Text>
-                                </TouchableOpacity>
-                                
-                                <Text style={styles.dateSeparator}>to</Text>
-                                
-                                <TouchableOpacity 
-                                    style={styles.dateButton} 
-                                    onPress={() => setShowEndPicker(true)}
-                                >
-                                    <Ionicons name="calendar-outline" size={18} color="#0067A5" style={{marginRight: 6}} />
-                                    <Text style={[styles.dateText, !endDate && styles.placeholderText]}>
-                                        {endDate || 'End Date'}
-                                    </Text>
-                                </TouchableOpacity>
-
-                                {(startDate || endDate) && (
-                                    <TouchableOpacity onPress={() => { setStartDate(''); setEndDate(''); }} style={styles.clearDateButton}>
-                                        <Ionicons name="close-circle" size={20} color="#999" />
-                                    </TouchableOpacity>
-                                )}
-                             </View>
+                            <TouchableOpacity 
+                                onPress={() => setFilterVisible(!filterVisible)} 
+                                style={[styles.filterButton, filterVisible && styles.filterButtonActive]}
+                            >
+                                <Text style={[styles.filterButtonText, filterVisible && { color: '#0067A5' }]}>Filter</Text>
+                                <Ionicons name={filterVisible ? "funnel" : "funnel-outline"} size={20} color={filterVisible ? "#0067A5" : "#666"} />
+                            </TouchableOpacity>
                         ) : (
                              <View style={styles.searchContainer}>
                                 <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
@@ -494,6 +551,75 @@ const CrudScreen = ({
                             </TouchableOpacity>
                         )}
                     </View>
+
+                    {filterType === 'date_range' && filterVisible && (
+                        <View style={styles.filterContainer}>
+                            <Text style={styles.filterTitle}>Filter by Date & Time</Text>
+                            <View style={styles.dateRow}>
+                                <View style={styles.dateCol}>
+                                    <Text style={styles.dateLabel}>Start</Text>
+                                    <TouchableOpacity onPress={() => showMode('date', 'start')} style={styles.dateButton}>
+                                        <Text style={styles.dateButtonText}>{startDate ? startDate.toLocaleDateString() : 'Select Date'}</Text>
+                                        <Ionicons name="calendar-outline" size={16} color="#666" />
+                                    </TouchableOpacity>
+                                    <View style={styles.dateButton}>
+                                        <TextInput
+                                            style={[styles.dateButtonText, { flex: 1, padding: 0 }]}
+                                            value={startTimeText}
+                                            onChangeText={(text) => handleTimeTextChange(text, 'start')}
+                                            onBlur={() => handleTimeBlur('start')}
+                                            placeholder="HH:mm"
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={5}
+                                        />
+                                        <TouchableOpacity onPress={() => showMode('time', 'start')}>
+                                            <Ionicons name="time-outline" size={16} color="#666" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                                <View style={styles.dateCol}>
+                                    <Text style={styles.dateLabel}>End</Text>
+                                    <TouchableOpacity onPress={() => showMode('date', 'end')} style={styles.dateButton}>
+                                        <Text style={styles.dateButtonText}>{endDate ? endDate.toLocaleDateString() : 'Select Date'}</Text>
+                                        <Ionicons name="calendar-outline" size={16} color="#666" />
+                                    </TouchableOpacity>
+                                    <View style={styles.dateButton}>
+                                        <TextInput
+                                            style={[styles.dateButtonText, { flex: 1, padding: 0 }]}
+                                            value={endTimeText}
+                                            onChangeText={(text) => handleTimeTextChange(text, 'end')}
+                                            onBlur={() => handleTimeBlur('end')}
+                                            placeholder="HH:mm"
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={5}
+                                        />
+                                        <TouchableOpacity onPress={() => showMode('time', 'end')}>
+                                            <Ionicons name="time-outline" size={16} color="#666" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                            <View style={styles.filterActions}>
+                                <TouchableOpacity onPress={resetFilter} style={[styles.filterActionButton, styles.resetButton]}>
+                                    <Text style={styles.resetButtonText}>Reset</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={applyFilter} style={[styles.filterActionButton, styles.applyButton]}>
+                                    <Text style={styles.applyButtonText}>Apply</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+
+                    {showPicker && (
+                        <DateTimePicker
+                            testID="dateTimePicker"
+                            value={activeField === 'start' ? (startDate || new Date()) : (endDate || new Date())}
+                            mode={pickerMode}
+                            is24Hour={true}
+                            display="default"
+                            onChange={onDateChange}
+                        />
+                    )}
 
                     {(showTitle || showLogo) && (
                         <View style={styles.headerContainer}>
@@ -849,26 +975,7 @@ const CrudScreen = ({
                 </View>
             </Modal>
 
-            {/* Date Pickers */}
-            {showStartPicker && (
-                <DateTimePicker
-                    value={startDate ? new Date(startDate) : new Date()}
-                    mode="date"
-                    display="default"
-                    onChange={(event, date) => onDateChange(event, date, 'start')}
-                    maximumDate={new Date()}
-                />
-            )}
-            {showEndPicker && (
-                <DateTimePicker
-                    value={endDate ? new Date(endDate) : new Date()}
-                    mode="date"
-                    display="default"
-                    onChange={(event, date) => onDateChange(event, date, 'end')}
-                    maximumDate={new Date()}
-                    minimumDate={startDate ? new Date(startDate) : undefined}
-                />
-            )}
+
         </SafeAreaView>
         </LinearGradient>
     );
@@ -1055,6 +1162,7 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 16,
         color: '#999',
+        fontFamily: 'Inter_400Regular',
     },
     modalContainer: {
         flex: 1,
@@ -1176,45 +1284,32 @@ const styles = StyleSheet.create({
         color: '#333',
         height: '100%',
     },
-    dateFilterContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        paddingHorizontal: 8,
-        paddingVertical: 6,
-        flex: 1,
-        marginRight: 8,
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
+    filterButton: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8 },
+    filterButtonActive: { backgroundColor: '#F0F9FF' },
+    filterButtonText: { marginRight: 4, fontFamily: 'Inter_600SemiBold', color: '#666', fontSize: 12 },
+    filterContainer: { backgroundColor: '#fff', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', elevation: 1 },
+    filterTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#333', marginBottom: 12 },
+    dateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+    dateCol: { flex: 1, marginHorizontal: 4 },
+    dateLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#666', marginBottom: 4 },
+    dateButton: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        borderWidth: 1, 
+        borderColor: '#ddd', 
+        borderRadius: 6, 
+        padding: 8, 
+        marginBottom: 8,
+        backgroundColor: '#fafafa'
     },
-    dateButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 6,
-        paddingHorizontal: 4,
-        backgroundColor: '#f5f5f5',
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: '#eee',
-    },
-    dateText: {
-        fontSize: 12,
-        color: '#333',
-        fontWeight: '600',
-    },
-    dateSeparator: {
-        marginHorizontal: 6,
-        color: '#666',
-        fontWeight: 'bold',
-        fontSize: 12,
-    },
-    clearDateButton: {
-        padding: 4,
-        marginLeft: 4,
-    },
+    dateButtonText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#333' },
+    filterActions: { flexDirection: 'row', justifyContent: 'space-between' },
+    filterActionButton: { flex: 1, padding: 10, borderRadius: 6, alignItems: 'center', marginHorizontal: 4 },
+    resetButton: { backgroundColor: '#e0e0e0' },
+    resetButtonText: { color: '#333', fontFamily: 'Inter_700Bold', fontSize: 12 },
+    applyButton: { backgroundColor: '#0067A5' },
+    applyButtonText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 },
     addButtonSmall: {
         width: 40,
         height: 40,
@@ -1290,6 +1385,7 @@ const styles = StyleSheet.create({
         color: '#0067A5',
         fontSize: 14,
         fontWeight: '600',
+        fontFamily: 'Inter_600SemiBold',
     },
     // Success Modal Styles
     successModalContent: {
@@ -1405,6 +1501,33 @@ const styles = StyleSheet.create({
         fontFamily: 'Inter_600SemiBold',
         color: '#fff',
     },
+    // Filter Styles
+    filterButton: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8 },
+    filterButtonActive: { backgroundColor: '#F0F9FF' },
+    filterButtonText: { marginRight: 4, fontFamily: 'Inter_600SemiBold', color: '#666', fontSize: 12 },
+    filterContainer: { backgroundColor: '#fff', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', elevation: 1 },
+    filterTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#333', marginBottom: 12 },
+    dateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+    dateCol: { flex: 1, marginHorizontal: 4 },
+    dateLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#666', marginBottom: 4 },
+    dateButton: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        borderWidth: 1, 
+        borderColor: '#ddd', 
+        borderRadius: 6, 
+        padding: 8, 
+        marginBottom: 8,
+        backgroundColor: '#fafafa'
+    },
+    dateButtonText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#333' },
+    filterActions: { flexDirection: 'row', justifyContent: 'space-between' },
+    actionButton: { flex: 1, padding: 10, borderRadius: 6, alignItems: 'center', marginHorizontal: 4 },
+    resetButton: { backgroundColor: '#e0e0e0' },
+    resetButtonText: { color: '#333', fontFamily: 'Inter_700Bold', fontSize: 12 },
+    applyButton: { backgroundColor: '#0067A5' },
+    applyButtonText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 },
 });
 
 export default CrudScreen;
