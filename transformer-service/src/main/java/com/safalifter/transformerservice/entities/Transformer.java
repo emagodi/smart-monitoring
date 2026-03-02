@@ -29,6 +29,9 @@ public class Transformer {
     @Column(name = "depot_id")
     private Long depotId;
 
+    @Enumerated(EnumType.STRING)
+    private TransformerType type;
+
     private BigDecimal lat;
 
     private BigDecimal lng;

@@ -331,10 +331,17 @@ const TransformerCrudScreen = () => {
                         colors={item.isActive ? ['#66bb6a', '#2e7d32'] : ['#ef5350', '#c62828']} 
                         style={styles.iconContainer}
                     >
-                        <Ionicons name="flash" size={16} color="#fff" />
+                        <Ionicons 
+                            name={item.type === 'GROUND_MOUNTED' ? "home" : "flash"} 
+                            size={16} 
+                            color="#fff" 
+                        />
                     </LinearGradient>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.cardSubtitle}>{item.capacity} KVA • {item.depotName}</Text>
+                        <Text style={styles.cardSubtitle}>
+                            {item.capacity} KVA • {item.depotName}
+                            {item.type ? ` • ${item.type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}` : ''}
+                        </Text>
                         <View style={styles.statusBadge}>
                              <View style={[styles.statusDot, { backgroundColor: item.isActive ? '#4CAF50' : '#F44336' }]} />
                              <Text style={[styles.statusText, { color: item.isActive ? '#4CAF50' : '#F44336' }]}>

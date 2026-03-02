@@ -16,6 +16,7 @@ com\safalifter\transformerservice\repository\CameraImageRepository.class
 com\safalifter\transformerservice\service\SensorService.class
 com\safalifter\transformerservice\config\OpenApiConfig.class
 com\safalifter\transformerservice\entities\Alert$AlertBuilder.class
+com\safalifter\transformerservice\entities\TransformerType.class
 com\safalifter\transformerservice\payload\request\CameraRequest.class
 com\safalifter\transformerservice\ingest\LoriotWebSocketIngestor$Listener.class
 com\safalifter\transformerservice\entities\CameraImage$CameraImageBuilder.class

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import com.safalifter.transformerservice.entities.Transformer;
+import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.payload.request.TransformerRequest;
 import com.safalifter.transformerservice.payload.response.SensorResponse;
 import com.safalifter.transformerservice.payload.response.TransformerResponse;
@@ -31,6 +32,7 @@ public class TransformerServiceImpl implements TransformerService {
                 .capacity(request.getCapacity())
                 .isActive(request.getIsActive())
                 .depotId(request.getDepotId())
+                .type(request.getType() != null ? TransformerType.valueOf(request.getType()) : null)
                 .lat(request.getLat())
                 .lng(request.getLng())
                 .build();
@@ -62,6 +64,9 @@ public class TransformerServiceImpl implements TransformerService {
         transformer.setCapacity(request.getCapacity());
         transformer.setActive(request.getIsActive());
         transformer.setDepotId(request.getDepotId());
+        if (request.getType() != null && !request.getType().isEmpty()) {
+            transformer.setType(TransformerType.valueOf(request.getType()));
+        }
         transformer.setLat(request.getLat());
         transformer.setLng(request.getLng());
         Transformer saved = transformerRepository.save(transformer);
@@ -91,6 +96,7 @@ public class TransformerServiceImpl implements TransformerService {
                 .capacity(transformer.getCapacity())
                 .isActive(transformer.isActive())
                 .depotId(transformer.getDepotId())
+                .type(transformer.getType() != null ? transformer.getType().name() : null)
                 .lat(transformer.getLat())
                 .lng(transformer.getLng())
                 .sensors(sensors)

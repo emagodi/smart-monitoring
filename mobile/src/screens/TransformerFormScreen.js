@@ -49,7 +49,8 @@ const TransformerFormScreen = ({ route, navigation }) => {
         lng: '',
         isActive: true,
         depotId: depotId || '',
-        depotName: depotName || ''
+        depotName: depotName || '',
+        type: 'POLE_MOUNTED'
     });
     const [submitting, setSubmitting] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -64,7 +65,8 @@ const TransformerFormScreen = ({ route, navigation }) => {
                 lng: String(transformer.lng || ''),
                 isActive: transformer.isActive ?? true,
                 depotId: transformer.depotId || depotId || '',
-                depotName: transformer.depotName || depotName || ''
+                depotName: transformer.depotName || depotName || '',
+                type: transformer.type || 'POLE_MOUNTED'
             });
             navigation.setOptions({ title: 'Edit Transformer' });
         } else {
@@ -149,6 +151,26 @@ const TransformerFormScreen = ({ route, navigation }) => {
                             placeholderTextColor="#999"
                             keyboardType="numeric"
                         />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Transformer Type</Text>
+                        <View style={styles.typeSelectorContainer}>
+                            <TouchableOpacity 
+                                style={[styles.typeOption, formData.type === 'POLE_MOUNTED' && styles.typeOptionSelected]}
+                                onPress={() => setFormData({...formData, type: 'POLE_MOUNTED'})}
+                            >
+                                <Ionicons name="flash-outline" size={20} color={formData.type === 'POLE_MOUNTED' ? '#fff' : '#666'} />
+                                <Text style={[styles.typeOptionText, formData.type === 'POLE_MOUNTED' && styles.typeOptionTextSelected]}>Pole Mounted</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.typeOption, formData.type === 'GROUND_MOUNTED' && styles.typeOptionSelected]}
+                                onPress={() => setFormData({...formData, type: 'GROUND_MOUNTED'})}
+                            >
+                                <Ionicons name="home-outline" size={20} color={formData.type === 'GROUND_MOUNTED' ? '#fff' : '#666'} />
+                                <Text style={[styles.typeOptionText, formData.type === 'GROUND_MOUNTED' && styles.typeOptionTextSelected]}>Ground Mounted</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
                     <View style={styles.row}>
@@ -268,6 +290,35 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontFamily: 'Inter_400Regular',
         color: '#1F2937',
+    },
+    typeSelectorContainer: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    typeOption: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        backgroundColor: '#F9FAFB',
+        gap: 8,
+    },
+    typeOptionSelected: {
+        backgroundColor: '#0067A5',
+        borderColor: '#0067A5',
+    },
+    typeOptionText: {
+        fontSize: 14,
+        fontFamily: 'Inter_500Medium',
+        color: '#666',
+    },
+    typeOptionTextSelected: {
+        color: '#fff',
     },
     switchContainer: {
         flexDirection: 'row',

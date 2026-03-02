@@ -1,6 +1,7 @@
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\response\SensorReadingResponse.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\payload\request\AlertRequest.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\TransformerRepository.java
+C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\TransformerType.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\repository\SensorRepository.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\CameraImage.java
 C:\Users\Edwin Magodi\Desktop\Projects\smart-monitoring\transformer-service\src\main\java\com\safalifter\transformerservice\entities\Transformer.java

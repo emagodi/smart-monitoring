@@ -793,6 +793,9 @@ const CrudScreen = ({
                                         style={styles.selectorItem}
                                         onPress={() => handleSelectOption(item)}
                                     >
+                                        {item.icon && (
+                                            <Ionicons name={item.icon} size={20} color="#666" style={{ marginRight: 10 }} />
+                                        )}
                                         <Text style={styles.selectorItemText}>
                                             {item[currentSelectorField?.displayKey || 'name']}
                                         </Text>
