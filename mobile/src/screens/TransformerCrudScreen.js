@@ -287,11 +287,28 @@ const TransformerCrudScreen = () => {
                     <View style={{ flex: 1 }}>
                         <Text style={styles.cardTitle}>{item.name}</Text>
                         <Text style={styles.cardSubtitle}>{item.model} • {item.topic}</Text>
-                        <View style={styles.statusBadge}>
-                             <View style={[styles.statusDot, { backgroundColor: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]} />
-                             <Text style={[styles.statusText, { color: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]}>
-                                {item.status || 'Unknown'}
-                             </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, justifyContent: 'space-between' }}>
+                            <View style={styles.statusBadge}>
+                                <View style={[styles.statusDot, { backgroundColor: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]} />
+                                <Text style={[styles.statusText, { color: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]}>
+                                    {item.status || 'Unknown'}
+                                </Text>
+                            </View>
+                            <TouchableOpacity 
+                                style={{ 
+                                    flexDirection: 'row', 
+                                    alignItems: 'center', 
+                                    backgroundColor: '#0067A5', 
+                                    paddingVertical: 4, 
+                                    paddingHorizontal: 8, 
+                                    borderRadius: 12, 
+                                    marginLeft: 8 
+                                }}
+                                onPress={() => navigation.navigate('CameraImages', { cameraId: item.id, cameraName: item.name })}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Inter_600SemiBold', marginRight: 4 }}>Images</Text>
+                                <Ionicons name="images" size={12} color="#fff" />
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -304,16 +321,6 @@ const TransformerCrudScreen = () => {
                         <Ionicons name="trash-outline" size={20} color="#FF3B30" />
                     </TouchableOpacity>
                 </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>
-                <TouchableOpacity 
-                    style={[styles.viewSensorsButton, { backgroundColor: '#0067A5', paddingHorizontal: 16 }]}
-                    onPress={() => navigation.navigate('CameraImages', { cameraId: item.id, cameraName: item.name })}
-                >
-                    <Text style={styles.viewSensorsText}>Images</Text>
-                    <Ionicons name="images" size={14} color="#fff" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
             </View>
         </View>
     );
