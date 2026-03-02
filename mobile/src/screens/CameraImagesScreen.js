@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Modal, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Modal, ActivityIndicator, Alert, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,10 +19,55 @@ const CameraImagesScreen = ({ route, navigation }) => {
     const [showPicker, setShowPicker] = useState(false);
     const [pickerMode, setPickerMode] = useState('date');
     const [activeField, setActiveField] = useState(null); // 'start' or 'end'
+    
+    // Time input state
+    const [startTimeText, setStartTimeText] = useState('');
+    const [endTimeText, setEndTimeText] = useState('');
 
     useEffect(() => {
         fetchImages();
     }, []);
+
+    // Sync text inputs with date state
+    useEffect(() => {
+        if (startDate) {
+            setStartTimeText(startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+        }
+    }, [startDate]);
+
+    useEffect(() => {
+        if (endDate) {
+            setEndTimeText(endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+        }
+    }, [endDate]);
+
+    const handleTimeTextChange = (text, type) => {
+        if (type === 'start') setStartTimeText(text);
+        else setEndTimeText(text);
+
+        // Try to parse HH:mm
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+        if (timeRegex.test(text)) {
+            const [hours, minutes] = text.split(':').map(Number);
+            const dateToUpdate = type === 'start' ? new Date(startDate) : new Date(endDate);
+            dateToUpdate.setHours(hours);
+            dateToUpdate.setMinutes(minutes);
+            
+            if (type === 'start') setStartDate(dateToUpdate);
+            else setEndDate(dateToUpdate);
+        }
+    };
+
+    const handleTimeBlur = (type) => {
+        const text = type === 'start' ? startTimeText : endTimeText;
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+        if (!timeRegex.test(text)) {
+            const date = type === 'start' ? startDate : endDate;
+            const validText = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            if (type === 'start') setStartTimeText(validText);
+            else setEndTimeText(validText);
+        }
+    };
 
     const fetchImages = async () => {
         setLoading(true);
@@ -143,10 +188,20 @@ const CameraImagesScreen = ({ route, navigation }) => {
                                 <Text style={styles.dateButtonText}>{startDate.toLocaleDateString()}</Text>
                                 <Ionicons name="calendar-outline" size={16} color="#666" />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => showMode('time', 'start')} style={styles.dateButton}>
-                                <Text style={styles.dateButtonText}>{startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                                <Ionicons name="time-outline" size={16} color="#666" />
-                            </TouchableOpacity>
+                            <View style={styles.dateButton}>
+                                <TextInput
+                                    style={[styles.dateButtonText, { flex: 1, padding: 0 }]}
+                                    value={startTimeText}
+                                    onChangeText={(text) => handleTimeTextChange(text, 'start')}
+                                    onBlur={() => handleTimeBlur('start')}
+                                    placeholder="HH:mm"
+                                    keyboardType="numbers-and-punctuation"
+                                    maxLength={5}
+                                />
+                                <TouchableOpacity onPress={() => showMode('time', 'start')}>
+                                    <Ionicons name="time-outline" size={16} color="#666" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         <View style={styles.dateCol}>
                             <Text style={styles.dateLabel}>End</Text>
@@ -154,10 +209,20 @@ const CameraImagesScreen = ({ route, navigation }) => {
                                 <Text style={styles.dateButtonText}>{endDate.toLocaleDateString()}</Text>
                                 <Ionicons name="calendar-outline" size={16} color="#666" />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => showMode('time', 'end')} style={styles.dateButton}>
-                                <Text style={styles.dateButtonText}>{endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                                <Ionicons name="time-outline" size={16} color="#666" />
-                            </TouchableOpacity>
+                            <View style={styles.dateButton}>
+                                <TextInput
+                                    style={[styles.dateButtonText, { flex: 1, padding: 0 }]}
+                                    value={endTimeText}
+                                    onChangeText={(text) => handleTimeTextChange(text, 'end')}
+                                    onBlur={() => handleTimeBlur('end')}
+                                    placeholder="HH:mm"
+                                    keyboardType="numbers-and-punctuation"
+                                    maxLength={5}
+                                />
+                                <TouchableOpacity onPress={() => showMode('time', 'end')}>
+                                    <Ionicons name="time-outline" size={16} color="#666" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                     <View style={styles.filterActions}>
