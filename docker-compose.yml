@@ -147,5 +147,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  vision-ai-service:
+    build: ./vision-ai-service
+    container_name: vision-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+
 volumes:
   mysql_data:

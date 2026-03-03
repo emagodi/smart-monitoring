@@ -83,6 +83,9 @@ public class GatewayConfig {
                 .route("transformer-openapi", r -> r.path("/transformer/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/transformer/(?<segment>.*)", "/${segment}"))
                         .uri("lb://transformer-service"))
+                .route("transformer-simulation", r -> r.path("/api/v1/simulation/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
                 .route("notification-swagger-ui", r -> r.path("/notification/swagger-ui/**", "/notification/swagger-ui.html")
                         .filters(f -> f.rewritePath("/notification/(?<segment>.*)", "/${segment}"))
                         .uri("lb://notification-service"))
@@ -95,16 +98,14 @@ public class GatewayConfig {
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
-                "http://localhost:3000"
-        ));
-        config.addAllowedMethod("*");
-        config.addAllowedHeader("*");
+        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"));
         config.setAllowCredentials(true);
-        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
+
         return new CorsWebFilter(source);
     }
 }
