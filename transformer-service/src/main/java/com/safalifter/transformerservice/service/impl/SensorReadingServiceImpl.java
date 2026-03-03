@@ -304,6 +304,11 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                     .sensorType(sensor.getType())
                     .build();
             try { alertService.create(ar); } catch (Exception ignored) {}
+            try {
+                notificationClient.send(SendNotificationRequest.builder()
+                        .message(message)
+                        .build());
+            } catch (Exception ignored) {}
         }
     }
 }
