@@ -72,7 +72,9 @@ public class SimulationServiceImpl implements SimulationService {
         String alertLevel = "SAFE";
 
         if (request.getCodedValue() != null) {
-            value = decodeValue(request.getCodedValue(), sensor.getType());
+            // Convert to lowercase as requested
+            String codedVal = request.getCodedValue().toLowerCase();
+            value = decodeValue(codedVal, sensor.getType());
         } else if (request.getRawValue() != null) {
             value = request.getRawValue();
         }
@@ -348,34 +350,36 @@ public class SimulationServiceImpl implements SimulationService {
     }
 
     private double decodeValue(String coded, String type) {
-        // Mock decoding logic
+        // Use lowercase logic
+        String val = coded.toLowerCase();
+        
         if (type.equalsIgnoreCase("temperature")) {
-            switch (coded.toUpperCase()) {
-                case "LOW": return 20.0;
-                case "NORMAL": return 45.0;
-                case "HIGH": return 75.0;
-                case "CRITICAL": return 95.0;
+            switch (val) {
+                case "low": return 20.0;
+                case "normal": return 45.0;
+                case "high": return 75.0;
+                case "critical": return 95.0;
                 default: return 0.0;
             }
         } else if (type.equalsIgnoreCase("oil_level") || type.equalsIgnoreCase("level")) {
-            switch (coded.toUpperCase()) {
-                case "LOW": return 15.0; // Warning
-                case "NORMAL": return 60.0;
-                case "HIGH": return 90.0; // Warning
+            switch (val) {
+                case "low": return 15.0; // Warning
+                case "normal": return 60.0;
+                case "high": return 90.0; // Warning
                 default: return 50.0;
             }
         } else if (type.equalsIgnoreCase("vibration")) {
-             switch (coded.toUpperCase()) {
-                case "SMOOTH": return 0.1;
-                case "ROUGH": return 0.6;
-                case "DANGEROUS": return 2.5;
+             switch (val) {
+                case "smooth": return 0.1;
+                case "rough": return 0.6;
+                case "dangerous": return 2.5;
                 default: return 0.0;
             }
-        } else if (type.equalsIgnoreCase("contact")) {
-             switch (coded.toUpperCase()) {
-                case "CLOSED": return 0.0;
-                case "OPEN": return 1.0;
-                case "CRITICAL": return 1.0; // Assume critical means open for contact
+        } else if (type.equalsIgnoreCase("contact") || type.equalsIgnoreCase("door")) {
+             switch (val) {
+                case "closed": return 0.0;
+                case "open": return 1.0;
+                case "critical": return 1.0; // Assume critical means open for contact
                 default: return 0.0;
             }
         }

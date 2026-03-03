@@ -16,6 +16,11 @@ const SimulationScreen = () => {
   const [loading, setLoading] = useState(false);
   const [showTransformerModal, setShowTransformerModal] = useState(false);
   
+  // Sensor Options Modal State
+  const [showSensorOptionModal, setShowSensorOptionModal] = useState(false);
+  const [currentSensorOptions, setCurrentSensorOptions] = useState([]);
+  const [currentSensorId, setCurrentSensorId] = useState(null);
+  
   // Sensor Inputs State (Map: sensorId -> value)
   const [sensorValues, setSensorValues] = useState({});
   const [simulationResults, setSimulationResults] = useState({});
@@ -74,6 +79,19 @@ const SimulationScreen = () => {
 
   const handleSensorValueChange = (sensorId, value) => {
     setSensorValues(prev => ({ ...prev, [sensorId]: value }));
+  };
+
+  const openSensorModal = (sensorId, options) => {
+    setCurrentSensorId(sensorId);
+    setCurrentSensorOptions(options);
+    setShowSensorOptionModal(true);
+  };
+
+  const handleSensorOptionSelect = (value) => {
+    if (currentSensorId) {
+        handleSensorValueChange(currentSensorId, value);
+    }
+    setShowSensorOptionModal(false);
   };
 
   const submitSensorSimulation = async (sensor) => {
@@ -163,42 +181,35 @@ const SimulationScreen = () => {
   };
 
   const renderSensorInput = (sensor) => {
-    const type = sensor.sensorType || sensor.type; // Handle inconsistencies
+    // Handle inconsistencies and normalize to uppercase for robust matching
+    const rawType = sensor.sensorType || sensor.type || '';
+    const type = rawType.toString().toUpperCase();
     const currentVal = sensorValues[sensor.id];
 
-    if (type === 'CONTACT_SENSOR' || type === 'DOOR') {
+    // Check for Contact/Door types (including partial matches like "CONTACT", "DOOR_SENSOR", etc.)
+    if (type.includes('CONTACT') || type.includes('DOOR')) {
         return (
-            <View style={styles.inputRow}>
-                <TouchableOpacity 
-                    style={[styles.segmentBtn, currentVal === 'CLOSED' && styles.segmentBtnActive]}
-                    onPress={() => handleSensorValueChange(sensor.id, 'CLOSED')}
-                >
-                    <Text style={[styles.segmentText, currentVal === 'CLOSED' && styles.segmentTextActive]}>CLOSED</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.segmentBtn, currentVal === 'OPEN' && styles.segmentBtnActive]}
-                    onPress={() => handleSensorValueChange(sensor.id, 'OPEN')}
-                >
-                    <Text style={[styles.segmentText, currentVal === 'OPEN' && styles.segmentTextActive]}>OPEN</Text>
-                </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+                style={styles.dropdown}
+                onPress={() => openSensorModal(sensor.id, ['closed', 'open'])}
+            >
+                <Text style={styles.dropdownText}>
+                    {currentVal ? currentVal.toUpperCase() : 'Select Status'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
         );
-    } else if (type === 'MOTION_SENSOR') {
+    } else if (type.includes('MOTION')) {
         return (
-            <View style={styles.inputRow}>
-                <TouchableOpacity 
-                    style={[styles.segmentBtn, currentVal === 'VACANT' && styles.segmentBtnActive]}
-                    onPress={() => handleSensorValueChange(sensor.id, 'VACANT')}
-                >
-                    <Text style={[styles.segmentText, currentVal === 'VACANT' && styles.segmentTextActive]}>VACANT</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.segmentBtn, currentVal === 'OCCUPIED' && styles.segmentBtnActive]}
-                    onPress={() => handleSensorValueChange(sensor.id, 'OCCUPIED')}
-                >
-                    <Text style={[styles.segmentText, currentVal === 'OCCUPIED' && styles.segmentTextActive]}>OCCUPIED</Text>
-                </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+                style={styles.dropdown}
+                onPress={() => openSensorModal(sensor.id, ['vacant', 'occupied'])}
+            >
+                <Text style={styles.dropdownText}>
+                    {currentVal ? currentVal.toUpperCase() : 'Select Status'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
         );
     } else {
         // Temperature, Oil Level, etc. -> Numeric Input
@@ -206,7 +217,7 @@ const SimulationScreen = () => {
             <View style={styles.inputRow}>
                 <TextInput 
                     style={styles.input}
-                    placeholder={`Enter ${type} value`}
+                    placeholder={`Enter ${rawType} value`}
                     keyboardType="numeric"
                     value={currentVal}
                     onChangeText={(text) => handleSensorValueChange(sensor.id, text)}
@@ -340,6 +351,31 @@ const SimulationScreen = () => {
         <View style={{height: 40}} />
       </ScrollView>
 
+      {/* Sensor Option Selection Modal */}
+      <Modal visible={showSensorOptionModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Value</Text>
+                <FlatList
+                    data={currentSensorOptions}
+                    keyExtractor={item => item}
+                    renderItem={({item}) => (
+                        <TouchableOpacity 
+                            style={styles.modalItem}
+                            onPress={() => handleSensorOptionSelect(item)}
+                        >
+                            <Ionicons name="radio-button-on" size={20} color="#2196F3" />
+                            <View style={{marginLeft: 10}}>
+                                <Text style={styles.modalItemText}>{item.toUpperCase()}</Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                />
+                <Button title="Cancel" onPress={() => setShowSensorOptionModal(false)} color="#666" />
+            </View>
+        </View>
+      </Modal>
+
       {/* Transformer Selection Modal */}
       <Modal visible={showTransformerModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -371,54 +407,54 @@ const SimulationScreen = () => {
 
 const styles = StyleSheet.create({
   container: { padding: 16 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#1a1a1a', fontFamily: 'Inter_700Bold' },
-  sectionHeader: { fontSize: 18, fontWeight: '600', marginTop: 24, marginBottom: 12, color: '#333', fontFamily: 'Inter_600SemiBold' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: '#1a1a1a', fontFamily: 'Inter_700Bold' },
+  sectionHeader: { fontSize: 16, fontWeight: '600', marginTop: 24, marginBottom: 12, color: '#333', fontFamily: 'Inter_600SemiBold' },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 },
-  label: { fontSize: 14, color: '#666', marginBottom: 8, fontFamily: 'Inter_500Medium' },
+  label: { fontSize: 12, color: '#666', marginBottom: 8, fontFamily: 'Inter_500Medium' },
   dropdown: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, backgroundColor: '#F9FAFB' },
-  dropdownText: { fontSize: 16, color: '#333', fontFamily: 'Inter_400Regular' },
+  dropdownText: { fontSize: 14, color: '#333', fontFamily: 'Inter_400Regular' },
   
   // Sensor Card
   sensorCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: '#2196F3', elevation: 1 },
   sensorHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  sensorName: { marginLeft: 8, fontSize: 16, fontWeight: '600', color: '#333' },
+  sensorName: { marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#333' },
   inputRow: { marginBottom: 12 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 16, backgroundColor: '#F9FAFB' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 14, backgroundColor: '#F9FAFB' },
   segmentBtn: { flex: 1, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ddd', marginHorizontal: 2, borderRadius: 6 },
   segmentBtnActive: { backgroundColor: '#E3F2FD', borderColor: '#2196F3' },
-  segmentText: { fontSize: 14, color: '#666', fontWeight: '600' },
+  segmentText: { fontSize: 12, color: '#666', fontWeight: '600' },
   segmentTextActive: { color: '#2196F3' },
   simulateBtn: { backgroundColor: '#2196F3', padding: 12, borderRadius: 8, alignItems: 'center' },
-  simulateBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  successText: { color: '#4CAF50', marginTop: 8, fontSize: 12, fontWeight: '600' },
+  simulateBtnText: { color: '#fff', fontWeight: '600', fontSize: 12 },
+  successText: { color: '#4CAF50', marginTop: 8, fontSize: 11, fontWeight: '600' },
 
   // Camera Section
-  subHeader: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#333' },
-  helperText: { fontSize: 12, color: '#666', marginBottom: 16, lineHeight: 18 },
+  subHeader: { fontSize: 14, fontWeight: '600', marginBottom: 8, color: '#333' },
+  helperText: { fontSize: 11, color: '#666', marginBottom: 16, lineHeight: 18 },
   modelSelector: { flexDirection: 'row', marginBottom: 16 },
   modelChip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: '#eee', marginRight: 8 },
   selectedModelChip: { backgroundColor: '#2196F3' },
-  modelChipText: { marginLeft: 6, fontSize: 12, color: '#666', fontWeight: '500' },
+  modelChipText: { marginLeft: 6, fontSize: 11, color: '#666', fontWeight: '500' },
   selectedModelChipText: { color: '#fff' },
   imagePlaceholder: { width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F0F0F0', marginBottom: 16, borderWidth: 1, borderColor: '#ddd', borderStyle: 'dashed' },
   uploadArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  uploadText: { marginTop: 10, color: '#666', fontWeight: '500' },
+  uploadText: { marginTop: 10, color: '#666', fontWeight: '500', fontSize: 12 },
   previewImage: { width: '100%', height: '100%' },
   processBtn: { backgroundColor: '#673AB7', padding: 16, borderRadius: 12, alignItems: 'center', elevation: 3 },
   disabledBtn: { backgroundColor: '#ccc', elevation: 0 },
-  processBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  processBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   resultBox: { marginTop: 16, padding: 16, borderRadius: 8, borderWidth: 1 },
-  resultTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8, color: '#333' },
-  resultDetail: { fontSize: 14, color: '#444', marginBottom: 4 },
-  resultNote: { fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 8 },
+  resultTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#333' },
+  resultDetail: { fontSize: 12, color: '#444', marginBottom: 4 },
+  resultNote: { fontSize: 11, color: '#666', fontStyle: 'italic', marginTop: 8 },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#fff', borderRadius: 16, padding: 20, maxHeight: '80%' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   modalItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  modalItemText: { fontSize: 16, fontWeight: '600', color: '#333' },
-  modalItemSub: { fontSize: 12, color: '#999' },
+  modalItemText: { fontSize: 14, fontWeight: '600', color: '#333' },
+  modalItemSub: { fontSize: 11, color: '#999' },
   emptyText: { textAlign: 'center', color: '#999', marginVertical: 20, fontStyle: 'italic' }
 });
 
