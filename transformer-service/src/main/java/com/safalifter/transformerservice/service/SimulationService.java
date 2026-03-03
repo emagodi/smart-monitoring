@@ -7,4 +7,5 @@ import org.springframework.web.multipart.MultipartFile;
 public interface SimulationService {
     SimulationResponse simulateSensor(SimulationRequest request);
     SimulationResponse analyzeImage(MultipartFile file, String modelType);
+    SimulationResponse simulateCameraImage(Long transformerId, MultipartFile file, String modelType);
 }

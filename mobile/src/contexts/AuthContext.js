@@ -5,18 +5,19 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [userToken, setUserToken] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // FORCED FALSE INITIALLY
 
   useEffect(() => {
+    // Attempt to restore token in background, but don't block UI
     const bootstrapAsync = async () => {
-      let token;
       try {
-        token = await authService.getToken();
+        const token = await authService.getToken();
+        if (token) {
+           setUserToken(token);
+        }
       } catch (e) {
-        // Restoring token failed
+        console.error('Error restoring token:', e);
       }
-      setUserToken(token);
-      setIsLoading(false);
     };
 
     bootstrapAsync();
@@ -25,15 +26,22 @@ export const AuthProvider = ({ children }) => {
   const authContext = useMemo(
     () => ({
       signIn: async (email, password) => {
-        const response = await authService.login(email, password);
-        // Ensure we extract the token correctly based on API response
-        // authService.login returns response.data
-        const token = response.access_token || response.accessToken;
-        setUserToken(token);
+        try {
+          const response = await authService.login(email, password);
+          const token = response.access_token || response.accessToken;
+          setUserToken(token);
+        } catch (e) {
+          console.error('Login failed:', e);
+          throw e;
+        }
       },
       signOut: async () => {
-        await authService.logout();
-        setUserToken(null);
+        try {
+          await authService.logout();
+          setUserToken(null);
+        } catch (e) {
+          console.error('Logout failed:', e);
+        }
       },
       userToken,
       isLoading,

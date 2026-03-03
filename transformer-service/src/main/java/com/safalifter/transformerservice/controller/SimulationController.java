@@ -33,4 +33,13 @@ public class SimulationController {
             @RequestParam(value = "modelType", defaultValue = "general") String modelType) {
         return ResponseEntity.ok(simulationService.analyzeImage(file, modelType));
     }
+
+    @PostMapping(value = "/camera-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload Image as Camera Event for Simulation")
+    public ResponseEntity<SimulationResponse> uploadCameraImage(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("transformerId") Long transformerId,
+            @RequestParam(value = "modelType", defaultValue = "general") String modelType) {
+        return ResponseEntity.ok(simulationService.simulateCameraImage(transformerId, file, modelType));
+    }
 }

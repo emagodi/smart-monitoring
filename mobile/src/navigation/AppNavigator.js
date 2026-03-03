@@ -176,6 +176,7 @@ const AppNavigator = () => {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 20 }}>Verifying User...</Text>
       </View>
     );
   }
@@ -213,10 +214,10 @@ const AppNavigator = () => {
           component={TransformerFormScreen} 
           options={{ headerShown: true, title: 'Transformer' }}
         />
-        <Stack.Screen 
+         <Stack.Screen 
           name="CameraImages" 
           component={CameraImagesScreen} 
-          options={{ headerShown: false }}
+          options={{ headerShown: true, title: 'Camera Images' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
