@@ -27,6 +27,9 @@ import java.util.Base64;
 import java.util.List;
 import java.util.HashMap;
 import java.util.regex.Pattern;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -47,26 +50,55 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     @Value("${loriot.default.sensor-type:}")
     private String defaultSensorType;
 
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
     @Override
     public void run(ApplicationArguments args) {
-        String url = loriotWsUrlProp;
-        if (url == null || url.isBlank()) {
-            url = System.getenv("LORIOT_WS_URL");
-        }
+        String url = resolveUrl();
         if (url == null || url.isBlank()) {
             log.info("LORIOT WebSocket URL not configured; skipping ingestion");
             return;
         }
+        connect();
+    }
+
+    private String resolveUrl() {
+        String url = loriotWsUrlProp;
+        if (url == null || url.isBlank()) {
+            url = System.getenv("LORIOT_WS_URL");
+        }
+        return url;
+    }
+
+    private void connect() {
+        String url = resolveUrl();
+        if (url == null) return;
 
         try {
             HttpClient client = HttpClient.newHttpClient();
             client.newWebSocketBuilder()
                     .buildAsync(URI.create(url), new Listener())
                     .thenAccept(ws -> log.info("Connected to LORIOT WebSocket"))
-                    .exceptionally(ex -> { log.error("Failed to connect to LORIOT WebSocket", ex); return null; });
+                    .exceptionally(ex -> {
+                        log.error("Failed to connect to LORIOT WebSocket", ex);
+                        scheduleReconnect();
+                        return null;
+                    });
         } catch (Exception e) {
             log.error("Error starting LORIOT WebSocket client", e);
+            scheduleReconnect();
         }
+    }
+
+    private void scheduleReconnect() {
+        scheduler.schedule(() -> {
+            try {
+                log.info("Attempting to reconnect to LORIOT WebSocket...");
+                connect();
+            } catch (Exception e) {
+                log.error("Error during reconnection attempt", e);
+            }
+        }, 10, TimeUnit.SECONDS);
     }
 
     private class Listener implements WebSocket.Listener {
@@ -102,11 +134,13 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
             log.error("LORIOT WebSocket error", error);
+            scheduleReconnect();
         }
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             log.info("LORIOT WebSocket closed: code={} reason={}", statusCode, reason);
+            scheduleReconnect();
             return CompletableFuture.completedFuture(null);
         }
 

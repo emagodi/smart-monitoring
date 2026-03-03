@@ -9,8 +9,10 @@ import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.payload.request.TransformerRequest;
 import com.safalifter.transformerservice.payload.response.SensorResponse;
+import com.safalifter.transformerservice.payload.response.ControllerResponse;
 import com.safalifter.transformerservice.payload.response.TransformerResponse;
 import com.safalifter.transformerservice.repository.SensorRepository;
+import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.TransformerService;
 
@@ -23,6 +25,7 @@ public class TransformerServiceImpl implements TransformerService {
 
     private final TransformerRepository transformerRepository;
     private final SensorRepository sensorRepository;
+    private final ControllerRepository controllerRepository;
 
     @Override
     public TransformerResponse create(TransformerRequest request) {
@@ -88,6 +91,20 @@ public class TransformerServiceImpl implements TransformerService {
                         .name(s.getName())
                         .type(s.getType())
                         .transformerId(transformer.getId())
+                        .createdAt(s.getCreatedAt())
+                        .updatedAt(s.getUpdatedAt())
+                        .build())
+                .toList();
+        List<ControllerResponse> controllers = controllerRepository.findByTransformerId(transformer.getId()).stream()
+                .map(c -> ControllerResponse.builder()
+                        .id(c.getId())
+                        .deviceId(c.getDeviceId())
+                        .devEui(c.getDevEui())
+                        .name(c.getName())
+                        .type(c.getType())
+                        .transformerId(transformer.getId())
+                        .createdAt(c.getCreatedAt())
+                        .updatedAt(c.getUpdatedAt())
                         .build())
                 .toList();
         return TransformerResponse.builder()
@@ -100,6 +117,7 @@ public class TransformerServiceImpl implements TransformerService {
                 .lat(transformer.getLat())
                 .lng(transformer.getLng())
                 .sensors(sensors)
+                .controllers(controllers)
                 .build();
     }
 }

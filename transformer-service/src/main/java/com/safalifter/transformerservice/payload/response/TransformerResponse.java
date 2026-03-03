@@ -22,4 +22,5 @@ public class TransformerResponse {
     private BigDecimal lat;
     private BigDecimal lng;
     private List<SensorResponse> sensors;
+    private List<ControllerResponse> controllers;
 }
