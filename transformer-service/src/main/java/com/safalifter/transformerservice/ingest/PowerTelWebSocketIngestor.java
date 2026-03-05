@@ -112,7 +112,11 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             try {
-                processMessage(data.toString());
+                String message = data.toString();
+                if (logWs) {
+                    log.info("WS RECV {}", message);
+                }
+                processMessage(message);
             } catch (Exception e) {
                 log.error("Error processing WebSocket message", e);
             }
@@ -169,7 +173,9 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
 
     private void processControllerData(Controller controller, String dataHex, JsonNode root, String payload) {
         try {
+            System.out.println("Processing controller data: " + dataHex);
             byte[] data = HexFormat.of().parseHex(dataHex);
+            System.out.println("Data length: " + data.length);
 
             // Byte 8 is digital status (9th byte)
             if (data.length <= 8) {
@@ -178,8 +184,13 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
             }
 
             int status = data[8] & 0xFF;
-            boolean di1 = (status & 0x01) != 0; // Bit 0
-            boolean di2 = (status & 0x02) != 0; // Bit 1
+            // Based on analysis: 
+            // 0x24 (0010 0100) -> Idle
+            // 0xB4 (1011 0100) -> Bit 4 & 7 set (Event 1)
+            // 0xAC (1010 1100) -> Bit 3 & 7 set (Event 2)
+            // Mapping: DI1 -> Bit 3, DI2 -> Bit 4
+            boolean di1 = (status & 0x08) != 0; // Bit 3
+            boolean di2 = (status & 0x10) != 0; // Bit 4
 
             int battery = root.path("bat").asInt();
             int rssi = 0;

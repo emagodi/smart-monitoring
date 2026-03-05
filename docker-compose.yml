@@ -99,6 +99,17 @@ services:
       - config-server
     ports:
       - "8085:8085"
+
+  transformer-frontend:
+    build: ./Transformer-frontend
+    container_name: transformer-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - auth-service
+      - transformer-service
+      - notification-service
     
   mosquitto:
     image: eclipse-mosquitto
