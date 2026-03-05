@@ -109,14 +109,13 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     modalTitle: {
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         fontSize: 20,
         color: '#1F2937',
         marginBottom: 8,
         textAlign: 'center',
     },
     modalMessage: {
-        fontFamily: 'Inter_400Regular',
         fontSize: 15,
         color: '#6B7280',
         textAlign: 'center',
@@ -147,12 +146,12 @@ const styles = StyleSheet.create({
         elevation: 4,
     },
     cancelButtonText: {
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         fontSize: 15,
         color: '#4B5563',
     },
     logoutButtonText: {
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         fontSize: 15,
         color: 'white',
     },

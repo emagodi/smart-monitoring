@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CrudScreen from '../components/CrudScreen';
 import infrastructureService from '../services/infrastructure';
 
-const DistrictListScreen = () => {
+const DistrictListScreen = ({ navigation }) => {
     // We need to fetch regions to allow selecting a region when creating/updating a district
     // But for simplicity in this iteration, we'll ask for Region ID
     // Ideally, this should be a dropdown selector.
@@ -46,6 +46,8 @@ const DistrictListScreen = () => {
             transformDataBeforeSubmit={transformDataBeforeSubmit}
             entityName="District"
             showLogo={false}
+            onAddPress={() => navigation.navigate('DistrictForm')}
+            onEditPress={(item) => navigation.navigate('DistrictForm', { district: item })}
         />
     );
 };

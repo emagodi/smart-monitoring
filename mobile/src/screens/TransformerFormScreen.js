@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 13,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         color: '#374151',
         marginBottom: 4,
         textTransform: 'uppercase',
@@ -288,7 +288,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         fontSize: 15,
-        fontFamily: 'Inter_400Regular',
         color: '#1F2937',
     },
     typeSelectorContainer: {
@@ -314,7 +313,7 @@ const styles = StyleSheet.create({
     },
     typeOptionText: {
         fontSize: 14,
-        fontFamily: 'Inter_500Medium',
+        fontWeight: '500',
         color: '#666',
     },
     typeOptionTextSelected: {
@@ -327,7 +326,6 @@ const styles = StyleSheet.create({
     },
     helperText: {
         fontSize: 12,
-        fontFamily: 'Inter_400Regular',
         color: '#9CA3AF',
         marginTop: 4,
     },
@@ -351,7 +349,7 @@ const styles = StyleSheet.create({
     submitButtonText: {
         color: '#fff',
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         marginLeft: 8,
     },
     modalOverlay: {
@@ -380,14 +378,13 @@ const styles = StyleSheet.create({
     },
     modalTitle: {
         fontSize: 22,
-        fontFamily: 'Inter_700Bold',
+        fontWeight: '700',
         color: '#111827',
         marginBottom: 8,
         textAlign: 'center',
     },
     modalMessage: {
         fontSize: 15,
-        fontFamily: 'Inter_400Regular',
         color: '#6B7280',
         textAlign: 'center',
         marginBottom: 24,
@@ -409,7 +406,7 @@ const styles = StyleSheet.create({
     modalButtonText: {
         color: 'white',
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
     },
 });
 

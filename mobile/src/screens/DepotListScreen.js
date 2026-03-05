@@ -2,7 +2,7 @@ import React from 'react';
 import CrudScreen from '../components/CrudScreen';
 import infrastructureService from '../services/infrastructure';
 
-const DepotListScreen = () => {
+const DepotListScreen = ({ navigation }) => {
     const fields = [
         { name: 'name', label: 'Depot Name', placeholder: 'Enter depot name', required: true },
         { 
@@ -38,6 +38,8 @@ const DepotListScreen = () => {
             transformDataBeforeSubmit={transformDataBeforeSubmit}
             entityName="Depot"
             showLogo={false}
+            onAddPress={() => navigation.navigate('DepotForm')}
+            onEditPress={(item) => navigation.navigate('DepotForm', { depot: item })}
         />
     );
 };

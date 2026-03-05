@@ -10,7 +10,8 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
-    Modal
+    Modal,
+    FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import infrastructureService from '../services/infrastructure';
@@ -37,6 +38,74 @@ const SuccessModal = ({ visible, message, onClose }) => (
     </Modal>
 );
 
+const SelectorModal = ({ visible, title, options, onSelect, onClose, loading, onSearch }) => {
+    const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        if (visible) setSearchQuery('');
+    }, [visible]);
+
+    const handleSearch = (text) => {
+        setSearchQuery(text);
+        if (onSearch) onSearch(text);
+    };
+
+    const filteredOptions = options.filter(opt => 
+        opt.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    return (
+        <Modal
+            animationType="slide"
+            transparent={true}
+            visible={visible}
+            onRequestClose={onClose}
+        >
+            <View style={styles.selectorModalOverlay}>
+                <View style={styles.selectorModalContent}>
+                    <View style={styles.selectorHeader}>
+                        <Text style={styles.selectorTitle}>{title}</Text>
+                        <TouchableOpacity onPress={onClose}>
+                            <Ionicons name="close" size={24} color="#6B7280" />
+                        </TouchableOpacity>
+                    </View>
+                    
+                    <View style={styles.searchContainer}>
+                        <Ionicons name="search" size={20} color="#9CA3AF" />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search..."
+                            value={searchQuery}
+                            onChangeText={handleSearch}
+                        />
+                    </View>
+
+                    {loading ? (
+                        <ActivityIndicator size="large" color="#0067A5" style={{ marginTop: 20 }} />
+                    ) : (
+                        <FlatList
+                            data={filteredOptions}
+                            keyExtractor={item => String(item.id)}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity 
+                                    style={styles.optionItem}
+                                    onPress={() => onSelect(item)}
+                                >
+                                    <Text style={styles.optionText}>{item.name}</Text>
+                                    <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+                                </TouchableOpacity>
+                            )}
+                            ListEmptyComponent={
+                                <Text style={styles.emptyText}>No options found</Text>
+                            }
+                        />
+                    )}
+                </View>
+            </View>
+        </Modal>
+    );
+};
+
 const DistrictFormScreen = ({ route, navigation }) => {
     const { district, regionId } = route.params || {};
     const isEditing = !!district;
@@ -45,9 +114,16 @@ const DistrictFormScreen = ({ route, navigation }) => {
         name: '',
         regionId: regionId || ''
     });
+    const [regionName, setRegionName] = useState('');
+    
     const [submitting, setSubmitting] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
+
+    // Selector State
+    const [regions, setRegions] = useState([]);
+    const [loadingRegions, setLoadingRegions] = useState(false);
+    const [showRegionSelector, setShowRegionSelector] = useState(false);
 
     useEffect(() => {
         if (isEditing && district) {
@@ -55,11 +131,43 @@ const DistrictFormScreen = ({ route, navigation }) => {
                 name: district.name || '',
                 regionId: district.regionId || regionId || ''
             });
+            // Try to set region name if available, otherwise we might need to fetch it
+            // Assuming district object has regionName or we just show ID for now if name missing
+            setRegionName(district.regionName || (district.region ? district.region.name : ''));
+            
             navigation.setOptions({ title: 'Edit District' });
         } else {
             navigation.setOptions({ title: 'Add District' });
         }
+        
+        fetchRegions();
     }, [district, isEditing, navigation, regionId]);
+
+    const fetchRegions = async () => {
+        setLoadingRegions(true);
+        try {
+            const result = await infrastructureService.getAllRegions(0, 100, ''); // Fetch all/many
+            if (result && result.content) {
+                setRegions(result.content);
+                // If editing and we have regionId but no name, try to find it
+                if (isEditing && district && district.regionId && !regionName) {
+                    const r = result.content.find(r => r.id === district.regionId);
+                    if (r) setRegionName(r.name);
+                }
+            } else if (Array.isArray(result)) {
+                setRegions(result);
+                 if (isEditing && district && district.regionId && !regionName) {
+                    const r = result.find(r => r.id === district.regionId);
+                    if (r) setRegionName(r.name);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching regions:', error);
+            Alert.alert('Error', 'Failed to load regions');
+        } finally {
+            setLoadingRegions(false);
+        }
+    };
 
     const handleSubmit = async () => {
         if (!formData.name) {
@@ -67,17 +175,22 @@ const DistrictFormScreen = ({ route, navigation }) => {
             return;
         }
         if (!formData.regionId) {
-            Alert.alert('Validation Error', 'Region ID is missing');
+            Alert.alert('Validation Error', 'Region is required');
             return;
         }
 
         setSubmitting(true);
         try {
+            const payload = {
+                name: formData.name,
+                regionId: parseInt(formData.regionId, 10)
+            };
+
             if (isEditing) {
-                await infrastructureService.updateDistrict(district.id, formData);
+                await infrastructureService.updateDistrict(district.id, payload);
                 setSuccessMessage('District updated successfully');
             } else {
-                await infrastructureService.createDistrict(formData);
+                await infrastructureService.createDistrict(payload);
                 setSuccessMessage('District added successfully');
             }
             setShowSuccessModal(true);
@@ -102,6 +215,20 @@ const DistrictFormScreen = ({ route, navigation }) => {
                     navigation.goBack();
                 }} 
             />
+            
+            <SelectorModal
+                visible={showRegionSelector}
+                title="Select Region"
+                options={regions}
+                loading={loadingRegions}
+                onClose={() => setShowRegionSelector(false)}
+                onSelect={(item) => {
+                    setFormData({ ...formData, regionId: item.id });
+                    setRegionName(item.name);
+                    setShowRegionSelector(false);
+                }}
+            />
+
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.formCard}>
                     <View style={styles.header}>
@@ -119,6 +246,19 @@ const DistrictFormScreen = ({ route, navigation }) => {
                             placeholder="e.g. Central District"
                             placeholderTextColor="#999"
                         />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Region *</Text>
+                        <TouchableOpacity 
+                            style={styles.selectorButton}
+                            onPress={() => setShowRegionSelector(true)}
+                        >
+                            <Text style={[styles.selectorText, !regionName && styles.placeholderText]}>
+                                {regionName || 'Select Region'}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                        </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity
@@ -179,7 +319,7 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 13,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         color: '#374151',
         marginBottom: 4,
         textTransform: 'uppercase',
@@ -191,19 +331,36 @@ const styles = StyleSheet.create({
         borderColor: '#E5E7EB',
         borderRadius: 10,
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 12, // Increased for better touch target
         fontSize: 15,
-        fontFamily: 'Inter_400Regular',
         color: '#1F2937',
+    },
+    selectorButton: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    selectorText: {
+        fontSize: 15,
+        color: '#1F2937',
+    },
+    placeholderText: {
+        color: '#999',
     },
     submitButton: {
         flexDirection: 'row',
         backgroundColor: '#0067A5',
-        paddingVertical: 12,
+        paddingVertical: 14, // Increased
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: 8,
+        marginTop: 16,
         shadowColor: '#0067A5',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
@@ -216,65 +373,104 @@ const styles = StyleSheet.create({
     submitButtonText: {
         color: '#fff',
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         marginLeft: 8,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
     },
     modalContent: {
-        backgroundColor: 'white',
+        backgroundColor: '#fff',
         borderRadius: 20,
         padding: 24,
+        width: '80%',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 10,
-        width: '100%',
-        maxWidth: 340,
+        elevation: 5,
     },
     successIconContainer: {
         marginBottom: 16,
-        transform: [{ scale: 1.1 }],
     },
     modalTitle: {
-        fontSize: 22,
-        fontFamily: 'Inter_700Bold',
+        fontSize: 20,
+        fontWeight: '700',
         color: '#111827',
         marginBottom: 8,
-        textAlign: 'center',
     },
     modalMessage: {
         fontSize: 15,
-        fontFamily: 'Inter_400Regular',
         color: '#6B7280',
         textAlign: 'center',
         marginBottom: 24,
-        lineHeight: 22,
     },
     modalButton: {
         backgroundColor: '#0067A5',
         paddingVertical: 12,
         paddingHorizontal: 32,
-        borderRadius: 12,
-        width: '100%',
-        alignItems: 'center',
-        shadowColor: '#0067A5',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 3,
+        borderRadius: 10,
     },
     modalButtonText: {
-        color: 'white',
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    // Selector Modal Styles
+    selectorModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end', // Bottom sheet style
+    },
+    selectorModalContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        height: '70%', // Take up 70% of screen
+        padding: 20,
+    },
+    selectorHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    selectorTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#111827',
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginBottom: 16,
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        fontSize: 15,
+        color: '#1F2937',
+    },
+    optionItem: {
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    optionText: {
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
+        color: '#374151',
+    },
+    emptyText: {
+        textAlign: 'center',
+        color: '#6B7280',
+        marginTop: 20,
     },
 });
 

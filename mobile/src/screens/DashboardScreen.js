@@ -256,13 +256,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerTitle: {
-    fontFamily: 'Inter_700Bold',
+    fontWeight: 'bold',
     fontSize: 28,
     color: '#1F2937',
     letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontFamily: 'Inter_500Medium',
+    fontWeight: '500',
     fontSize: 14,
     color: '#6B7280',
     textTransform: 'uppercase',
@@ -276,12 +276,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionTitle: {
-    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
     fontSize: 16,
     color: '#374151',
   },
   sectionAction: {
-    fontFamily: 'Inter_500Medium',
+    fontWeight: '500',
     fontSize: 13,
     color: '#0067A5',
   },
@@ -344,19 +344,18 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   cardValue: {
-    fontFamily: 'Inter_700Bold',
+    fontWeight: 'bold',
     fontSize: 24,
     color: '#FFFFFF',
     marginBottom: 2,
   },
   cardTitle: {
-    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
     fontSize: 13,
     color: 'rgba(255,255,255,0.9)',
     marginLeft: 8,
   },
   cardSubtitle: {
-    fontFamily: 'Inter_400Regular',
     fontSize: 10,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
@@ -376,7 +375,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   recentAlertsTitle: {
-    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
     fontSize: 14,
     color: '#111827',
     paddingHorizontal: 16,
@@ -406,13 +405,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   alertMessage: {
-    fontFamily: 'Inter_500Medium',
+    fontWeight: '500',
     fontSize: 13,
     color: '#1F2937',
     marginBottom: 2,
   },
   alertTime: {
-    fontFamily: 'Inter_400Regular',
     fontSize: 11,
     color: '#6B7280',
   },
@@ -425,7 +423,6 @@ const styles = StyleSheet.create({
     padding: 24,
     textAlign: 'center',
     color: '#6B7280',
-    fontFamily: 'Inter_400Regular',
     fontSize: 14,
   },
 });

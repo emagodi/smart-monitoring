@@ -1000,11 +1000,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
     },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-    },
+
     addButton: {
         backgroundColor: '#0067A5',
         width: 40,
@@ -1105,15 +1101,13 @@ const styles = StyleSheet.create({
     },
     cardTitle: {
         fontSize: 15,
-        fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: 'bold',
         color: '#222',
         marginBottom: 2,
     },
     cardSubtitle: {
         fontSize: 14,
         color: '#666',
-        fontFamily: 'Inter_400Regular',
     },
     cardDetail: {
         fontSize: 14,
@@ -1146,7 +1140,6 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 22,
         fontWeight: 'bold',
-        fontFamily: 'Inter_700Bold',
         color: '#1a1a1a',
     },
     headerSubtitle: {
@@ -1154,7 +1147,6 @@ const styles = StyleSheet.create({
         color: '#546e7a',
         marginTop: 4,
         fontWeight: '500',
-        fontFamily: 'Inter_500Medium',
     },
     centered: {
         flex: 1,
@@ -1165,7 +1157,6 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 16,
         color: '#999',
-        fontFamily: 'Inter_400Regular',
     },
     modalContainer: {
         flex: 1,
@@ -1209,8 +1200,7 @@ const styles = StyleSheet.create({
     },
     modalTitle: {
         fontSize: 16,
-        fontWeight: '700',
-        fontFamily: 'Inter_700Bold',
+        fontWeight: 'bold',
         color: '#1a1a1a',
     },
     modalScrollView: {
@@ -1224,8 +1214,7 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 12,
-        fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: 'bold',
         color: '#555',
         marginBottom: 6,
         textTransform: 'uppercase',
@@ -1238,7 +1227,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 10,
         fontSize: 14,
-        fontFamily: 'Inter_400Regular',
         backgroundColor: '#fff',
         color: '#333',
     },
@@ -1287,32 +1275,7 @@ const styles = StyleSheet.create({
         color: '#333',
         height: '100%',
     },
-    filterButton: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8 },
-    filterButtonActive: { backgroundColor: '#F0F9FF' },
-    filterButtonText: { marginRight: 4, fontFamily: 'Inter_600SemiBold', color: '#666', fontSize: 12 },
-    filterContainer: { backgroundColor: '#fff', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', elevation: 1 },
-    filterTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#333', marginBottom: 12 },
-    dateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    dateCol: { flex: 1, marginHorizontal: 4 },
-    dateLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#666', marginBottom: 4 },
-    dateButton: { 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        borderWidth: 1, 
-        borderColor: '#ddd', 
-        borderRadius: 6, 
-        padding: 8, 
-        marginBottom: 8,
-        backgroundColor: '#fafafa'
-    },
-    dateButtonText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#333' },
-    filterActions: { flexDirection: 'row', justifyContent: 'space-between' },
-    filterActionButton: { flex: 1, padding: 10, borderRadius: 6, alignItems: 'center', marginHorizontal: 4 },
-    resetButton: { backgroundColor: '#e0e0e0' },
-    resetButtonText: { color: '#333', fontFamily: 'Inter_700Bold', fontSize: 12 },
-    applyButton: { backgroundColor: '#0067A5' },
-    applyButtonText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 },
+
     addButtonSmall: {
         width: 40,
         height: 40,
@@ -1336,7 +1299,6 @@ const styles = StyleSheet.create({
     selectorInputText: {
         fontSize: 14,
         color: '#333',
-        fontFamily: 'Inter_400Regular',
     },
     placeholderText: {
         color: '#999',
@@ -1353,7 +1315,6 @@ const styles = StyleSheet.create({
     selectorItemText: {
         fontSize: 14,
         color: '#333',
-        fontFamily: 'Inter_400Regular',
     },
     disabledButton: {
         opacity: 0.7,
@@ -1362,8 +1323,7 @@ const styles = StyleSheet.create({
     submitButtonText: {
         color: '#fff',
         fontSize: 14,
-        fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: 'bold',
         marginLeft: 8,
     },
     footer: {
@@ -1387,8 +1347,7 @@ const styles = StyleSheet.create({
     loadMoreText: {
         color: '#0067A5',
         fontSize: 14,
-        fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: 'bold',
     },
     // Success Modal Styles
     successModalContent: {
@@ -1413,7 +1372,6 @@ const styles = StyleSheet.create({
     successTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        fontFamily: 'Inter_700Bold',
         color: '#1a1a1a',
         marginBottom: 8,
     },
@@ -1422,7 +1380,6 @@ const styles = StyleSheet.create({
         color: '#555',
         textAlign: 'center',
         marginBottom: 20,
-        fontFamily: 'Inter_400Regular',
     },
     successButton: {
         backgroundColor: '#4CAF50',
@@ -1434,8 +1391,7 @@ const styles = StyleSheet.create({
     successButtonText: {
         color: '#fff',
         fontSize: 14,
-        fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: 'bold',
     },
     // Delete Modal Styles
     deleteModalContent: {
@@ -1460,7 +1416,6 @@ const styles = StyleSheet.create({
     deleteTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        fontFamily: 'Inter_700Bold',
         color: '#D32F2F',
         marginBottom: 8,
     },
@@ -1469,7 +1424,6 @@ const styles = StyleSheet.create({
         color: '#555',
         textAlign: 'center',
         marginBottom: 20,
-        fontFamily: 'Inter_400Regular',
     },
     deleteActions: {
         flexDirection: 'row',
@@ -1486,8 +1440,7 @@ const styles = StyleSheet.create({
     },
     cancelDeleteText: {
         fontSize: 14,
-        fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: 'bold',
         color: '#555',
     },
     confirmDeleteButton: {
@@ -1500,19 +1453,18 @@ const styles = StyleSheet.create({
     },
     confirmDeleteText: {
         fontSize: 14,
-        fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: 'bold',
         color: '#fff',
     },
     // Filter Styles
     filterButton: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8 },
     filterButtonActive: { backgroundColor: '#F0F9FF' },
-    filterButtonText: { marginRight: 4, fontFamily: 'Inter_600SemiBold', color: '#666', fontSize: 12 },
+    filterButtonText: { marginRight: 4, fontWeight: 'bold', color: '#666', fontSize: 12 },
     filterContainer: { backgroundColor: '#fff', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', elevation: 1 },
-    filterTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#333', marginBottom: 12 },
+    filterTitle: { fontSize: 13, fontWeight: 'bold', color: '#333', marginBottom: 12 },
     dateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
     dateCol: { flex: 1, marginHorizontal: 4 },
-    dateLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#666', marginBottom: 4 },
+    dateLabel: { fontSize: 11, color: '#666', marginBottom: 4 },
     dateButton: { 
         flexDirection: 'row', 
         justifyContent: 'space-between', 
@@ -1524,13 +1476,13 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         backgroundColor: '#fafafa'
     },
-    dateButtonText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#333' },
+    dateButtonText: { fontSize: 12, color: '#333' },
     filterActions: { flexDirection: 'row', justifyContent: 'space-between' },
     actionButton: { flex: 1, padding: 10, borderRadius: 6, alignItems: 'center', marginHorizontal: 4 },
     resetButton: { backgroundColor: '#e0e0e0' },
-    resetButtonText: { color: '#333', fontFamily: 'Inter_700Bold', fontSize: 12 },
+    resetButtonText: { color: '#333', fontWeight: 'bold', fontSize: 12 },
     applyButton: { backgroundColor: '#0067A5' },
-    applyButtonText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 },
+    applyButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
 });
 
 export default CrudScreen;

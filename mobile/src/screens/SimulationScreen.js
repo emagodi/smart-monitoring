@@ -407,12 +407,12 @@ const SimulationScreen = () => {
 
 const styles = StyleSheet.create({
   container: { padding: 16 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: '#1a1a1a', fontFamily: 'Inter_700Bold' },
-  sectionHeader: { fontSize: 16, fontWeight: '600', marginTop: 24, marginBottom: 12, color: '#333', fontFamily: 'Inter_600SemiBold' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: '#1a1a1a' },
+  sectionHeader: { fontSize: 16, fontWeight: '600', marginTop: 24, marginBottom: 12, color: '#333' },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 },
-  label: { fontSize: 12, color: '#666', marginBottom: 8, fontFamily: 'Inter_500Medium' },
+  label: { fontSize: 12, color: '#666', marginBottom: 8, fontWeight: '500' },
   dropdown: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, backgroundColor: '#F9FAFB' },
-  dropdownText: { fontSize: 14, color: '#333', fontFamily: 'Inter_400Regular' },
+  dropdownText: { fontSize: 14, color: '#333' },
   
   // Sensor Card
   sensorCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: '#2196F3', elevation: 1 },

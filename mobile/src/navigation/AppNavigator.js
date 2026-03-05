@@ -56,7 +56,7 @@ const CustomDrawerContent = (props) => {
             resizeMode="contain"
           />
         </View>
-        <Text style={{ color: 'white', fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 4 }}>Smart Monitoring</Text>
+        <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 4 }}>Smart Monitoring</Text>
       </View>
       
       <View style={{ flex: 1, paddingTop: 8 }}>
@@ -70,7 +70,7 @@ const CustomDrawerContent = (props) => {
             <Ionicons name="log-out-outline" size={22} color="#EF4444" />
           )}
           onPress={() => signOut()}
-          labelStyle={{ marginLeft: -10, fontSize: 12, fontFamily: 'Inter_500Medium', color: '#EF4444' }}
+          labelStyle={{ marginLeft: -10, fontSize: 12, fontWeight: '500', color: '#EF4444' }}
           style={{ marginTop: 0 }}
         />
       </View>
@@ -92,7 +92,7 @@ const TransformersStackNavigator = () => {
         options={{ 
             title: 'Transformer Details',
             // headerRight: () => <LogoutButton />,
-            headerTitleStyle: { fontFamily: 'Inter_600SemiBold' },
+            headerTitleStyle: { fontWeight: '600' },
         }} 
       />
     </TransformersStack.Navigator>
@@ -106,7 +106,7 @@ const DrawerNavigator = () => {
       screenOptions={({ route }) => ({
         headerShown: true,
         // headerRight: () => <LogoutButton />,
-        headerTitleStyle: { fontFamily: 'Inter_600SemiBold', fontSize: 18 },
+        headerTitleStyle: { fontWeight: '600', fontSize: 18 },
         headerStyle: { elevation: 0, shadowOpacity: 0, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
         drawerActiveBackgroundColor: '#F0F9FF',
         drawerActiveTintColor: '#0067A5',
@@ -115,7 +115,7 @@ const DrawerNavigator = () => {
         drawerLabelStyle: {
           marginLeft: 0,
           fontSize: 12,
-          fontFamily: 'Inter_500Medium',
+          fontWeight: '500',
         },
         drawerIcon: ({ focused, color, size }) => {
           let iconName;

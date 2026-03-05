@@ -297,15 +297,15 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f5f5f5' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', elevation: 2 },
     backButton: { padding: 8 },
-    headerTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#333', flex: 1, marginLeft: 8 },
+    headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', flex: 1, marginLeft: 8 },
     filterButton: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8 },
     filterButtonActive: { backgroundColor: '#F0F9FF' },
-    filterButtonText: { marginRight: 4, fontFamily: 'Inter_600SemiBold', color: '#666', fontSize: 12 },
+    filterButtonText: { marginRight: 4, fontWeight: '600', color: '#666', fontSize: 12 },
     filterContainer: { backgroundColor: '#fff', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', elevation: 1 },
-    filterTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#333', marginBottom: 12 },
+    filterTitle: { fontSize: 13, fontWeight: 'bold', color: '#333', marginBottom: 12 },
     dateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
     dateCol: { flex: 1, marginHorizontal: 4 },
-    dateLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#666', marginBottom: 4 },
+    dateLabel: { fontSize: 11, color: '#666', marginBottom: 4 },
     dateButton: { 
         flexDirection: 'row', 
         justifyContent: 'space-between', 
@@ -317,21 +317,21 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         backgroundColor: '#fafafa'
     },
-    dateButtonText: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#333' },
+    dateButtonText: { fontSize: 12, color: '#333' },
     filterActions: { flexDirection: 'row', justifyContent: 'space-between' },
     actionButton: { flex: 1, padding: 10, borderRadius: 6, alignItems: 'center', marginHorizontal: 4 },
     resetButton: { backgroundColor: '#e0e0e0' },
-    resetButtonText: { color: '#333', fontFamily: 'Inter_700Bold', fontSize: 12 },
+    resetButtonText: { color: '#333', fontWeight: 'bold', fontSize: 12 },
     applyButton: { backgroundColor: '#0067A5' },
-    applyButtonText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 },
+    applyButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
     loader: { marginTop: 20 },
     listContent: { padding: 16 },
     card: { backgroundColor: '#fff', padding: 16, marginBottom: 12, borderRadius: 8, elevation: 2 },
     cardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    dateText: { fontSize: 14, color: '#333', fontFamily: 'Inter_600SemiBold' },
-    subText: { fontSize: 11, color: '#666', marginTop: 4, fontFamily: 'Inter_400Regular' },
+    dateText: { fontSize: 14, color: '#333', fontWeight: '600' },
+    subText: { fontSize: 11, color: '#666', marginTop: 4 },
     viewButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0067A5', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
-    viewButtonText: { color: '#fff', marginLeft: 6, fontFamily: 'Inter_700Bold', fontSize: 12 },
+    viewButtonText: { color: '#fff', marginLeft: 6, fontWeight: 'bold', fontSize: 12 },
     emptyContainer: { 
         alignItems: 'center', 
         justifyContent: 'center',
@@ -350,21 +350,20 @@ const styles = StyleSheet.create({
         marginTop: 16, 
         color: '#333', 
         fontSize: 16, 
-        fontFamily: 'Inter_700Bold' 
+        fontWeight: 'bold' 
     },
     emptySubText: { 
         textAlign: 'center', 
         marginTop: 8, 
         color: '#666', 
         fontSize: 12,
-        fontFamily: 'Inter_400Regular'
     },
     modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
     closeButton: { position: 'absolute', top: 40, right: 20, zIndex: 10 },
     imageWrapper: { width: '100%', height: '80%', justifyContent: 'center', alignItems: 'center' },
     fullImage: { width: '100%', height: '80%' },
     imageInfo: { position: 'absolute', bottom: 20, left: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, borderRadius: 8 },
-    infoText: { color: '#fff', fontSize: 12, marginBottom: 4, fontFamily: 'Inter_400Regular' }
+    infoText: { color: '#fff', fontSize: 12, marginBottom: 4 }
 });
 
 export default CameraImagesScreen;

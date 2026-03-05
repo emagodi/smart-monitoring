@@ -44,6 +44,7 @@ const RegionFormScreen = ({ route, navigation }) => {
     const [formData, setFormData] = useState({
         name: ''
     });
+    
     const [submitting, setSubmitting] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
@@ -67,11 +68,15 @@ const RegionFormScreen = ({ route, navigation }) => {
 
         setSubmitting(true);
         try {
+            const payload = {
+                name: formData.name
+            };
+
             if (isEditing) {
-                await infrastructureService.updateRegion(region.id, formData);
+                await infrastructureService.updateRegion(region.id, payload);
                 setSuccessMessage('Region updated successfully');
             } else {
-                await infrastructureService.createRegion(formData);
+                await infrastructureService.createRegion(payload);
                 setSuccessMessage('Region added successfully');
             }
             setShowSuccessModal(true);
@@ -96,12 +101,19 @@ const RegionFormScreen = ({ route, navigation }) => {
                     navigation.goBack();
                 }} 
             />
+            
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.formCard}>
                     <View style={styles.header}>
                         <View style={styles.iconContainer}>
                             <Ionicons name="map" size={32} color="#0067A5" />
                         </View>
+                        <Text style={styles.headerTitle}>
+                            {isEditing ? 'Edit Region Details' : 'New Region Details'}
+                        </Text>
+                        <Text style={styles.headerSubtitle}>
+                            {isEditing ? 'Update the region information below' : 'Enter the details for the new region'}
+                        </Text>
                     </View>
 
                     <View style={styles.inputGroup}>
@@ -148,7 +160,7 @@ const styles = StyleSheet.create({
     formCard: {
         backgroundColor: '#fff',
         borderRadius: 16,
-        padding: 16,
+        padding: 24,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -157,60 +169,62 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 32,
     },
     iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#E1F5FE',
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#f0f9ff',
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: 16,
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#111827',
         marginBottom: 8,
     },
+    headerSubtitle: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'center',
+    },
     inputGroup: {
-        marginBottom: 12,
+        marginBottom: 24,
     },
     label: {
-        fontSize: 13,
-        fontFamily: 'Inter_600SemiBold',
+        fontSize: 14,
+        fontWeight: '600',
         color: '#374151',
-        marginBottom: 4,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        marginBottom: 8,
     },
     input: {
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#f9fafb',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 10,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        fontSize: 15,
-        fontFamily: 'Inter_400Regular',
-        color: '#1F2937',
+        borderColor: '#e5e7eb',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        color: '#111827',
     },
     submitButton: {
-        flexDirection: 'row',
         backgroundColor: '#0067A5',
-        paddingVertical: 12,
-        borderRadius: 12,
+        borderRadius: 8,
+        paddingVertical: 14,
+        flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 8,
-        shadowColor: '#0067A5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
     },
     disabledButton: {
-        opacity: 0.7,
+        backgroundColor: '#9CA3AF',
     },
     submitButtonText: {
         color: '#fff',
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         marginLeft: 8,
     },
     modalOverlay: {
@@ -218,58 +232,50 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
     },
     modalContent: {
         backgroundColor: 'white',
         borderRadius: 20,
-        padding: 24,
+        padding: 30,
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 10,
-        width: '100%',
-        maxWidth: 340,
+        shadowOffset: {
+            width: 0,
+            height: 2
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+        width: '80%',
+        maxWidth: 400
     },
     successIconContainer: {
-        marginBottom: 16,
-        transform: [{ scale: 1.1 }],
+        marginBottom: 20,
     },
     modalTitle: {
-        fontSize: 22,
-        fontFamily: 'Inter_700Bold',
-        color: '#111827',
-        marginBottom: 8,
-        textAlign: 'center',
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        marginBottom: 10,
     },
     modalMessage: {
-        fontSize: 15,
-        fontFamily: 'Inter_400Regular',
+        fontSize: 16,
         color: '#6B7280',
         textAlign: 'center',
         marginBottom: 24,
-        lineHeight: 22,
     },
     modalButton: {
         backgroundColor: '#0067A5',
+        borderRadius: 10,
         paddingVertical: 12,
-        paddingHorizontal: 32,
-        borderRadius: 12,
-        width: '100%',
-        alignItems: 'center',
-        shadowColor: '#0067A5',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 3,
+        paddingHorizontal: 30,
+        elevation: 2,
     },
     modalButtonText: {
         color: 'white',
+        fontWeight: 'bold',
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
-    },
+    }
 });
 
 export default RegionFormScreen;

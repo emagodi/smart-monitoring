@@ -2,7 +2,7 @@ import React from 'react';
 import CrudScreen from '../components/CrudScreen';
 import infrastructureService from '../services/infrastructure';
 
-const RegionListScreen = () => {
+const RegionListScreen = ({ navigation }) => {
     const fields = [
         { name: 'name', label: 'Region Name', placeholder: 'Enter region name', required: true }
     ];
@@ -19,6 +19,8 @@ const RegionListScreen = () => {
             itemTitleKey="name"
             entityName="Region"
             showLogo={false}
+            onAddPress={() => navigation.navigate('RegionForm')}
+            onEditPress={(item) => navigation.navigate('RegionForm', { region: item })}
         />
     );
 };

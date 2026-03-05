@@ -306,7 +306,7 @@ const TransformerCrudScreen = () => {
                                 }}
                                 onPress={() => navigation.navigate('CameraImages', { cameraId: item.id, cameraName: item.name })}
                             >
-                                <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Inter_600SemiBold', marginRight: 4 }}>Images</Text>
+                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginRight: 4 }}>Images</Text>
                                 <Ionicons name="images" size={12} color="#fff" />
                             </TouchableOpacity>
                         </View>
@@ -631,14 +631,12 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 14,
         fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
         color: '#1a1a1a',
         marginBottom: 2,
     },
     cardSubtitle: {
         fontSize: 11,
         color: '#757575',
-        fontFamily: 'Inter_400Regular',
     },
     statusBadge: {
         flexDirection: 'row',
@@ -654,7 +652,6 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 10,
         fontWeight: '500',
-        fontFamily: 'Inter_500Medium',
     },
     cardActions: {
         flexDirection: 'row',
@@ -679,19 +676,16 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 10,
         fontWeight: '600',
-        fontFamily: 'Inter_600SemiBold',
         marginRight: 4,
     },
     readingValue: {
         fontSize: 16,
         fontWeight: 'bold',
-        fontFamily: 'Inter_700Bold',
         color: '#333',
     },
     readingTime: {
         fontSize: 12,
         color: '#666',
-        fontFamily: 'Inter_400Regular',
     },
     modalOverlay: {
         flex: 1,
@@ -721,14 +715,13 @@ const styles = StyleSheet.create({
     },
     modalTitle: {
         fontSize: 20,
-        fontFamily: 'Inter_700Bold',
+        fontWeight: '700',
         color: '#111827',
         marginBottom: 8,
         textAlign: 'center',
     },
     modalMessage: {
         fontSize: 15,
-        fontFamily: 'Inter_400Regular',
         color: '#6B7280',
         textAlign: 'center',
         marginBottom: 24,
@@ -754,12 +747,12 @@ const styles = StyleSheet.create({
     },
     modalCancelText: {
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         color: '#374151',
     },
     modalConfirmText: {
         fontSize: 16,
-        fontFamily: 'Inter_600SemiBold',
+        fontWeight: '600',
         color: 'white',
     },
 });
