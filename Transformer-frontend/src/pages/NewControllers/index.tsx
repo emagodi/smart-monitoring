@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
 import Button from '../../components/ui/button/Button';
-import { Search, Filter, Loader2, Cpu, Settings, CheckCircle } from 'lucide-react';
-import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
+import { Search, Loader2, Cpu, Settings } from 'lucide-react';
 
 interface Controller {
   id: number;
@@ -17,29 +16,16 @@ interface Controller {
   transformer?: { id: number; name: string };
 }
 
-interface TransformerOption { id: number; name: string }
-
 export default function NewControllersIndex() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Controller[]>([]);
-  const [transformers, setTransformers] = useState<TransformerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   
-  const [showEdit, setShowEdit] = useState(false);
-  const [active, setActive] = useState<Controller | null>(null);
-  
-  // Edit form state
-  const [nameInput, setNameInput] = useState('');
-  const [transformerInput, setTransformerInput] = useState<number | ''>('');
-  
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ variant: 'success' | 'error' | 'info' | 'warning'; title: string; message: string } | null>(null);
-
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
 
@@ -53,16 +39,6 @@ export default function NewControllersIndex() {
     }
     return [];
   };
-
-  const fetchTransformerOptions = useCallback(async () => {
-    try {
-      const res = await axios.get<any>(`${API_BASE_URL}/api/v1/transformers`, { headers });
-      const arr = Array.isArray(res.data) ? (res.data as TransformerOption[]) : ((res.data?.data as TransformerOption[]) ?? []);
-      setTransformers(arr.map((t) => ({ id: t.id, name: t.name })));
-    } catch {
-      setTransformers([]);
-    }
-  }, [API_BASE_URL, headers]);
 
   const fetchControllers = useCallback(async () => {
     try {
@@ -83,53 +59,11 @@ export default function NewControllersIndex() {
 
   useEffect(() => {
     if (token) {
-      fetchTransformerOptions();
       fetchControllers();
     } else {
        console.log('No token available');
     }
-  }, [token, fetchTransformerOptions, fetchControllers]);
-
-  const openEdit = (row: Controller) => {
-    setActive(row);
-    setNameInput(row.name || '');
-    setTransformerInput(row.transformerId ?? '');
-    setFormError(null);
-    setShowEdit(true);
-  };
-
-  const submitEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!active) return;
-    
-    try {
-      setSavingEdit(true);
-      setFormError(null);
-      
-      // We need to send all required fields, including deviceId, devEui, type
-      const payload = {
-        deviceId: active.deviceId,
-        devEui: active.devEui,
-        type: active.type,
-        name: nameInput,
-        transformerId: transformerInput === '' ? null : transformerInput
-      };
-
-      await axios.put(`${API_BASE_URL}/api/v1/controllers/${active.id}`, payload, { headers });
-      
-      setShowEdit(false);
-      setActive(null);
-      await fetchControllers(); // Refresh list - the item should disappear if assigned!
-      
-      setNotice({ variant: 'success', title: 'Controller updated', message: 'Controller assigned successfully.' });
-      setTimeout(() => setNotice(null), 4000);
-    } catch (err: any) {
-      console.error(err);
-      setFormError(err.response?.data?.message || 'Failed to update controller');
-    } finally {
-      setSavingEdit(false);
-    }
-  };
+  }, [token, fetchControllers]);
 
   const filtered = items.filter((c) => {
     const q = search.trim().toLowerCase();
@@ -161,11 +95,7 @@ export default function NewControllersIndex() {
   }
 
   return (
-    <div className="space-y-6">
-      {notice && (
-        <Alert variant={notice.variant} title={notice.title} message={notice.message} />
-      )}
-      
+    <div className="space-y-6">      
       <div className="flex justify-between items-center">
         <div>
            <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -249,7 +179,7 @@ export default function NewControllersIndex() {
                          </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/new-controllers/${c.id}/edit`)}>
                         <Settings className="w-4 h-4 mr-1" /> Edit / Assign
                       </Button>
                     </td>
@@ -282,47 +212,6 @@ export default function NewControllersIndex() {
           </div>
         )}
       </div>
-
-      <Modal isOpen={showEdit} onClose={() => setShowEdit(false)} title="Edit Controller">
-        <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-gray-900">Edit Controller</h3>
-        </div>
-        <form onSubmit={submitEdit} className="space-y-4">
-          {formError && <div className="p-2 text-sm text-red-600 bg-red-50 rounded">{formError}</div>}
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
-            <input
-              type="text"
-              required
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Assign to Transformer</label>
-            <div className="mt-1">
-                 <SearchableSelect 
-                    options={transformers} 
-                    value={transformerInput} 
-                    onChange={(v) => setTransformerInput(v)} 
-                    placeholder="Select Transformer (or leave empty)" 
-                />
-            </div>
-            <p className="mt-1 text-xs text-gray-500">Select a transformer to assign this controller to.</p>
-          </div>
-          
-          <div className="pt-4 flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setShowEdit(false)} type="button">Cancel</Button>
-            <Button type="submit" disabled={savingEdit}>
-              {savingEdit ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
-              Save Changes
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }

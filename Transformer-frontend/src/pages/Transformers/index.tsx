@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
@@ -8,7 +9,6 @@ import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import Button from '../../components/ui/button/Button';
 import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search, Camera as CameraIcon, Cpu, List as ListIcon, Image as ImageIcon, Eye as EyeIcon, ChevronLeft as ChevronLeftIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
-import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 
 // --- Interfaces ---
 
@@ -75,13 +75,11 @@ interface CameraImage {
   cameraModel?: string;
 }
 
-// For the creation modal dropdown
-interface DepotOption { id: number; name: string }
-
 type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'CAMERAS' | 'READINGS' | 'IMAGES';
 
 export default function TransformersIndex() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   
   // --- Navigation State ---
   const [viewMode, setViewMode] = useState<ViewMode>('REGIONS');
@@ -113,7 +111,6 @@ export default function TransformersIndex() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   
   // --- Global Options (for modal) ---
-  const [allDepotOptions, setAllDepotOptions] = useState<DepotOption[]>([]);
 
   // --- UI State ---
   const [loading, setLoading] = useState(false);
@@ -126,20 +123,9 @@ export default function TransformersIndex() {
   const [totalElements, setTotalElements] = useState(0);
 
   // Modal State
-  const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
   const [showView, setShowView] = useState(false);
   const [activeTransformer, setActiveTransformer] = useState<Transformer | null>(null);
   
-  // Form State
-  const [nameInput, setNameInput] = useState('');
-  const [capacityInput, setCapacityInput] = useState<number | ''>('');
-  const [isActiveInput, setIsActiveInput] = useState<boolean>(true);
-  const [depotInput, setDepotInput] = useState<number | ''>('');
-  const [latInput, setLatInput] = useState<number | ''>('');
-  const [lngInput, setLngInput] = useState<number | ''>('');
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ variant: 'success' | 'error' | 'info' | 'warning'; title: string; message: string } | null>(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -291,14 +277,14 @@ export default function TransformersIndex() {
       if (imageStartDate && imageStartTime && imageEndDate && imageEndTime) {
           url = `${API_BASE_URL}/api/v1/cameras/${cameraId}/images/filter`;
           
-          const formatDate = (date: Date) => {
+          const formatDate = (date: any) => {
             const y = date.getFullYear();
             const m = String(date.getMonth() + 1).padStart(2, '0');
             const d = String(date.getDate()).padStart(2, '0');
             return `${y}-${m}-${d}`;
           };
 
-          const formatTime = (date: Date) => {
+          const formatTime = (date: any) => {
             const h = String(date.getHours()).padStart(2, '0');
             const m = String(date.getMinutes()).padStart(2, '0');
             return `${h}:${m}`;
@@ -323,17 +309,6 @@ export default function TransformersIndex() {
       setLoading(false);
     }
   }, [API_BASE_URL, headers, imageStartDate, imageStartTime, imageEndDate, imageEndTime]);
-
-  // Fetch all depots for the dropdown in Modal
-  const fetchAllDepots = useCallback(async () => {
-      try {
-          const res = await axios.get(`${API_BASE_URL}/api/v1/depots`, { headers });
-          const list = normalizeList(res.data);
-          setAllDepotOptions(list.map((d: any) => ({ id: d.id, name: d.name })));
-      } catch {
-          setAllDepotOptions([]);
-      }
-  }, [API_BASE_URL, headers]);
 
   // --- Effects ---
 
@@ -368,12 +343,6 @@ export default function TransformersIndex() {
       fetchImages(selectedCamera.id);
     }
   }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedCamera, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchCameras, fetchReadings, fetchImages]);
-
-  useEffect(() => {
-      if (token && showCreate) {
-          fetchAllDepots();
-      }
-  }, [token, showCreate, fetchAllDepots]);
 
   // --- Event Handlers ---
 
@@ -497,28 +466,12 @@ export default function TransformersIndex() {
 
   // --- CRUD Handlers (Transformers) ---
 
-  const openCreateModal = () => {
-      setNameInput('');
-      setCapacityInput('');
-      setIsActiveInput(true);
-      setLatInput('');
-      setLngInput('');
-      // Pre-fill depot if selected
-      setDepotInput(selectedDepot ? selectedDepot.id : '');
-      setFormError(null);
-      setShowCreate(true);
+  const handleAddTransformer = () => {
+      navigate('/transformers/new');
   };
 
-  const openEditModal = (t: Transformer) => {
-      setActiveTransformer(t);
-      setNameInput(t.name);
-      setCapacityInput(t.capacity ?? '');
-      setIsActiveInput(t.isActive ?? true);
-      setDepotInput(t.depotId ?? (t.depot?.id) ?? '');
-      setLatInput(t.lat ?? '');
-      setLngInput(t.lng ?? '');
-      setFormError(null);
-      setShowEdit(true);
+  const handleEditTransformer = (t: Transformer) => {
+      navigate(`/transformers/${t.id}/edit`);
   };
 
   const openViewModal = (t: Transformer) => {
@@ -534,59 +487,6 @@ export default function TransformersIndex() {
           if (selectedDepot) fetchTransformers(selectedDepot.id);
       } catch {
           setNotice({ variant: 'error', title: 'Error', message: 'Failed to delete transformer' });
-      }
-  };
-
-  const submitCreate = async () => {
-      if (!nameInput.trim()) { setFormError('Name is required'); return; }
-      if (!depotInput) { setFormError('Depot is required'); return; }
-      
-      try {
-          setSaving(true);
-          await axios.post(`${API_BASE_URL}/api/v1/transformers`, {
-              name: nameInput,
-              capacity: capacityInput ? Number(capacityInput) : undefined,
-              isActive: isActiveInput,
-              depotId: Number(depotInput),
-              lat: latInput ? Number(latInput) : undefined,
-              lng: lngInput ? Number(lngInput) : undefined
-          }, { headers });
-          setShowCreate(false);
-          setNotice({ variant: 'success', title: 'Success', message: 'Transformer created' });
-          if (selectedDepot && selectedDepot.id === Number(depotInput)) {
-              fetchTransformers(selectedDepot.id);
-          } else if (viewMode === 'TRANSFORMERS' && selectedDepot) {
-              fetchTransformers(selectedDepot.id);
-          }
-      } catch {
-          setFormError('Failed to create transformer');
-      } finally {
-          setSaving(false);
-      }
-  };
-
-  const submitEdit = async () => {
-      if (!activeTransformer) return;
-      if (!nameInput.trim()) { setFormError('Name is required'); return; }
-      if (!depotInput) { setFormError('Depot is required'); return; }
-
-      try {
-          setSaving(true);
-          await axios.put(`${API_BASE_URL}/api/v1/transformers/${activeTransformer.id}`, {
-              name: nameInput,
-              capacity: capacityInput ? Number(capacityInput) : undefined,
-              isActive: isActiveInput,
-              depotId: Number(depotInput),
-              lat: latInput ? Number(latInput) : undefined,
-              lng: lngInput ? Number(lngInput) : undefined
-          }, { headers });
-          setShowEdit(false);
-          setNotice({ variant: 'success', title: 'Success', message: 'Transformer updated' });
-          if (selectedDepot) fetchTransformers(selectedDepot.id);
-      } catch {
-          setFormError('Failed to update transformer');
-      } finally {
-          setSaving(false);
       }
   };
 
@@ -681,7 +581,7 @@ export default function TransformersIndex() {
           <p className="text-gray-500 text-sm mt-1">Manage electrical infrastructure hierarchy</p>
         </div>
         {viewMode === 'TRANSFORMERS' && (
-            <Button onClick={openCreateModal} icon={<Plus className="h-4 w-4" />}>
+            <Button onClick={handleAddTransformer} icon={<Plus className="h-4 w-4" />}>
                 Add Transformer
             </Button>
         )}
@@ -861,7 +761,7 @@ export default function TransformersIndex() {
                                       <ActionMenu
                                           placement="bottom-end"
                                           onView={() => openViewModal(t)}
-                                          onEdit={() => openEditModal(t)}
+                                          onEdit={() => handleEditTransformer(t)}
                                           onDelete={() => handleDelete(t.id)}
                                       />
                                   </td>
@@ -1177,111 +1077,9 @@ export default function TransformersIndex() {
           </div>
       )}
 
-      {/* CREATE MODAL */}
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Add Transformer">
-          <div className="space-y-4">
-              {formError && <Alert variant="error" title="Error">{formError}</Alert>}
-              
-              <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <input type="text" value={nameInput} onChange={e => setNameInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" placeholder="Transformer Name" />
-              </div>
 
-              <div>
-                  <label className="block text-sm font-medium text-gray-700">Depot</label>
-                  <SearchableSelect
-                      options={allDepotOptions}
-                      value={depotInput}
-                      onChange={setDepotInput}
-                      placeholder="Select Depot"
-                      className="mt-1"
-                  />
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Capacity (kVA)</label>
-                      <input type="number" value={capacityInput} onChange={e => setCapacityInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" placeholder="e.g. 500" />
-                  </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Status</label>
-                      <select value={isActiveInput ? 'true' : 'false'} onChange={e => setIsActiveInput(e.target.value === 'true')} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border">
-                          <option value="true">Active</option>
-                          <option value="false">Maintenance</option>
-                      </select>
-                  </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                      <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
-                  </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                      <input type="number" step="any" value={lngInput} onChange={e => setLngInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
-                  </div>
-              </div>
-
-              <div className="mt-5 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-                  <Button onClick={submitCreate} disabled={saving}>{saving ? 'Saving...' : 'Create'}</Button>
-              </div>
-          </div>
-      </Modal>
-
-      {/* EDIT MODAL */}
-      <Modal isOpen={showEdit} onClose={() => setShowEdit(false)} title="Edit Transformer">
-          <div className="space-y-4">
-              {formError && <Alert variant="error" title="Error">{formError}</Alert>}
-              
-              <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <input type="text" value={nameInput} onChange={e => setNameInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
-              </div>
-
-              <div>
-                  <label className="block text-sm font-medium text-gray-700">Depot</label>
-                  <SearchableSelect
-                      options={allDepotOptions}
-                      value={depotInput}
-                      onChange={setDepotInput}
-                      placeholder="Select Depot"
-                      className="mt-1"
-                  />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Capacity (kVA)</label>
-                      <input type="number" value={capacityInput} onChange={e => setCapacityInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
-                  </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Status</label>
-                      <select value={isActiveInput ? 'true' : 'false'} onChange={e => setIsActiveInput(e.target.value === 'true')} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border">
-                          <option value="true">Active</option>
-                          <option value="false">Maintenance</option>
-                      </select>
-                  </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                      <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
-                  </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                      <input type="number" step="any" value={lngInput} onChange={e => setLngInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
-                  </div>
-              </div>
-
-              <div className="mt-5 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
-                  <Button onClick={submitEdit} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button>
-              </div>
-          </div>
-      </Modal>
 
       {/* VIEW MODAL */}
       <Modal isOpen={showView} onClose={() => setShowView(false)} title="Transformer Details">
