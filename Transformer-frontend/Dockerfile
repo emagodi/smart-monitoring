@@ -4,9 +4,11 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
+# Ensure typescript is available globally just in case
+RUN npm install -g typescript
 RUN npm run build
 
 # Stage 2: Serve the application with Nginx

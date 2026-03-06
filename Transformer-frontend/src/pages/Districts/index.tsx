@@ -5,6 +5,7 @@ import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import Button from '../../components/ui/button/Button';
+import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 import { Plus, X, Search, Filter, Loader2, Building2, MapPin, Hash } from 'lucide-react';
 
 interface District {
@@ -59,7 +60,7 @@ export default function DistrictsIndex() {
 
   const fetchRegionsOptions = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/v1/regions`, { headers });
+      const res = await axios.get(`${API_BASE_URL}/api/v1/regions?page=0&size=1000`, { headers });
       let arr: RegionOption[] = [];
       if (Array.isArray(res.data)) {
         arr = res.data;
@@ -366,7 +367,7 @@ export default function DistrictsIndex() {
           <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, filtered.length)}</span> of <span className="font-medium">{filtered.length}</span> results</p>
+                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, totalElements)}</span> of <span className="font-medium">{totalElements}</span> results</p>
               </div>
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
