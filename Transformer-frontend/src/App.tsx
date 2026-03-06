@@ -21,6 +21,7 @@ import EditController from "./pages/NewControllers/EditController";
 import CreateTransformer from "./pages/Transformers/CreateTransformer";
 import EditTransformer from "./pages/Transformers/EditTransformer";
 import SiteIndex from "./pages/Site";
+import SimulationPage from "./pages/Simulation";
 
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
@@ -49,6 +50,7 @@ const AppRoutes = () => {
         <Route path="new-controllers" element={<NewControllersIndex />} />
         <Route path="new-controllers/:id/edit" element={<EditController />} />
         <Route path="sites" element={<SiteIndex />} />
+        <Route path="simulation" element={<SimulationPage />} />
         <Route path="transformer/:id" element={<TransformerDetail />} />
         <Route
           path="users"

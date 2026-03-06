@@ -8,6 +8,7 @@ import com.safalifter.transformerservice.repository.ControllerReadingRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
+import com.safalifter.transformerservice.service.ControllerReadingService;
 import com.safalifter.transformerservice.service.SensorReadingService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -40,6 +41,7 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
     private final SensorReadingService sensorReadingService;
     private final ControllerRepository controllerRepository;
     private final ControllerReadingRepository controllerReadingRepository;
+    private final ControllerReadingService controllerReadingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     @Value("${powertel.ws.log:false}")
@@ -225,7 +227,7 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
                     .snr(snr)
                     .build();
 
-            controllerReadingRepository.save(reading);
+            controllerReadingService.save(reading);
             log.info("Saved controller reading for devEui: {}, DI1: {}, DI2: {}", controller.getDevEui(), di1, di2);
 
             // Also save SensorReading if a Sensor exists with this DevEUI

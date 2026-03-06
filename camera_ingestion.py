@@ -71,8 +71,20 @@ def send_to_vision_ai(filepath, topic):
         if response.status_code == 200:
             result = response.json()
             print(f"Vision AI Result: {result}")
-            if "prediction" in result:
-                send_event_to_backend(topic, result["prediction"], filepath)
+            
+            # Handle new response format
+            prediction = {}
+            if "detectedClass" in result:
+                prediction = {
+                    "class": result.get("detectedClass"),
+                    "confidence": result.get("confidence", 0.0),
+                    "alertLevel": result.get("alertLevel", "SAFE")
+                }
+            elif "prediction" in result:
+                prediction = result["prediction"]
+                
+            if prediction:
+                send_event_to_backend(topic, prediction, filepath)
         else:
             print(f"Vision AI Error ({response.status_code}): {response.text}")
             

@@ -42,12 +42,20 @@ async def analyze_image(
             alert_level = "CRITICAL"
             
     elif model_type == "security":
-        if "intruder" in filename or "person" in filename:
+        if "intruder" in filename or "person" in filename or "human" in filename:
             detected_class = "intruder"
             alert_level = "CRITICAL"
         elif "vehicle" in filename:
             detected_class = "unauthorized_vehicle"
             alert_level = "WARNING"
+        else:
+             # Randomly detect person for demo purposes (50% chance)
+             if random.random() > 0.5:
+                 detected_class = "person"
+                 alert_level = "CRITICAL"
+             else:
+                 detected_class = "safe"
+                 alert_level = "SAFE"
             
     elif model_type == "door":
         if "open" in filename:

@@ -72,6 +72,7 @@ services:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
       APP_IMAGE_STORAGE_DIR: /app/uploads
+      VISION_AI_URL: http://host.docker.internal:8000
     ports:
       - "8083:8083"
     volumes:

@@ -62,6 +62,9 @@ public class Alert {
     @Column(name = "sensor_type")
     private String sensorType;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

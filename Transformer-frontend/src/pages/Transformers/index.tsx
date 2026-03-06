@@ -40,6 +40,7 @@ interface Transformer {
   lng?: number;
   sensors?: Sensor[];
   cameras?: Camera[];
+  controllers?: Controller[];
 }
 
 interface Sensor {
@@ -56,6 +57,19 @@ interface Reading {
   createdAt: string;
   updatedAt: string;
   attributes: Record<string, any>;
+}
+
+interface ControllerReading {
+  id: number;
+  controllerId: number;
+  rawPayload: string;
+  di1: boolean;
+  di2: boolean;
+  battery: number;
+  rssi: number;
+  snr: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Camera {
@@ -75,7 +89,17 @@ interface CameraImage {
   cameraModel?: string;
 }
 
-type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'CAMERAS' | 'READINGS' | 'IMAGES';
+interface Controller {
+  id: number;
+  deviceId: string;
+  devEui: string;
+  name: string;
+  type: string;
+  transformerId?: number;
+  transformer?: { id: number; name: string };
+}
+
+type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'CAMERAS' | 'READINGS' | 'IMAGES' | 'CONTROLLERS' | 'CONTROLLER_READINGS';
 
 export default function TransformersIndex() {
   const { token } = useAuth();
@@ -89,6 +113,7 @@ export default function TransformersIndex() {
   const [selectedTransformer, setSelectedTransformer] = useState<Transformer | null>(null);
   const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
+  const [selectedController, setSelectedController] = useState<Controller | null>(null);
 
   // --- Data State ---
   const [regions, setRegions] = useState<Region[]>([]);
@@ -97,14 +122,22 @@ export default function TransformersIndex() {
   const [transformers, setTransformers] = useState<Transformer[]>([]);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [controllers, setControllers] = useState<Controller[]>([]);
   const [readings, setReadings] = useState<Reading[]>([]);
+  const [controllerReadings, setControllerReadings] = useState<ControllerReading[]>([]);
   const [images, setImages] = useState<CameraImage[]>([]);
-  
+
   // Image Filter & Pagination State
   const [imageStartDate, setImageStartDate] = useState<Date | null>(null);
   const [imageStartTime, setImageStartTime] = useState<Date | null>(null);
   const [imageEndDate, setImageEndDate] = useState<Date | null>(null);
   const [imageEndTime, setImageEndTime] = useState<Date | null>(null);
+
+  // Controller Filter State
+  const [controllerStartDate, setControllerStartDate] = useState<Date | null>(null);
+  const [controllerStartTime, setControllerStartTime] = useState<Date | null>(null);
+  const [controllerEndDate, setControllerEndDate] = useState<Date | null>(null);
+  const [controllerEndTime, setControllerEndTime] = useState<Date | null>(null);
   const [imagePage, setImagePage] = useState(1);
   const [imagePageSize] = useState(10);
   const [showImagePreview, setShowImagePreview] = useState(false);
@@ -119,7 +152,7 @@ export default function TransformersIndex() {
   
   // Pagination (shared state, reset on view change)
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [totalElements, setTotalElements] = useState(0);
 
   // Modal State
@@ -136,7 +169,7 @@ export default function TransformersIndex() {
   const normalizeList = (payload: unknown): any[] => {
     if (Array.isArray(payload)) return payload;
     const obj = payload as Record<string, unknown>;
-    const candidates = ['content', 'data', 'items', 'records', 'sensorReadings'];
+    const candidates = ['content', 'data', 'items', 'records', 'sensorReadings', 'readings', 'controllerReadings'];
     for (const key of candidates) {
       if (Array.isArray(obj?.[key])) return obj[key] as any[];
     }
@@ -310,6 +343,65 @@ export default function TransformersIndex() {
     }
   }, [API_BASE_URL, headers, imageStartDate, imageStartTime, imageEndDate, imageEndTime]);
 
+  const fetchControllers = useCallback(async (transformerId: number) => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE_URL}/api/v1/controllers/transformer/${transformerId}`, { headers });
+      const list = normalizeList(res.data);
+      setControllers(list);
+      setTotalElements(list.length);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch controllers');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, headers]);
+
+  const fetchControllerReadings = useCallback(async (controllerId: number) => {
+    try {
+      setLoading(true);
+      let url = `${API_BASE_URL}/api/v1/controllers/${controllerId}/readings`;
+      const params: any = {
+        page: page - 1,
+        size: pageSize
+      };
+
+      if (controllerStartDate && controllerStartTime && controllerEndDate && controllerEndTime) {
+          url = `${API_BASE_URL}/api/v1/controllers/${controllerId}/readings/filter`;
+          
+          const formatDate = (date: any) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+          };
+
+          const formatTime = (date: any) => {
+            const h = String(date.getHours()).padStart(2, '0');
+            const m = String(date.getMinutes()).padStart(2, '0');
+            return `${h}:${m}`;
+          };
+
+          const start = `${formatDate(controllerStartDate)}T${formatTime(controllerStartTime)}:00`;
+          const end = `${formatDate(controllerEndDate)}T${formatTime(controllerEndTime)}:00`;
+          
+          params.start = new Date(start).toISOString();
+          params.end = new Date(end).toISOString();
+      }
+
+      const res = await axios.get(url, { headers, params });
+      const list = normalizeList(res.data);
+      setControllerReadings(list);
+      setTotalElements(extractTotal(res.data, list.length));
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch controller readings');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, headers, controllerStartDate, controllerStartTime, controllerEndDate, controllerEndTime, page, pageSize]);
+
   // --- Effects ---
 
   useEffect(() => {
@@ -341,8 +433,12 @@ export default function TransformersIndex() {
       fetchReadings(selectedSensor.id);
     } else if (viewMode === 'IMAGES' && selectedCamera) {
       fetchImages(selectedCamera.id);
+    } else if (viewMode === 'CONTROLLERS' && selectedTransformer) {
+      fetchControllers(selectedTransformer.id);
+    } else if (viewMode === 'CONTROLLER_READINGS' && selectedController) {
+      fetchControllerReadings(selectedController.id);
     }
-  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedCamera, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchCameras, fetchReadings, fetchImages]);
+  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedCamera, selectedController, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchCameras, fetchReadings, fetchImages, fetchControllers, fetchControllerReadings]);
 
   // --- Event Handlers ---
 
@@ -399,6 +495,24 @@ export default function TransformersIndex() {
     setImageEndTime(null);
   };
 
+  const handleViewControllers = (transformer: Transformer) => {
+    setSelectedTransformer(transformer);
+    setViewMode('CONTROLLERS');
+    setPage(1);
+    setSearch('');
+  };
+
+  const handleViewControllerReadings = (controller: Controller) => {
+    setSelectedController(controller);
+    setViewMode('CONTROLLER_READINGS');
+    setPage(1);
+    setSearch('');
+    setControllerStartDate(null);
+    setControllerStartTime(null);
+    setControllerEndDate(null);
+    setControllerEndTime(null);
+  };
+
   const handleBack = () => {
     setPage(1);
     setSearch('');
@@ -414,6 +528,12 @@ export default function TransformersIndex() {
     } else if (viewMode === 'SENSORS') {
       setViewMode('TRANSFORMERS');
       setSelectedTransformer(null);
+    } else if (viewMode === 'CONTROLLERS') {
+      setViewMode('TRANSFORMERS');
+      setSelectedTransformer(null);
+    } else if (viewMode === 'CONTROLLER_READINGS') {
+      setViewMode('CONTROLLERS');
+      setSelectedController(null);
     } else if (viewMode === 'TRANSFORMERS') {
       setViewMode('DEPOTS');
       setSelectedDepot(null);
@@ -455,12 +575,16 @@ export default function TransformersIndex() {
           setSelectedTransformer(null);
           setSelectedSensor(null);
           setSelectedCamera(null);
+          setSelectedController(null);
       } else if (mode === 'SENSORS') {
           setViewMode('SENSORS');
           setSelectedSensor(null);
       } else if (mode === 'CAMERAS') {
           setViewMode('CAMERAS');
           setSelectedCamera(null);
+      } else if (mode === 'CONTROLLERS') {
+          setViewMode('CONTROLLERS');
+          setSelectedController(null);
       }
   };
 
@@ -524,7 +648,7 @@ export default function TransformersIndex() {
           {selectedTransformer && (
               <>
                   <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className={`hover:text-brand-600 ${['SENSORS', 'CAMERAS'].includes(viewMode) ? 'font-bold text-brand-600' : ''}`}>
+                  <span className={`hover:text-brand-600 ${['SENSORS', 'CAMERAS', 'CONTROLLERS'].includes(viewMode) ? 'font-bold text-brand-600' : ''}`}>
                       {selectedTransformer.name}
                   </span>
               </>
@@ -541,6 +665,12 @@ export default function TransformersIndex() {
                   <span className="font-bold text-brand-600">Cameras</span>
               </>
           )}
+          {viewMode === 'CONTROLLERS' && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Controllers</span>
+              </>
+          )}
           {selectedSensor && (
               <>
                   <ChevronRight className="h-4 w-4 mx-2" />
@@ -555,6 +685,14 @@ export default function TransformersIndex() {
                   <button onClick={() => navigateTo('CAMERAS')} className="hover:text-brand-600">Cameras</button>
                   <ChevronRight className="h-4 w-4 mx-2" />
                   <span className="font-bold text-brand-600">Images</span>
+              </>
+          )}
+          {selectedController && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <button onClick={() => navigateTo('CONTROLLERS')} className="hover:text-brand-600">Controllers</button>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Readings</span>
               </>
           )}
       </nav>
@@ -713,6 +851,7 @@ export default function TransformersIndex() {
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Sensors</th>
                               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Cameras</th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Controllers</th>
                               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                           </tr>
                       </thead>
@@ -754,6 +893,18 @@ export default function TransformersIndex() {
                                           Cameras
                                           <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
                                               {t.cameras?.length || 0}
+                                          </span>
+                                      </button>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <button 
+                                          onClick={() => handleViewControllers(t)}
+                                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                                      >
+                                          <Cpu className="h-3 w-3 mr-1.5" />
+                                          Controllers
+                                          <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
+                                              {t.controllers?.length || 0}
                                           </span>
                                       </button>
                                   </td>
@@ -1080,6 +1231,293 @@ export default function TransformersIndex() {
 
 
 
+
+              {/* CONTROLLERS VIEW */}
+              {viewMode === 'CONTROLLERS' && (
+                  <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                          <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Controller Name</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID</th>
+                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredList(controllers).map((c) => (
+                              <tr key={c.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                      <div className="flex items-center">
+                                          <Cpu className="h-5 w-5 text-gray-400 mr-3" />
+                                          <div className="text-sm font-medium text-gray-900">{c.name}</div>
+                                      </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{c.type}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{c.deviceId || c.devEui || '-'}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                      <Button variant="secondary" size="sm" onClick={() => handleViewControllerReadings(c)} icon={<ListIcon className="h-4 w-4" />}>
+                                          Readings
+                                      </Button>
+                                  </td>
+                              </tr>
+                          ))}
+                          {controllers.length === 0 && (
+                              <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No controllers found for {selectedTransformer?.name}.</td></tr>
+                          )}
+                      </tbody>
+                  </table>
+              )}
+
+              {/* CONTROLLER READINGS VIEW */}
+              {viewMode === 'CONTROLLER_READINGS' && (
+                  <div className="p-6">
+                      <div className="flex flex-col gap-4 mb-6">
+                          <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-gray-900">Readings for {selectedController?.name}</h2>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => { 
+                                    setControllerStartDate(null); 
+                                    setControllerStartTime(null); 
+                                    setControllerEndDate(null); 
+                                    setControllerEndTime(null); 
+                                }}
+                                className="text-xs"
+                            >
+                                Clear Filters
+                            </Button>
+                          </div>
+                          
+                          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  {/* From Section */}
+                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                                      <div className="flex items-center gap-2 mb-2">
+                                          <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">From</label>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                selected={controllerStartDate}
+                                                onChange={(date: Date | null) => setControllerStartDate(date)}
+                                                dateFormat="MM/dd/yyyy"
+                                                placeholderText="Select Date"
+                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
+                                            />
+                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                selected={controllerStartTime}
+                                                onChange={(date: Date | null) => setControllerStartTime(date)}
+                                                showTimeSelect
+                                                showTimeSelectOnly
+                                                      timeIntervals={15}
+                                                      timeCaption="Time"
+                                                      dateFormat="h:mm aa"
+                                                      placeholderText="--:-- --"
+                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
+                                                  />
+                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+
+                                  {/* To Section */}
+                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                                      <div className="flex items-center gap-2 mb-2">
+                                          <div className="h-2 w-2 rounded-full bg-indigo-500"></div>
+                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">To</label>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                selected={controllerEndDate}
+                                                onChange={(date: Date | null) => setControllerEndDate(date)}
+                                                dateFormat="MM/dd/yyyy"
+                                                placeholderText="Select Date"
+                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
+                                            />
+                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                      selected={controllerEndTime}
+                                                      onChange={(date) => setControllerEndTime(date)}
+                                                      showTimeSelect
+                                                      showTimeSelectOnly
+                                                      timeIntervals={15}
+                                                      timeCaption="Time"
+                                                      dateFormat="h:mm aa"
+                                                      placeholderText="--:-- --"
+                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
+                                                  />
+                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+
+                      {/* Pagination Info & Page Size Selector (Top) */}
+                      <div className="flex items-center justify-between mb-4 px-1">
+                          <p className="text-sm text-gray-700">
+                              Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, totalElements)}</span> of <span className="font-medium">{totalElements}</span> results
+                          </p>
+                          <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-500">Rows per page:</span>
+                              <select
+                                  value={pageSize}
+                                  onChange={(e) => {
+                                      setPageSize(Number(e.target.value));
+                                      setPage(1);
+                                  }}
+                                  className="block rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 cursor-pointer"
+                              >
+                                  <option value={10}>10</option>
+                                  <option value={25}>25</option>
+                                  <option value={50}>50</option>
+                                  <option value={100}>100</option>
+                              </select>
+                          </div>
+                      </div>
+
+                      <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg shadow-sm">
+                          <thead className="bg-gray-50">
+                              <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DI1</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DI2</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Battery</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">RSSI</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SNR</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Raw Payload</th>
+                              </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                              {controllerReadings.map((r) => (
+                                  <tr key={r.id} className="hover:bg-gray-50">
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                          {new Date(r.createdAt).toLocaleString()}
+                                      </td>
+                                      <td className="px-6 py-4 text-sm text-gray-500">{r.di1 ? 'True' : 'False'}</td>
+                                      <td className="px-6 py-4 text-sm text-gray-500">{r.di2 ? 'True' : 'False'}</td>
+                                      <td className="px-6 py-4 text-sm text-gray-500">{r.battery}</td>
+                                      <td className="px-6 py-4 text-sm text-gray-500">{r.rssi}</td>
+                                      <td className="px-6 py-4 text-sm text-gray-500">{r.snr}</td>
+                                      <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={r.rawPayload}>{r.rawPayload}</td>
+                                  </tr>
+                              ))}
+                              {controllerReadings.length === 0 && (
+                                  <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">No readings found.</td></tr>
+                              )}
+                          </tbody>
+                      </table>
+                      
+                      {/* Pagination Controls */}
+                      {controllerReadings.length > 0 && (
+                          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-4">
+                              <div className="flex flex-1 justify-between sm:hidden">
+                                  <Button 
+                                      onClick={() => setPage(p => Math.max(1, p - 1))} 
+                                      disabled={page === 1}
+                                      variant="outline"
+                                  >
+                                      Previous
+                                  </Button>
+                                  <Button 
+                                      onClick={() => setPage(p => Math.min(Math.ceil(totalElements / pageSize), p + 1))} 
+                                      disabled={page >= Math.ceil(totalElements / pageSize)}
+                                      variant="outline"
+                                  >
+                                      Next
+                                  </Button>
+                              </div>
+                              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-end">
+                                  <div>
+                                      <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                          <button
+                                              onClick={() => setPage(p => Math.max(1, p - 1))}
+                                              disabled={page === 1}
+                                              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                          >
+                                              <span className="sr-only">Previous</span>
+                                              <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
+                                          </button>
+                                          
+                                          {(() => {
+                                              const totalPages = Math.ceil(totalElements / pageSize);
+                                              const pageNumbers = [];
+                                              const maxVisible = 7;
+
+                                              if (totalPages <= maxVisible) {
+                                                  for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
+                                              } else {
+                                                  if (page <= 4) {
+                                                      for (let i = 1; i <= 5; i++) pageNumbers.push(i);
+                                                      pageNumbers.push('...');
+                                                      pageNumbers.push(totalPages);
+                                                  } else if (page >= totalPages - 3) {
+                                                      pageNumbers.push(1);
+                                                      pageNumbers.push('...');
+                                                      for (let i = totalPages - 4; i <= totalPages; i++) pageNumbers.push(i);
+                                                  } else {
+                                                      pageNumbers.push(1);
+                                                      pageNumbers.push('...');
+                                                      pageNumbers.push(page - 1);
+                                                      pageNumbers.push(page);
+                                                      pageNumbers.push(page + 1);
+                                                      pageNumbers.push('...');
+                                                      pageNumbers.push(totalPages);
+                                                  }
+                                              }
+
+                                              return pageNumbers.map((p, idx) => (
+                                                  <button
+                                                      key={idx}
+                                                      onClick={() => typeof p === 'number' && setPage(p)}
+                                                      disabled={p === '...'}
+                                                      className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                                                          p === page
+                                                              ? 'z-10 bg-purple-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600'
+                                                              : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
+                                                      } ${p === '...' ? 'cursor-default' : ''}`}
+                                                  >
+                                                      {p}
+                                                  </button>
+                                              ));
+                                          })()}
+
+                                          <button
+                                              onClick={() => setPage(p => Math.min(Math.ceil(totalElements / pageSize), p + 1))}
+                                              disabled={page >= Math.ceil(totalElements / pageSize)}
+                                              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                          >
+                                              <span className="sr-only">Next</span>
+                                              <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                          </button>
+                                      </nav>
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              )}
 
       {/* VIEW MODAL */}
       <Modal isOpen={showView} onClose={() => setShowView(false)} title="Transformer Details">

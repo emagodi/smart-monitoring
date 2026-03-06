@@ -20,7 +20,8 @@ import {
   CheckCircle,
   Clock,
   Briefcase,
-  Cpu
+  Cpu,
+  TestTube
 } from 'lucide-react';
 
 interface NavItem {
@@ -95,6 +96,11 @@ const navGroups: NavGroup[] = [
         icon: <Cpu className="w-5 h-5" />,
         name: "New Controllers",
         path: "/new-controllers",
+      },
+      {
+        icon: <TestTube className="w-5 h-5" />,
+        name: "Simulation",
+        path: "/simulation",
       },
     ],
   },

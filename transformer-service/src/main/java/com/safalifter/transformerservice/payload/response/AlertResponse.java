@@ -28,4 +28,5 @@ public class AlertResponse {
     private String deviceId;
     private String deviceName;
     private String sensorType;
+    private String imageUrl;
 }

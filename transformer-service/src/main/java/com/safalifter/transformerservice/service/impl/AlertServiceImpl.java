@@ -45,6 +45,7 @@ public class AlertServiceImpl implements AlertService {
                 .deviceId(request.getDeviceId())
                 .deviceName(request.getDeviceName())
                 .sensorType(request.getSensorType())
+                .imageUrl(request.getImageUrl())
                 .build();
         Alert saved = alertRepository.save(alert);
         return toResponse(saved);
@@ -117,6 +118,7 @@ public class AlertServiceImpl implements AlertService {
                 .deviceId(alert.getDeviceId())
                 .deviceName(alert.getDeviceName())
                 .sensorType(alert.getSensorType())
+                .imageUrl(alert.getImageUrl())
                 .build();
     }
 }
