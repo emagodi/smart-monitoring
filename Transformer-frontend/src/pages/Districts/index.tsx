@@ -61,13 +61,14 @@ export default function DistrictsIndex() {
   const fetchRegionsOptions = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/v1/regions?page=0&size=1000`, { headers });
+      const responseData = res.data as any;
       let arr: RegionOption[] = [];
-      if (Array.isArray(res.data)) {
-        arr = res.data;
-      } else if (Array.isArray(res.data?.content)) {
-        arr = res.data.content;
-      } else if (Array.isArray(res.data?.data)) {
-        arr = res.data.data;
+      if (Array.isArray(responseData)) {
+        arr = responseData;
+      } else if (Array.isArray(responseData?.content)) {
+        arr = responseData.content;
+      } else if (Array.isArray(responseData?.data)) {
+        arr = responseData.data;
       }
       setRegions(arr.map((r) => ({ id: r.id, name: r.name })));
     } catch {
@@ -95,18 +96,19 @@ export default function DistrictsIndex() {
           const p = page - 1;
           const url = `${API_BASE_URL}/api/v1/districts?page=${p}&size=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`;
           const res = await axios.get(url, { headers });
+          const responseData = res.data as any;
           
-          if (res.data?.content) {
-            data = res.data.content;
-            total = res.data.totalElements || res.data.content.length;
-          } else if (Array.isArray(res.data)) {
-             data = res.data;
-             total = res.data.length;
-          } else if (res.data?.data) {
-             data = res.data.data;
-             total = res.data.total || res.data.data.length;
+          if (responseData?.content) {
+            data = responseData.content;
+            total = responseData.totalElements || responseData.content.length;
+          } else if (Array.isArray(responseData)) {
+             data = responseData;
+             total = responseData.length;
+          } else if (responseData?.data) {
+             data = responseData.data;
+             total = responseData.total || responseData.data.length;
           } else {
-             data = normalizeList(res.data);
+             data = normalizeList(responseData);
              total = data.length;
           }
       }
@@ -692,59 +694,4 @@ export function DistrictDeleteModal({ open, onClose, onConfirm, district, deleti
   );
 }
 
-function SearchableSelect({ options, value, onChange, placeholder, compact }: { options: { id: number; name: string }[]; value: number | ''; onChange: (v: number | '') => void; placeholder?: string; compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const selected = typeof value === 'number' ? options.find(o => o.id === value) : undefined;
 
-  useEffect(() => {
-    setQuery(selected ? selected.name : '');
-  }, [selected]);
-
-  const filtered = options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase()));
-
-  return (
-    <div className="relative">
-      <div className="relative group">
-        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-          <Search className={`h-4 w-4 ${compact ? 'text-gray-400' : 'text-gray-400 group-focus-within:text-blue-500'}`} />
-        </span>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          placeholder={placeholder || 'Search…'}
-          className={compact 
-            ? "block w-full pl-9 pr-8 py-1.5 border-none bg-transparent text-sm font-medium focus:ring-0 placeholder-gray-400"
-            : "mt-1 block w-full rounded-md border border-gray-300 bg-white pl-10 pr-8 py-2 shadow-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:text-sm hover:border-gray-400"
-          }
-        />
-        <button type="button" onClick={() => setOpen(v => !v)} className="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-gray-600">
-           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.25 8.27a.75.75 0 01-.02-1.06z"/></svg>
-        </button>
-      </div>
-      {open && (
-        <div className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg focus:outline-none py-1">
-          <ul className="max-h-56 overflow-auto">
-            {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-gray-500">No matches</li>
-            ) : (
-              filtered.map(opt => (
-                <li key={opt.id}>
-                  <button
-                    type="button"
-                    onClick={() => { onChange(opt.id); setQuery(opt.name); setOpen(false); }}
-                    className={`flex w-full px-3 py-2 text-left text-sm ${value === opt.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
-                  >
-                    {opt.name}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
