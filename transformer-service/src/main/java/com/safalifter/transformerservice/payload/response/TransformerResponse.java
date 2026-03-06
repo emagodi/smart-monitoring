@@ -23,4 +23,5 @@ public class TransformerResponse {
     private BigDecimal lng;
     private List<SensorResponse> sensors;
     private List<ControllerResponse> controllers;
+    private List<CameraResponse> cameras;
 }

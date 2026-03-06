@@ -36,6 +36,8 @@ interface Transformer {
   depot?: { id: number; name: string };
   lat?: number;
   lng?: number;
+  sensors?: Sensor[];
+  cameras?: Camera[];
 }
 
 interface Sensor {
@@ -747,6 +749,8 @@ export default function TransformersIndex() {
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transformer</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Sensors</th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Cameras</th>
                               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                           </tr>
                       </thead>
@@ -767,22 +771,36 @@ export default function TransformersIndex() {
                                           {t.isActive ? 'Active' : 'Maintenance'}
                                       </span>
                                   </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <button 
+                                          onClick={() => handleViewSensors(t)}
+                                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                                      >
+                                          <Cpu className="h-3 w-3 mr-1.5" />
+                                          Sensors ({t.sensors?.length || 0})
+                                      </button>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                                      <button 
+                                          onClick={() => handleViewCameras(t)}
+                                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors"
+                                      >
+                                          <CameraIcon className="h-3 w-3 mr-1.5" />
+                                          Cameras ({t.cameras?.length || 0})
+                                      </button>
+                                  </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                       <ActionMenu
                                           placement="bottom-end"
                                           onView={() => openViewModal(t)}
                                           onEdit={() => openEditModal(t)}
                                           onDelete={() => handleDelete(t.id)}
-                                          extras={[
-                                              { label: 'View Sensors', onClick: () => handleViewSensors(t), icon: <Cpu className="h-4 w-4 mr-2" /> },
-                                              { label: 'View Cameras', onClick: () => handleViewCameras(t), icon: <CameraIcon className="h-4 w-4 mr-2" /> }
-                                          ]}
                                       />
                                   </td>
                               </tr>
                           ))}
                           {transformers.length === 0 && (
-                              <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No transformers found in {selectedDepot?.name}.</td></tr>
+                              <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500">No transformers found in {selectedDepot?.name}.</td></tr>
                           )}
                       </tbody>
                   </table>
