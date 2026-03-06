@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Briefcase
+  Briefcase,
+  Cpu
 } from 'lucide-react';
 
 interface NavItem {
@@ -89,6 +90,11 @@ const navGroups: NavGroup[] = [
         icon: <Activity className="w-5 h-5" />,
         name: "Sensors",
         path: "/sensors",
+      },
+      {
+        icon: <Cpu className="w-5 h-5" />,
+        name: "New Controllers",
+        path: "/new-controllers",
       },
     ],
   },

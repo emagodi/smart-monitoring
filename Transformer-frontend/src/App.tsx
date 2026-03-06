@@ -16,6 +16,7 @@ import DistrictsIndex from "./pages/Districts";
 import DepotsIndex from "./pages/Depots";
 import TransformersIndex from "./pages/Transformers";
 import SensorsIndex from "./pages/Sensors";
+import NewControllersIndex from "./pages/NewControllers";
 import SiteIndex from "./pages/Site";
 
 const AppRoutes = () => {
@@ -40,6 +41,7 @@ const AppRoutes = () => {
         <Route path="depots" element={<DepotsIndex />} />
         <Route path="transformers" element={<TransformersIndex />} />
         <Route path="sensors" element={<SensorsIndex />} />
+        <Route path="new-controllers" element={<NewControllersIndex />} />
         <Route path="sites" element={<SiteIndex />} />
         <Route path="transformer/:id" element={<TransformerDetail />} />
         <Route

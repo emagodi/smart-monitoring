@@ -1013,12 +1013,12 @@ export default function TransformersIndex() {
                                               <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
                                               <div className="relative">
                                                   <DatePicker
-                                                      selected={imageStartDate}
-                                                      onChange={(date) => setImageStartDate(date)}
-                                                      dateFormat="MM/dd/yyyy"
-                                                      placeholderText="Select Date"
-                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
-                                                  />
+                                                selected={imageStartDate}
+                                                onChange={(date: Date | null) => setImageStartDate(date)}
+                                                dateFormat="MM/dd/yyyy"
+                                                placeholderText="Select Date"
+                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
+                                            />
                                                   <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
                                               </div>
                                           </div>
@@ -1026,10 +1026,10 @@ export default function TransformersIndex() {
                                               <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
                                               <div className="relative">
                                                   <DatePicker
-                                                      selected={imageStartTime}
-                                                      onChange={(date) => setImageStartTime(date)}
-                                                      showTimeSelect
-                                                      showTimeSelectOnly
+                                                selected={imageStartTime}
+                                                onChange={(date: Date | null) => setImageStartTime(date)}
+                                                showTimeSelect
+                                                showTimeSelectOnly
                                                       timeIntervals={15}
                                                       timeCaption="Time"
                                                       dateFormat="h:mm aa"
@@ -1053,12 +1053,12 @@ export default function TransformersIndex() {
                                               <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
                                               <div className="relative">
                                                   <DatePicker
-                                                      selected={imageEndDate}
-                                                      onChange={(date) => setImageEndDate(date)}
-                                                      dateFormat="MM/dd/yyyy"
-                                                      placeholderText="Select Date"
-                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
-                                                  />
+                                                selected={imageEndDate}
+                                                onChange={(date: Date | null) => setImageEndDate(date)}
+                                                dateFormat="MM/dd/yyyy"
+                                                placeholderText="Select Date"
+                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
+                                            />
                                                   <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
                                               </div>
                                           </div>
@@ -1201,7 +1201,7 @@ export default function TransformersIndex() {
               <div className="grid grid-cols-2 gap-4">
                   <div>
                       <label className="block text-sm font-medium text-gray-700">Capacity (kVA)</label>
-                      <input type="number" value={capacityInput} onChange={e => setCapacityInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" placeholder="e.g. 500" />
+                      <input type="number" value={capacityInput} onChange={e => setCapacityInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" placeholder="e.g. 500" />
                   </div>
                   <div>
                       <label className="block text-sm font-medium text-gray-700">Status</label>
@@ -1215,11 +1215,11 @@ export default function TransformersIndex() {
               <div className="grid grid-cols-2 gap-4">
                   <div>
                       <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                      <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
+                      <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
                   </div>
                   <div>
                       <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                      <input type="number" step="any" value={lngInput} onChange={e => setLngInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
+                      <input type="number" step="any" value={lngInput} onChange={e => setLngInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
                   </div>
               </div>
 
@@ -1254,7 +1254,7 @@ export default function TransformersIndex() {
               <div className="grid grid-cols-2 gap-4">
                   <div>
                       <label className="block text-sm font-medium text-gray-700">Capacity (kVA)</label>
-                      <input type="number" value={capacityInput} onChange={e => setCapacityInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
+                      <input type="number" value={capacityInput} onChange={e => setCapacityInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
                   </div>
                   <div>
                       <label className="block text-sm font-medium text-gray-700">Status</label>
@@ -1272,7 +1272,7 @@ export default function TransformersIndex() {
                   </div>
                   <div>
                       <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                      <input type="number" step="any" value={lngInput} onChange={e => setLngInput(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
+                      <input type="number" step="any" value={lngInput} onChange={e => setLngInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm p-2 border" />
                   </div>
               </div>
 

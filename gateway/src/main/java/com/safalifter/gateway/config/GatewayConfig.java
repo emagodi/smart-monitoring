@@ -44,6 +44,10 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
 
+                .route("transformer-controllers", r -> r.path("/api/v1/controllers/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
                 .route("transformer-sensors", r -> r.path("/api/v1/sensors/**")
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))

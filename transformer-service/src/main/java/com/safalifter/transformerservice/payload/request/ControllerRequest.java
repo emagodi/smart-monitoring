@@ -24,6 +24,5 @@ public class ControllerRequest {
     @NotBlank(message = "devEui is required")
     private String devEui;
     
-    @NotNull(message = "transformerId is required")
     private Long transformerId;
 }

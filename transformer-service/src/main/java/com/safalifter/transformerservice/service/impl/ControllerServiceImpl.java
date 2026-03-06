@@ -24,8 +24,10 @@ public class ControllerServiceImpl implements ControllerService {
 
     @Override
     public ControllerResponse create(ControllerRequest request) {
-        transformerRepository.findById(request.getTransformerId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + request.getTransformerId() + " not found"));
-        controllerRepository.findByTransformerIdAndDeviceId(request.getTransformerId(), request.getDeviceId()).ifPresent(s -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Controller already exists on transformer"); });
+        if (request.getTransformerId() != null) {
+            transformerRepository.findById(request.getTransformerId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + request.getTransformerId() + " not found"));
+            controllerRepository.findByTransformerIdAndDeviceId(request.getTransformerId(), request.getDeviceId()).ifPresent(s -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Controller already exists on transformer"); });
+        }
         Controller controller = Controller.builder()
                 .deviceId(request.getDeviceId())
                 .devEui(request.getDevEui())
@@ -60,7 +62,9 @@ public class ControllerServiceImpl implements ControllerService {
     @Override
     public ControllerResponse update(Long id, ControllerRequest request) {
         Controller controller = controllerRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Controller with id " + id + " not found"));
-        transformerRepository.findById(request.getTransformerId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + request.getTransformerId() + " not found"));
+        if (request.getTransformerId() != null) {
+            transformerRepository.findById(request.getTransformerId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + request.getTransformerId() + " not found"));
+        }
         controller.setDeviceId(request.getDeviceId());
         controller.setDevEui(request.getDevEui());
         controller.setName(request.getName());
