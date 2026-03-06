@@ -5,7 +5,7 @@ import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import Button from '../../components/ui/button/Button';
-import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search } from 'lucide-react';
+import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search, Camera as CameraIcon, Cpu, List as ListIcon, Image as ImageIcon } from 'lucide-react';
 import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 
 // --- Interfaces ---
@@ -38,10 +38,43 @@ interface Transformer {
   lng?: number;
 }
 
+interface Sensor {
+  id: number;
+  name: string;
+  type: string;
+  deviceId?: string;
+  devEui?: string;
+  transformerId?: number;
+}
+
+interface Reading {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
+  attributes: Record<string, any>;
+}
+
+interface Camera {
+  id: number;
+  name: string;
+  topic?: string;
+  model?: string;
+  status?: string;
+  transformerId?: number;
+}
+
+interface CameraImage {
+  id: number;
+  imageUrl: string;
+  capturedAt: string;
+  cameraMacAddress?: string;
+  cameraModel?: string;
+}
+
 // For the creation modal dropdown
 interface DepotOption { id: number; name: string }
 
-type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS';
+type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'CAMERAS' | 'READINGS' | 'IMAGES';
 
 export default function TransformersIndex() {
   const { token } = useAuth();
@@ -51,12 +84,19 @@ export default function TransformersIndex() {
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedDepot, setSelectedDepot] = useState<Depot | null>(null);
+  const [selectedTransformer, setSelectedTransformer] = useState<Transformer | null>(null);
+  const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null);
+  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
   // --- Data State ---
   const [regions, setRegions] = useState<Region[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
   const [depots, setDepots] = useState<Depot[]>([]);
   const [transformers, setTransformers] = useState<Transformer[]>([]);
+  const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [readings, setReadings] = useState<Reading[]>([]);
+  const [images, setImages] = useState<CameraImage[]>([]);
   
   // --- Global Options (for modal) ---
   const [allDepotOptions, setAllDepotOptions] = useState<DepotOption[]>([]);
@@ -96,7 +136,7 @@ export default function TransformersIndex() {
   const normalizeList = (payload: unknown): any[] => {
     if (Array.isArray(payload)) return payload;
     const obj = payload as Record<string, unknown>;
-    const candidates = ['content', 'data', 'items', 'records'];
+    const candidates = ['content', 'data', 'items', 'records', 'sensorReadings'];
     for (const key of candidates) {
       if (Array.isArray(obj?.[key])) return obj[key] as any[];
     }
@@ -115,7 +155,6 @@ export default function TransformersIndex() {
   const fetchRegions = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch all regions for list
       const res = await axios.get(`${API_BASE_URL}/api/v1/regions?page=${page-1}&size=${pageSize}`, { headers });
       const list = normalizeList(res.data);
       setRegions(list);
@@ -131,12 +170,10 @@ export default function TransformersIndex() {
   const fetchDistricts = useCallback(async (regionId: number) => {
     try {
       setLoading(true);
-      // Fetch districts by region
       const res = await axios.get(`${API_BASE_URL}/api/v1/districts/region/${regionId}`, { headers });
-      // Note: Endpoint usually returns a list directly or wrapped.
       const list = normalizeList(res.data);
       setDistricts(list);
-      setTotalElements(list.length); // Usually not paginated by region endpoint, or we handle client side
+      setTotalElements(list.length);
     } catch (err) {
         console.error(err);
       setError('Failed to fetch districts');
@@ -148,9 +185,6 @@ export default function TransformersIndex() {
   const fetchDepots = useCallback(async (districtId: number) => {
     try {
       setLoading(true);
-      // Fetch depots by district
-      // Assuming endpoint exists: /api/v1/depots/district/{id} or we filter
-      // Based on typical pattern in this project:
       const res = await axios.get(`${API_BASE_URL}/api/v1/depots/district/${districtId}`, { headers });
       const list = normalizeList(res.data);
       setDepots(list);
@@ -166,7 +200,6 @@ export default function TransformersIndex() {
   const fetchTransformers = useCallback(async (depotId: number) => {
     try {
       setLoading(true);
-      // Fetch transformers by depot
       const res = await axios.get(`${API_BASE_URL}/api/v1/transformers/depot/${depotId}`, { headers });
       const list = normalizeList(res.data);
       setTransformers(list);
@@ -174,6 +207,68 @@ export default function TransformersIndex() {
     } catch (err) {
         console.error(err);
       setError('Failed to fetch transformers');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, headers]);
+
+  const fetchSensors = useCallback(async (transformerId: number) => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE_URL}/api/v1/sensors/transformer/${transformerId}`, { headers });
+      const list = normalizeList(res.data);
+      setSensors(list);
+      setTotalElements(list.length);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch sensors');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, headers]);
+
+  const fetchCameras = useCallback(async (transformerId: number) => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE_URL}/api/v1/cameras/transformer/${transformerId}`, { headers });
+      const list = normalizeList(res.data);
+      setCameras(list);
+      setTotalElements(list.length);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch cameras');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, headers]);
+
+  const fetchReadings = useCallback(async (sensorId: number) => {
+    try {
+      setLoading(true);
+      // Fetch specific sensor to get readings
+      const res = await axios.get(`${API_BASE_URL}/api/v1/sensors/${sensorId}`, { headers });
+      // Assuming res.data.sensorReadings contains the list
+      const list = normalizeList(res.data); // will check for sensorReadings key
+      setReadings(list);
+      setTotalElements(list.length);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch readings');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, headers]);
+
+  const fetchImages = useCallback(async (cameraId: number) => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE_URL}/api/v1/cameras/${cameraId}/images`, { headers });
+      const list = normalizeList(res.data);
+      setImages(list);
+      setTotalElements(list.length);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch images');
     } finally {
       setLoading(false);
     }
@@ -203,8 +298,16 @@ export default function TransformersIndex() {
       fetchDepots(selectedDistrict.id);
     } else if (viewMode === 'TRANSFORMERS' && selectedDepot) {
       fetchTransformers(selectedDepot.id);
+    } else if (viewMode === 'SENSORS' && selectedTransformer) {
+      fetchSensors(selectedTransformer.id);
+    } else if (viewMode === 'CAMERAS' && selectedTransformer) {
+      fetchCameras(selectedTransformer.id);
+    } else if (viewMode === 'READINGS' && selectedSensor) {
+      fetchReadings(selectedSensor.id);
+    } else if (viewMode === 'IMAGES' && selectedCamera) {
+      fetchImages(selectedCamera.id);
     }
-  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers]);
+  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedCamera, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchCameras, fetchReadings, fetchImages]);
 
   useEffect(() => {
       if (token && showCreate) {
@@ -235,10 +338,50 @@ export default function TransformersIndex() {
     setSearch('');
   };
 
+  const handleViewSensors = (transformer: Transformer) => {
+    setSelectedTransformer(transformer);
+    setViewMode('SENSORS');
+    setPage(1);
+    setSearch('');
+  };
+
+  const handleViewCameras = (transformer: Transformer) => {
+    setSelectedTransformer(transformer);
+    setViewMode('CAMERAS');
+    setPage(1);
+    setSearch('');
+  };
+
+  const handleViewReadings = (sensor: Sensor) => {
+    setSelectedSensor(sensor);
+    setViewMode('READINGS');
+    setPage(1);
+    setSearch('');
+  };
+
+  const handleViewImages = (camera: Camera) => {
+    setSelectedCamera(camera);
+    setViewMode('IMAGES');
+    setPage(1);
+    setSearch('');
+  };
+
   const handleBack = () => {
     setPage(1);
     setSearch('');
-    if (viewMode === 'TRANSFORMERS') {
+    if (viewMode === 'IMAGES') {
+      setViewMode('CAMERAS');
+      setSelectedCamera(null);
+    } else if (viewMode === 'READINGS') {
+      setViewMode('SENSORS');
+      setSelectedSensor(null);
+    } else if (viewMode === 'CAMERAS') {
+      setViewMode('TRANSFORMERS');
+      setSelectedTransformer(null);
+    } else if (viewMode === 'SENSORS') {
+      setViewMode('TRANSFORMERS');
+      setSelectedTransformer(null);
+    } else if (viewMode === 'TRANSFORMERS') {
       setViewMode('DEPOTS');
       setSelectedDepot(null);
     } else if (viewMode === 'DEPOTS') {
@@ -258,13 +401,33 @@ export default function TransformersIndex() {
           setSelectedRegion(null);
           setSelectedDistrict(null);
           setSelectedDepot(null);
+          setSelectedTransformer(null);
+          setSelectedSensor(null);
+          setSelectedCamera(null);
       } else if (mode === 'DISTRICTS') {
           setViewMode('DISTRICTS');
           setSelectedDistrict(null);
           setSelectedDepot(null);
+          setSelectedTransformer(null);
+          setSelectedSensor(null);
+          setSelectedCamera(null);
       } else if (mode === 'DEPOTS') {
           setViewMode('DEPOTS');
           setSelectedDepot(null);
+          setSelectedTransformer(null);
+          setSelectedSensor(null);
+          setSelectedCamera(null);
+      } else if (mode === 'TRANSFORMERS') {
+          setViewMode('TRANSFORMERS');
+          setSelectedTransformer(null);
+          setSelectedSensor(null);
+          setSelectedCamera(null);
+      } else if (mode === 'SENSORS') {
+          setViewMode('SENSORS');
+          setSelectedSensor(null);
+      } else if (mode === 'CAMERAS') {
+          setViewMode('CAMERAS');
+          setSelectedCamera(null);
       }
   };
 
@@ -389,7 +552,45 @@ export default function TransformersIndex() {
           {selectedDepot && (
               <>
                   <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">{selectedDepot.name}</span>
+                  <button onClick={() => navigateTo('TRANSFORMERS')} className={`hover:text-brand-600 ${viewMode === 'TRANSFORMERS' ? 'font-bold text-brand-600' : ''}`}>
+                      {selectedDepot.name}
+                  </button>
+              </>
+          )}
+          {selectedTransformer && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className={`hover:text-brand-600 ${['SENSORS', 'CAMERAS'].includes(viewMode) ? 'font-bold text-brand-600' : ''}`}>
+                      {selectedTransformer.name}
+                  </span>
+              </>
+          )}
+          {viewMode === 'SENSORS' && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Sensors</span>
+              </>
+          )}
+          {viewMode === 'CAMERAS' && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Cameras</span>
+              </>
+          )}
+          {selectedSensor && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <button onClick={() => navigateTo('SENSORS')} className="hover:text-brand-600">Sensors</button>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Readings</span>
+              </>
+          )}
+          {selectedCamera && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <button onClick={() => navigateTo('CAMERAS')} className="hover:text-brand-600">Cameras</button>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Images</span>
               </>
           )}
       </nav>
@@ -572,6 +773,10 @@ export default function TransformersIndex() {
                                           onView={() => openViewModal(t)}
                                           onEdit={() => openEditModal(t)}
                                           onDelete={() => handleDelete(t.id)}
+                                          extras={[
+                                              { label: 'View Sensors', onClick: () => handleViewSensors(t), icon: <Cpu className="h-4 w-4 mr-2" /> },
+                                              { label: 'View Cameras', onClick: () => handleViewCameras(t), icon: <CameraIcon className="h-4 w-4 mr-2" /> }
+                                          ]}
                                       />
                                   </td>
                               </tr>
@@ -581,6 +786,130 @@ export default function TransformersIndex() {
                           )}
                       </tbody>
                   </table>
+              )}
+
+              {/* SENSORS VIEW */}
+              {viewMode === 'SENSORS' && (
+                  <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                          <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sensor Name</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID</th>
+                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredList(sensors).map((s) => (
+                              <tr key={s.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                      <div className="flex items-center">
+                                          <Cpu className="h-5 w-5 text-gray-400 mr-3" />
+                                          <div className="text-sm font-medium text-gray-900">{s.name}</div>
+                                      </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.type}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.deviceId || s.devEui || '-'}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                      <Button variant="secondary" size="sm" onClick={() => handleViewReadings(s)} icon={<ListIcon className="h-4 w-4" />}>
+                                          Readings
+                                      </Button>
+                                  </td>
+                              </tr>
+                          ))}
+                          {sensors.length === 0 && (
+                              <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No sensors found for {selectedTransformer?.name}.</td></tr>
+                          )}
+                      </tbody>
+                  </table>
+              )}
+
+              {/* CAMERAS VIEW */}
+              {viewMode === 'CAMERAS' && (
+                  <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                          <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Camera Name</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredList(cameras).map((c) => (
+                              <tr key={c.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                      <div className="flex items-center">
+                                          <CameraIcon className="h-5 w-5 text-gray-400 mr-3" />
+                                          <div className="text-sm font-medium text-gray-900">{c.name}</div>
+                                      </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{c.model || '-'}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'online' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                          {c.status || 'Unknown'}
+                                      </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                      <Button variant="secondary" size="sm" onClick={() => handleViewImages(c)} icon={<ImageIcon className="h-4 w-4" />}>
+                                          Images
+                                      </Button>
+                                  </td>
+                              </tr>
+                          ))}
+                          {cameras.length === 0 && (
+                              <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No cameras found for {selectedTransformer?.name}.</td></tr>
+                          )}
+                      </tbody>
+                  </table>
+              )}
+
+              {/* READINGS VIEW */}
+              {viewMode === 'READINGS' && (
+                  <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                          <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Values</th>
+                          </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                          {readings.map((r) => (
+                              <tr key={r.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      {new Date(r.createdAt).toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-4 text-sm text-gray-500">
+                                      <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-100 overflow-x-auto whitespace-pre-wrap">
+                                          {JSON.stringify(r.attributes || {}, null, 2)}
+                                      </pre>
+                                  </td>
+                              </tr>
+                          ))}
+                          {readings.length === 0 && (
+                              <tr><td colSpan={2} className="px-6 py-12 text-center text-gray-500">No readings found.</td></tr>
+                          )}
+                      </tbody>
+                  </table>
+              )}
+
+              {/* IMAGES VIEW */}
+              {viewMode === 'IMAGES' && (
+                  <div className="p-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {images.map((img) => (
+                              <div key={img.id} className="relative group aspect-video bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                                  <img src={img.imageUrl} alt={`Camera capture ${img.id}`} className="w-full h-full object-cover" />
+                                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2">
+                                      {new Date(img.capturedAt).toLocaleString()}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                      {images.length === 0 && (
+                          <div className="text-center text-gray-500 py-12">No images found.</div>
+                      )}
+                  </div>
               )}
           </div>
       )}
