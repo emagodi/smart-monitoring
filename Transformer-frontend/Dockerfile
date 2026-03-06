@@ -7,7 +7,7 @@ COPY package.json package-lock.json ./
 RUN npm install
 
 COPY . .
-RUN npx vite build
+RUN npm run build
 
 # Stage 2: Serve the application with Nginx
 FROM nginx:alpine

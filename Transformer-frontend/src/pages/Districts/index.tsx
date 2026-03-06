@@ -41,6 +41,7 @@ export default function DistrictsIndex() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [regionFilter, setRegionFilter] = useState<number | ''>('');
+  const [totalElements, setTotalElements] = useState(0);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
@@ -58,8 +59,15 @@ export default function DistrictsIndex() {
 
   const fetchRegionsOptions = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/v1/regions`, { headers });
-      const arr = Array.isArray(res.data) ? (res.data as RegionOption[]) : ((res.data?.data as RegionOption[]) ?? []);
+      const res = await axios.get(`${API_BASE_URL}/api/v1/regions?page=0&size=1000`, { headers });
+      let arr: RegionOption[] = [];
+      if (Array.isArray(res.data)) {
+        arr = res.data;
+      } else if (Array.isArray(res.data?.content)) {
+        arr = res.data.content;
+      } else if (Array.isArray(res.data?.data)) {
+        arr = res.data.data;
+      }
       setRegions(arr.map((r) => ({ id: r.id, name: r.name })));
     } catch {
       setRegions([]);
@@ -70,14 +78,46 @@ export default function DistrictsIndex() {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.get(`${API_BASE_URL}/api/v1/districts`, { headers });
-      setDistricts(normalizeList(res.data));
+      
+      let data: District[] = [];
+      let total = 0;
+
+      if (regionFilter) {
+          const res = await axios.get(`${API_BASE_URL}/api/v1/districts/region/${regionFilter}`, { headers });
+          data = normalizeList(res.data);
+          if (search) {
+             const q = search.trim().toLowerCase();
+             data = data.filter(d => d.name.toLowerCase().includes(q));
+          }
+          total = data.length;
+      } else {
+          const p = page - 1;
+          const url = `${API_BASE_URL}/api/v1/districts?page=${p}&size=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+          const res = await axios.get(url, { headers });
+          
+          if (res.data?.content) {
+            data = res.data.content;
+            total = res.data.totalElements || res.data.content.length;
+          } else if (Array.isArray(res.data)) {
+             data = res.data;
+             total = res.data.length;
+          } else if (res.data?.data) {
+             data = res.data.data;
+             total = res.data.total || res.data.data.length;
+          } else {
+             data = normalizeList(res.data);
+             total = data.length;
+          }
+      }
+
+      setDistricts(data);
+      setTotalElements(total);
     } catch {
       setError('Failed to fetch districts');
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers]);
+  }, [API_BASE_URL, headers, page, pageSize, search, regionFilter]);
 
   useEffect(() => {
     if (token) {
@@ -192,15 +232,8 @@ export default function DistrictsIndex() {
     }
   };
 
-  const filtered = districts.filter((d) => {
-    const q = search.trim().toLowerCase();
-    const rName = regions.find(r => r.id === (d.region?.id ?? d.regionId))?.name ?? '';
-    const matchesSearch = !q || d.name.toLowerCase().includes(q) || rName.toLowerCase().includes(q);
-    const matchesRegion = !regionFilter || (d.region?.id ?? d.regionId) === regionFilter;
-    return matchesSearch && matchesRegion;
-  });
-  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.ceil(totalElements / pageSize) || 1;
+  const paginated = regionFilter ? districts.slice((page - 1) * pageSize, page * pageSize) : districts;
 
   if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /><span className="ml-2 text-gray-500">Loading districts...</span></div>;
   if (error) return <div className="p-4 text-red-500">{error}</div>;
