@@ -59,7 +59,7 @@ export default function DistrictsIndex() {
 
   const fetchRegionsOptions = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/v1/regions?page=0&size=1000`, { headers });
+      const res = await axios.get(`${API_BASE_URL}/api/v1/regions`, { headers });
       let arr: RegionOption[] = [];
       if (Array.isArray(res.data)) {
         arr = res.data;
