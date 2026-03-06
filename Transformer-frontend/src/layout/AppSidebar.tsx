@@ -135,13 +135,7 @@ const AppSidebar: React.FC = () => {
         !isExpanded && !isMobileOpen ? "justify-center px-0" : ""
       }`}>
         <Link to="/" className="flex items-center gap-3">
-            {/* You can add a logo image here if available */}
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 text-white">
-              <Zap className="w-5 h-5" />
-            </div>
-            {(isExpanded || isMobileOpen) && (
-              <span className="text-xl font-bold text-gray-900 dark:text-white">TAIS</span>
-            )}
+            <img src="/images/powertel.png" alt="Logo" className="h-12 w-auto" />
         </Link>
       </div>
 

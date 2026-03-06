@@ -17,12 +17,14 @@ import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.CameraRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.TransformerService;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class TransformerServiceImpl implements TransformerService {
 
     private final TransformerRepository transformerRepository;
@@ -123,6 +125,7 @@ public class TransformerServiceImpl implements TransformerService {
                         .ipAddress(c.getIpAddress())
                         .build())
                 .toList();
+        log.info("Transformer {}: Found {} cameras", transformer.getId(), cameras.size());
         return TransformerResponse.builder()
                 .id(transformer.getId())
                 .name(transformer.getName())

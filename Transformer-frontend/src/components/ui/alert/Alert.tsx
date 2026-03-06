@@ -3,7 +3,8 @@ import { Link } from "react-router";
 interface AlertProps {
   variant: "success" | "error" | "warning" | "info"; // Alert type
   title: string; // Title of the alert
-  message: string; // Message of the alert
+  message?: string; // Message of the alert
+  children?: React.ReactNode; // Alert content
   showLink?: boolean; // Whether to show the "Learn More" link
   linkHref?: string; // Link URL
   linkText?: string; // Link text
@@ -13,6 +14,7 @@ const Alert: React.FC<AlertProps> = ({
   variant,
   title,
   message,
+  children,
   showLink = false,
   linkHref = "#",
   linkText = "Learn more",
@@ -125,7 +127,7 @@ const Alert: React.FC<AlertProps> = ({
             {title}
           </h4>
 
-          <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
+          <div className="text-sm text-gray-500 dark:text-gray-400">{children || message}</div>
 
           {showLink && (
             <Link

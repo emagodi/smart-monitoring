@@ -9,6 +9,7 @@ interface ModalProps {
   isFullscreen?: boolean;
   overlayClassName?: string;
   backdropBlur?: boolean;
+  title?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -20,6 +21,7 @@ export const Modal: React.FC<ModalProps> = ({
   isFullscreen = false,
   overlayClassName,
   backdropBlur = true,
+  title,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +93,11 @@ export const Modal: React.FC<ModalProps> = ({
             </svg>
           </button>
         )}
-        <div>{children}</div>
+        <div>
+          <div className={title ? "p-4" : ""}>
+            {children}
+          </div>
+        </div>
       </div>
     </div>
   );

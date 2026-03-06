@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import Button from '../../components/ui/button/Button';
-import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search, Camera as CameraIcon, Cpu, List as ListIcon, Image as ImageIcon } from 'lucide-react';
+import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search, Camera as CameraIcon, Cpu, List as ListIcon, Image as ImageIcon, Eye as EyeIcon, ChevronLeft as ChevronLeftIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 
 // --- Interfaces ---
@@ -100,6 +102,16 @@ export default function TransformersIndex() {
   const [readings, setReadings] = useState<Reading[]>([]);
   const [images, setImages] = useState<CameraImage[]>([]);
   
+  // Image Filter & Pagination State
+  const [imageStartDate, setImageStartDate] = useState<Date | null>(null);
+  const [imageStartTime, setImageStartTime] = useState<Date | null>(null);
+  const [imageEndDate, setImageEndDate] = useState<Date | null>(null);
+  const [imageEndTime, setImageEndTime] = useState<Date | null>(null);
+  const [imagePage, setImagePage] = useState(1);
+  const [imagePageSize] = useState(10);
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  
   // --- Global Options (for modal) ---
   const [allDepotOptions, setAllDepotOptions] = useState<DepotOption[]>([]);
 
@@ -150,6 +162,15 @@ export default function TransformersIndex() {
       if (typeof obj?.totalElements === 'number') return obj.totalElements;
       if (typeof obj?.total === 'number') return obj.total;
       return listLength; // fallback
+  };
+
+  const getImageUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    if (API_BASE_URL && !url.startsWith(API_BASE_URL)) {
+        return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    }
+    return url;
   };
 
   // --- Data Fetching ---
@@ -264,17 +285,44 @@ export default function TransformersIndex() {
   const fetchImages = useCallback(async (cameraId: number) => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE_URL}/api/v1/cameras/${cameraId}/images`, { headers });
+      let url = `${API_BASE_URL}/api/v1/cameras/${cameraId}/images`;
+      const params: any = {};
+      
+      if (imageStartDate && imageStartTime && imageEndDate && imageEndTime) {
+          url = `${API_BASE_URL}/api/v1/cameras/${cameraId}/images/filter`;
+          
+          const formatDate = (date: Date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+          };
+
+          const formatTime = (date: Date) => {
+            const h = String(date.getHours()).padStart(2, '0');
+            const m = String(date.getMinutes()).padStart(2, '0');
+            return `${h}:${m}`;
+          };
+
+          const start = `${formatDate(imageStartDate)}T${formatTime(imageStartTime)}:00`;
+          const end = `${formatDate(imageEndDate)}T${formatTime(imageEndTime)}:00`;
+          
+          params.start = new Date(start).toISOString();
+          params.end = new Date(end).toISOString();
+      }
+
+      const res = await axios.get(url, { headers, params });
       const list = normalizeList(res.data);
       setImages(list);
       setTotalElements(list.length);
+      setImagePage(1); // Reset to first page on new fetch
     } catch (err) {
       console.error(err);
       setError('Failed to fetch images');
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers]);
+  }, [API_BASE_URL, headers, imageStartDate, imageStartTime, imageEndDate, imageEndTime]);
 
   // Fetch all depots for the dropdown in Modal
   const fetchAllDepots = useCallback(async () => {
@@ -288,6 +336,16 @@ export default function TransformersIndex() {
   }, [API_BASE_URL, headers]);
 
   // --- Effects ---
+
+  useEffect(() => {
+    if (transformers.length > 0) {
+      console.log('Transformers loaded:', transformers);
+      transformers.forEach(t => {
+        console.log(`Transformer ${t.id} cameras:`, t.cameras);
+      });
+    }
+  }, [transformers]);
+
 
   useEffect(() => {
     if (!token) return;
@@ -366,6 +424,10 @@ export default function TransformersIndex() {
     setViewMode('IMAGES');
     setPage(1);
     setSearch('');
+    setImageStartDate(null);
+    setImageStartTime(null);
+    setImageEndDate(null);
+    setImageEndTime(null);
   };
 
   const handleBack = () => {
@@ -777,7 +839,10 @@ export default function TransformersIndex() {
                                           className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                                       >
                                           <Cpu className="h-3 w-3 mr-1.5" />
-                                          Sensors ({t.sensors?.length || 0})
+                                          Sensors
+                                          <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
+                                              {t.sensors?.length || 0}
+                                          </span>
                                       </button>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -786,7 +851,10 @@ export default function TransformersIndex() {
                                           className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors"
                                       >
                                           <CameraIcon className="h-3 w-3 mr-1.5" />
-                                          Cameras ({t.cameras?.length || 0})
+                                          Cameras
+                                          <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
+                                              {t.cameras?.length || 0}
+                                          </span>
                                       </button>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -914,18 +982,195 @@ export default function TransformersIndex() {
               {/* IMAGES VIEW */}
               {viewMode === 'IMAGES' && (
                   <div className="p-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                          {images.map((img) => (
-                              <div key={img.id} className="relative group aspect-video bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                                  <img src={img.imageUrl} alt={`Camera capture ${img.id}`} className="w-full h-full object-cover" />
-                                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2">
-                                      {new Date(img.capturedAt).toLocaleString()}
+                      <div className="flex flex-col gap-4 mb-6">
+                          <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-gray-900">Images for {selectedCamera?.name}</h2>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => { 
+                                    setImageStartDate(null); 
+                                    setImageStartTime(null); 
+                                    setImageEndDate(null); 
+                                    setImageEndTime(null); 
+                                }}
+                                className="text-xs"
+                            >
+                                Clear Filters
+                            </Button>
+                          </div>
+                          
+                          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  {/* From Section */}
+                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                                      <div className="flex items-center gap-2 mb-2">
+                                          <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">From</label>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                      selected={imageStartDate}
+                                                      onChange={(date) => setImageStartDate(date)}
+                                                      dateFormat="MM/dd/yyyy"
+                                                      placeholderText="Select Date"
+                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
+                                                  />
+                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                      selected={imageStartTime}
+                                                      onChange={(date) => setImageStartTime(date)}
+                                                      showTimeSelect
+                                                      showTimeSelectOnly
+                                                      timeIntervals={15}
+                                                      timeCaption="Time"
+                                                      dateFormat="h:mm aa"
+                                                      placeholderText="--:-- --"
+                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
+                                                  />
+                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+
+                                  {/* To Section */}
+                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                                      <div className="flex items-center gap-2 mb-2">
+                                          <div className="h-2 w-2 rounded-full bg-indigo-500"></div>
+                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">To</label>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                      selected={imageEndDate}
+                                                      onChange={(date) => setImageEndDate(date)}
+                                                      dateFormat="MM/dd/yyyy"
+                                                      placeholderText="Select Date"
+                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
+                                                  />
+                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                          <div>
+                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
+                                              <div className="relative">
+                                                  <DatePicker
+                                                      selected={imageEndTime}
+                                                      onChange={(date) => setImageEndTime(date)}
+                                                      showTimeSelect
+                                                      showTimeSelectOnly
+                                                      timeIntervals={15}
+                                                      timeCaption="Time"
+                                                      dateFormat="h:mm aa"
+                                                      placeholderText="--:-- --"
+                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
+                                                  />
+                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                                              </div>
+                                          </div>
+                                      </div>
                                   </div>
                               </div>
-                          ))}
+                          </div>
                       </div>
-                      {images.length === 0 && (
-                          <div className="text-center text-gray-500 py-12">No images found.</div>
+
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+                          <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                  <tr>
+                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Captured At</th>
+                                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                  {images.slice((imagePage - 1) * imagePageSize, imagePage * imagePageSize).map((img) => (
+                                      <tr key={img.id} className="hover:bg-gray-50">
+                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                              #{img.id}
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                              {new Date(img.capturedAt).toLocaleString()}
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                              <Button 
+                                                  size="sm" 
+                                                  onClick={() => {
+                                                      setPreviewImageUrl(getImageUrl(img.imageUrl));
+                                                      setShowImagePreview(true);
+                                                  }}
+                                                  icon={<EyeIcon className="h-4 w-4" />}
+                                              >
+                                                  View
+                                              </Button>
+                                          </td>
+                                      </tr>
+                                  ))}
+                                  {images.length === 0 && (
+                                      <tr><td colSpan={3} className="px-6 py-12 text-center text-gray-500">No images found.</td></tr>
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
+
+                      {/* Pagination Controls */}
+                      {images.length > 0 && (
+                          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-4">
+                              <div className="flex flex-1 justify-between sm:hidden">
+                                  <Button 
+                                      onClick={() => setImagePage(p => Math.max(1, p - 1))} 
+                                      disabled={imagePage === 1}
+                                      variant="outline"
+                                  >
+                                      Previous
+                                  </Button>
+                                  <Button 
+                                      onClick={() => setImagePage(p => Math.min(Math.ceil(images.length / imagePageSize), p + 1))} 
+                                      disabled={imagePage >= Math.ceil(images.length / imagePageSize)}
+                                      variant="outline"
+                                  >
+                                      Next
+                                  </Button>
+                              </div>
+                              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                                  <div>
+                                      <p className="text-sm text-gray-700">
+                                          Showing <span className="font-medium">{(imagePage - 1) * imagePageSize + 1}</span> to <span className="font-medium">{Math.min(imagePage * imagePageSize, images.length)}</span> of <span className="font-medium">{images.length}</span> results
+                                      </p>
+                                  </div>
+                                  <div>
+                                      <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                          <button
+                                              onClick={() => setImagePage(p => Math.max(1, p - 1))}
+                                              disabled={imagePage === 1}
+                                              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                          >
+                                              <span className="sr-only">Previous</span>
+                                              <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
+                                          </button>
+                                          <button
+                                              onClick={() => setImagePage(p => Math.min(Math.ceil(images.length / imagePageSize), p + 1))}
+                                              disabled={imagePage >= Math.ceil(images.length / imagePageSize)}
+                                              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                                          >
+                                              <span className="sr-only">Next</span>
+                                              <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                          </button>
+                                      </nav>
+                                  </div>
+                              </div>
+                          </div>
                       )}
                   </div>
               )}
@@ -1073,6 +1318,22 @@ export default function TransformersIndex() {
                   </div>
               </div>
           )}
+      </Modal>
+
+      {/* IMAGE PREVIEW MODAL */}
+      <Modal isOpen={showImagePreview} onClose={() => setShowImagePreview(false)} title="Image Preview" className="max-w-4xl w-full">
+          <div className="flex justify-center bg-black rounded-lg overflow-hidden">
+              {previewImageUrl && (
+                  <img 
+                      src={previewImageUrl} 
+                      alt="Preview" 
+                      className="max-h-[80vh] w-auto object-contain" 
+                  />
+              )}
+          </div>
+          <div className="mt-4 flex justify-end">
+              <Button variant="outline" onClick={() => setShowImagePreview(false)}>Close</Button>
+          </div>
       </Modal>
     </div>
   );

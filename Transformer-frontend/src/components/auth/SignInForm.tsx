@@ -45,6 +45,9 @@ export default function SignInForm() {
         </Link>
       </div>
       <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
+        <div className="flex justify-center mb-6">
+            <img src="/images/powertel.png" alt="Logo" className="h-20 w-auto" />
+        </div>
         <div>
             <div className="mb-5 sm:mb-8">
               <div className="rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-4">

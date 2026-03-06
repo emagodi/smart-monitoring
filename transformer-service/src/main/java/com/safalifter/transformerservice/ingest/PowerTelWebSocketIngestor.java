@@ -177,20 +177,33 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
             byte[] data = HexFormat.of().parseHex(dataHex);
             System.out.println("Data length: " + data.length);
 
-            // Byte 8 is digital status (9th byte)
-            if (data.length <= 8) {
-                log.warn("Controller data too short: {}", dataHex);
-                return;
-            }
+            boolean di1, di2;
+            int status;
 
-            int status = data[8] & 0xFF;
-            // Based on analysis: 
-            // 0x24 (0010 0100) -> Idle
-            // 0xB4 (1011 0100) -> Bit 4 & 7 set (Event 1)
-            // 0xAC (1010 1100) -> Bit 3 & 7 set (Event 2)
-            // Mapping: DI1 -> Bit 3, DI2 -> Bit 4
-            boolean di1 = (status & 0x08) != 0; // Bit 3
-            boolean di2 = (status & 0x10) != 0; // Bit 4
+            // Heuristic to detect payload type
+            // Case 2: 000007ffffffffffff0146 (Byte 2 is 0x07, Status at Byte 9)
+            if (data.length > 9 && data[2] == 0x07) {
+                status = data[9] & 0xFF;
+                // Dragino LT-22222-L Format: Bit 0 is DI1, Bit 1 is DI2
+                di1 = (status & 0x01) != 0;
+                di2 = (status & 0x02) != 0;
+                log.info("Decoded Dragino V2 format. Status: {}, DI1: {}, DI2: {}", status, di1, di2);
+            } else {
+                // Case 1: 0000000000000000b4ff41 (Byte 2 is 0x00, Status at Byte 8)
+                if (data.length <= 8) {
+                    log.warn("Controller data too short: {}", dataHex);
+                    return;
+                }
+                status = data[8] & 0xFF;
+                // Dragino V1 / Default Format: Bit 3 is DI1, Bit 4 is DI2
+                // User reports Active Low behavior (0 when triggered, 1 when safe)
+                // Payload 0x24 (0010 0100) -> Bit 3=0 (DI1 Trigger), Bit 4=0 (DI2 Trigger)
+                // Payload 0x3C (0011 1100) -> Bit 3=1 (DI1 Safe), Bit 4=1 (DI2 Safe)
+                // Payload 0xB4 (1011 0100) -> Bit 3=0 (DI1 Trigger), Bit 4=1 (DI2 Safe)
+                di1 = (status & 0x08) == 0;
+                di2 = (status & 0x10) == 0;
+                log.info("Decoded Dragino V1 format (Active Low). Status: {}, DI1: {}, DI2: {}", status, di1, di2);
+            }
 
             int battery = root.path("bat").asInt();
             int rssi = 0;
@@ -214,6 +227,32 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
 
             controllerReadingRepository.save(reading);
             log.info("Saved controller reading for devEui: {}, DI1: {}, DI2: {}", controller.getDevEui(), di1, di2);
+
+            // Also save SensorReading if a Sensor exists with this DevEUI
+            java.util.Optional<com.safalifter.transformerservice.entities.Sensor> sensorOpt = sensorRepository.findByDevEui(controller.getDevEui());
+            if (sensorOpt.isPresent()) {
+                com.safalifter.transformerservice.entities.Sensor sensor = sensorOpt.get();
+                java.util.Map<String, Object> decodedMap = new java.util.HashMap<>();
+                decodedMap.put("di1", di1);
+                decodedMap.put("di2", di2);
+                decodedMap.put("status", status);
+                decodedMap.put("battery", battery);
+                decodedMap.put("rssi", rssi);
+                decodedMap.put("snr", snr);
+                decodedMap.put("Hardware_mode", "LT22222"); // Add hint for frontend
+
+                String decodedJson = objectMapper.writeValueAsString(decodedMap);
+
+                com.safalifter.transformerservice.entities.SensorReading sensorReading = com.safalifter.transformerservice.entities.SensorReading.builder()
+                        .sensorId(sensor.getId())
+                        .rawPayload(payload)
+                        .decoded(decodedJson)
+                        .build();
+
+                com.safalifter.transformerservice.entities.SensorReading savedReading = sensorReadingRepository.save(sensorReading);
+                sensorReadingService.processTriggers(savedReading);
+                log.info("Saved sensor reading for sensor: {}, DI1: {}, DI2: {}", sensor.getName(), di1, di2);
+            }
 
         } catch (Exception e) {
             log.error("Error processing controller data", e);
