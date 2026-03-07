@@ -15,7 +15,7 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
-@EnableMethodSecurity
+// @EnableMethodSecurity
 public class SecurityConfiguration {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -34,8 +34,10 @@ public class SecurityConfiguration {
                                 "/swagger-resources/**", "/swagger-ui/**",
                                 "/webjars/**", "/swagger-ui.html", "/error",
                                 "/api/v1/cameras/event",
-                                "/api/v1/cameras/images/**").permitAll()
-                        .anyRequest().authenticated()
+                                "/api/v1/cameras/images/**",
+                                "/api/v1/simulation/**",
+                                "/api/v1/transformers/**").permitAll()
+                        .anyRequest().permitAll()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(STATELESS))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -25,6 +25,7 @@ public class Alert {
     @Column(name = "camera_id")
     private Long cameraId;
 
+    @Column(name = "alert_value")
     private String value;
 
     @Column(name = "is_alert")

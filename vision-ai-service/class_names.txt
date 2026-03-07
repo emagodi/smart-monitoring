@@ -1,0 +1,2 @@
+climbing
+door_opening

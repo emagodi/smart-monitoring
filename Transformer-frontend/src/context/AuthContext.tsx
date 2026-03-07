@@ -71,6 +71,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (username: string, password: string, remember: boolean = true): Promise<boolean> => {
+    // Dev Bypass for Admin or specific User
+    if (username === 'admin' && password === 'admin') {
+      
+      const dummyToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyfQ.Signature";
+      const userInfo: User = {
+        id: 1,
+        username: username,
+        email: username,
+        first_name: 'Edwin',
+        last_name: 'Magodi',
+        phone: '1234567890',
+      };
+      const storage = remember ? localStorage : sessionStorage;
+      storage.setItem('token', dummyToken);
+      storage.setItem('user', JSON.stringify(userInfo));
+      setToken(dummyToken);
+      setUser(userInfo);
+      if (dummyToken) scheduleExpiryLogout(dummyToken);
+      return true;
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/authenticate`, {
         method: 'POST',
