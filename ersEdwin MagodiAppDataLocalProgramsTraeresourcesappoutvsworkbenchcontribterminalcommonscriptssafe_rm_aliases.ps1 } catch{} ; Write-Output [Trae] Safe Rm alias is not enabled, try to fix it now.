@@ -1,0 +1,125 @@
+[33mcommit 282e140483c56a97254a25f36151a375084b18d4[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32medwin[m[33m, [m[1;31morigin/edwin[m[33m)[m
+Author: Edwin Magodi <magodiedwin@gmail.com>
+Date:   Tue Feb 24 09:21:31 2026 +0200
+
+    Add sensors
+
+M	mobile/src/config.js
+M	mobile/src/screens/NewSensorsScreen.js
+M	mobile/src/screens/SimulationScreen.js
+M	mosquitto/data/mosquitto.db
+M	mosquitto/log/mosquitto.log
+M	transformer-service/src/main/java/com/safalifter/transformerservice/service/impl/SensorServiceImpl.java
+M	transformer-service/target/classes/com/safalifter/transformerservice/service/impl/SensorServiceImpl.class
+
+[33mcommit 36f06192ac4cd5fa00cf2c8c9562b8aadeaf7b80[m
+Author: Edwin Magodi <magodiedwin@gmail.com>
+Date:   Fri Feb 13 00:11:39 2026 +0200
+
+    camera trials
+
+M	docker-compose.yml
+M	mobile/package-lock.json
+M	mobile/package.json
+M	mobile/src/components/CrudScreen.js
+M	mobile/src/config.js
+M	mobile/src/navigation/AppNavigator.js
+M	mobile/src/screens/MapScreen.js
+A	mobile/src/screens/NewSensorsScreen.js
+M	mobile/src/screens/TransformerCrudScreen.js
+M	mobile/src/screens/TransformerDetailsScreen.js
+M	mobile/src/services/sensor.js
+A	mosquitto/config/mosquitto.conf
+A	mosquitto/data/mosquitto.db
+A	mosquitto/log/mosquitto.log
+M	transformer-service/pom.xml
+A	transformer-service/src/main/java/com/safalifter/transformerservice/config/MqttConfig.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/controller/SensorController.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/payload/request/TransformerRequest.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/repository/SensorRepository.java
+A	transformer-service/src/main/java/com/safalifter/transformerservice/service/CameraIntegrationService.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/service/SensorService.java
+A	transformer-service/src/main/java/com/safalifter/transformerservice/service/impl/CameraIntegrationServiceImpl.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/service/impl/SensorServiceImpl.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/service/impl/TransformerServiceImpl.java
+A	transformer-service/target/classes/com/safalifter/transformerservice/config/MqttConfig.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/controller/SensorController.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/payload/request/TransformerRequest$TransformerRequestBuilder.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/payload/request/TransformerRequest.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/repository/SensorRepository.class
+A	transformer-service/target/classes/com/safalifter/transformerservice/service/CameraIntegrationService.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/service/SensorService.class
+A	transformer-service/target/classes/com/safalifter/transformerservice/service/impl/CameraIntegrationServiceImpl.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/service/impl/SensorServiceImpl.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/service/impl/TransformerServiceImpl.class
+M	transformer-service/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst
+M	transformer-service/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst
+M	transformer-service/target/transformer-service-0.0.1-SNAPSHOT.jar
+M	transformer-service/target/transformer-service-0.0.1-SNAPSHOT.jar.original
+
+[33mcommit 8c1c265b5c6c2e244a6e1e7a7c805e5944e37877[m
+Author: Edwin Magodi <magodiedwin@gmail.com>
+Date:   Mon Feb 9 11:51:43 2026 +0200
+
+    add search and without using ids
+
+M	auth-service/src/main/java/com/safalifter/authservice/controller/DepotController.java
+M	auth-service/src/main/java/com/safalifter/authservice/controller/DistrictController.java
+M	auth-service/src/main/java/com/safalifter/authservice/controller/RegionController.java
+M	auth-service/src/main/java/com/safalifter/authservice/payload/response/DepotResponse.java
+M	auth-service/src/main/java/com/safalifter/authservice/payload/response/DistrictResponse.java
+M	auth-service/src/main/java/com/safalifter/authservice/repository/DepotRepository.java
+M	auth-service/src/main/java/com/safalifter/authservice/repository/DistrictRepository.java
+M	auth-service/src/main/java/com/safalifter/authservice/repository/RegionRepository.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/DepotService.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/DistrictService.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/RegionService.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/impl/DepotServiceImpl.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/impl/DistrictServiceImpl.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/impl/RegionServiceImpl.java
+M	mobile/src/components/CrudScreen.js
+M	mobile/src/screens/DepotListScreen.js
+M	mobile/src/screens/DistrictListScreen.js
+M	mobile/src/screens/TransformerCrudScreen.js
+M	mobile/src/services/infrastructure.js
+M	mobile/src/services/transformer.js
+M	transformer-service/src/main/java/com/safalifter/transformerservice/client/AuthClient.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/controller/TransformerController.java
+A	transformer-service/src/main/java/com/safalifter/transformerservice/payload/response/DepotResponse.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/payload/response/TransformerResponse.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/repository/TransformerRepository.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/service/TransformerService.java
+M	transformer-service/src/main/java/com/safalifter/transformerservice/service/impl/TransformerServiceImpl.java
+M	transformer-service/target/classes/com/safalifter/transformerservice/client/AuthClient.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/controller/TransformerController.class
+A	transformer-service/target/classes/com/safalifter/transformerservice/payload/response/DepotResponse$DepotResponseBuilder.class
+A	transformer-service/target/classes/com/safalifter/transformerservice/payload/response/DepotResponse.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/payload/response/TransformerResponse$TransformerResponseBuilder.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/payload/response/TransformerResponse.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/repository/TransformerRepository.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/service/TransformerService.class
+M	transformer-service/target/classes/com/safalifter/transformerservice/service/impl/TransformerServiceImpl.class
+
+[33mcommit 619f410dc0b93e6549ea63eac44713b1f6e47948[m
+Author: Edwin Magodi <magodiedwin@gmail.com>
+Date:   Mon Feb 9 11:15:29 2026 +0200
+
+    UI improvements on CRUD
+
+M	auth-service/src/main/java/com/safalifter/authservice/controller/RegionController.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/RegionService.java
+M	auth-service/src/main/java/com/safalifter/authservice/service/impl/RegionServiceImpl.java
+M	mobile/src/components/CrudScreen.js
+M	mobile/src/screens/DepotListScreen.js
+M	mobile/src/screens/DistrictListScreen.js
+M	mobile/src/screens/RegionListScreen.js
+M	mobile/src/screens/TransformerCrudScreen.js
+M	mobile/src/services/infrastructure.js
+
+[33mcommit 4a44cbd1665a15a8b76e36d04a94667298ecb0c2[m
+Author: Edwin Magodi <magodiedwin@gmail.com>
+Date:   Mon Feb 9 10:33:41 2026 +0200
+
+    Add region successfully
+
+M	mobile/src/components/CrudScreen.js

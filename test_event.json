@@ -1,0 +1,7 @@
+{
+    "topic": "NE101SensingCam/Snapshot",
+    "aiClass": "normal",
+    "confidence": 0.99,
+    "timestamp": "2026-02-28T22:30:00",
+    "imagePath": "/app/uploads/test_image.jpg"
+}

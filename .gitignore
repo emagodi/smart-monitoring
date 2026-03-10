@@ -1,0 +1,11 @@
+**/target/
+**/node_modules/
+**/.idea/
+**/*.iml
+**/.DS_Store
+**/dist/
+**/build/
+.env
+vision-ai-service/fine_tuned_clip_model/*.safetensors
+vision-ai-service/fine_tuned_clip_model/*.bin
+vision-ai-service/fine_tuned_clip_model/*.pth
