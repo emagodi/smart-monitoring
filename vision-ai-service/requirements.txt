@@ -5,6 +5,7 @@ pillow
 numpy
 transformers
 torch
+torchvision
 scikit-learn
 tqdm
 

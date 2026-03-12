@@ -9,6 +9,7 @@ const analyzeImage = async (imageUri) => {
         name: 'photo.jpg',
         type: 'image/jpeg',
     });
+    formData.append('modelType', 'security');
 
     const response = await axios.post(`${config.VISION_AI_URL}/analyze/upload`, formData, {
         headers: {

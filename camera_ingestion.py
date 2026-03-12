@@ -65,8 +65,9 @@ def send_to_vision_ai(filepath, topic):
         print(f"Sending {filepath} to Vision AI...")
         with open(filepath, 'rb') as f:
             files = {'file': (os.path.basename(filepath), f, 'image/jpeg')}
+            data = {"modelType": "security"}
             headers = {'Bypass-Tunnel-Reminder': 'true'}
-            response = requests.post(VISION_AI_URL, files=files, headers=headers)
+            response = requests.post(VISION_AI_URL, files=files, data=data, headers=headers)
         
         if response.status_code == 200:
             result = response.json()

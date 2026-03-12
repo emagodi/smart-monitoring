@@ -148,7 +148,12 @@ public class SimulationServiceImpl implements SimulationService {
 
             if (simCamera != null) {
                 // Save file to disk
-                String filename = "sim_" + System.currentTimeMillis() + "_" + request.getImage().getOriginalFilename();
+                String originalName = request.getImage().getOriginalFilename();
+                if (originalName == null || originalName.isBlank()) {
+                    originalName = "image";
+                }
+                String safeOriginalName = originalName.replaceAll("[^a-zA-Z0-9._-]", "_");
+                String filename = "sim_" + System.currentTimeMillis() + "_" + safeOriginalName;
                 String storedPath = "simulation/" + filename; // Relative path for DB
                 
                 try {

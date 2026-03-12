@@ -557,7 +557,7 @@ export default function DashboardHome() {
                                                onClick={() => {
                                                 setImagePreviewError(false);
                                                 setImagePreviewLoading(true);
-                                                setSelectedImage(`${API_BASE_URL}/api/v1/simulation/uploads/${alert.imageUrl}`);
+                                                setSelectedImage(`${API_BASE_URL}/api/v1/simulation/uploads/${encodeURI(alert.imageUrl)}`);
                                                }}
                                                 className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
                                              >

@@ -9,3 +9,6 @@
 vision-ai-service/fine_tuned_clip_model/*.safetensors
 vision-ai-service/fine_tuned_clip_model/*.bin
 vision-ai-service/fine_tuned_clip_model/*.pth
+vision-ai-service/cnn_security_model/
+vision-ai-service/dataset_aug/
+vision-ai-service/dataset/*/augmented/

@@ -7,11 +7,14 @@ import com.safalifter.transformerservice.service.SimulationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Tag(name = "Simulation Endpoints")
@@ -74,10 +77,24 @@ public class SimulationControllerController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping(value = "/uploads/**", produces = MediaType.IMAGE_JPEG_VALUE)
+    @GetMapping(value = "/uploads/**")
     public ResponseEntity<byte[]> getImage(jakarta.servlet.http.HttpServletRequest request) {
         String path = request.getRequestURI();
         String filename = path.substring(path.indexOf("/uploads/") + 9);
-        return ResponseEntity.ok(simulationService.getImage(filename));
+        String decoded = URLDecoder.decode(filename, StandardCharsets.UTF_8);
+        MediaType mediaType = detectMediaType(decoded);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .contentType(mediaType)
+                .body(simulationService.getImage(decoded));
+    }
+
+    private MediaType detectMediaType(String filename) {
+        String lower = filename == null ? "" : filename.toLowerCase();
+        if (lower.endsWith(".png")) return MediaType.IMAGE_PNG;
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return MediaType.IMAGE_JPEG;
+        if (lower.endsWith(".webp")) return MediaType.parseMediaType("image/webp");
+        if (lower.endsWith(".bmp")) return MediaType.parseMediaType("image/bmp");
+        return MediaType.APPLICATION_OCTET_STREAM;
     }
 }
