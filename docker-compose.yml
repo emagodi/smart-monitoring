@@ -11,7 +11,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./db-init:/docker-entrypoint-initdb.d:ro
+      - ./backend/db-init:/docker-entrypoint-initdb.d:ro
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
@@ -28,7 +28,7 @@ services:
       - mysql
 
   config-server:
-    build: ./config-server
+    build: ./backend/config-server
     container_name: config-server
     restart: unless-stopped
     environment:
@@ -37,14 +37,14 @@ services:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
     volumes:
-      - ./config:/config:ro
+      - ./backend/config:/config:ro
     ports:
       - "8888:8888"
     depends_on:
       - mysql
 
   eureka-server:
-    build: ./eureka-server
+    build: ./backend/eureka-server
     container_name: eureka-server
     restart: unless-stopped
     environment:
@@ -56,7 +56,7 @@ services:
       - config-server
 
   auth-service:
-    build: ./auth-service
+    build: ./backend/auth-service
     container_name: auth-service
     restart: unless-stopped
     environment:
@@ -75,7 +75,7 @@ services:
       - config-server
 
   transformer-service:
-    build: ./transformer-service
+    build: ./backend/transformer-service
     container_name: transformer-service
     restart: unless-stopped
     environment:
@@ -95,7 +95,7 @@ services:
       - config-server
 
   notification-service:
-    build: ./notification-service
+    build: ./backend/notification-service
     container_name: notification-service
     restart: unless-stopped
     environment:
@@ -114,7 +114,7 @@ services:
       - "8085:8085"
 
   transformer-frontend:
-    build: ./Transformer-frontend
+    build: ./frontend
     container_name: transformer-frontend
     restart: unless-stopped
     ports:
@@ -125,7 +125,7 @@ services:
       - notification-service
     
   gateway:
-    build: ./gateway
+    build: ./backend/gateway
     container_name: api-gateway
     restart: unless-stopped
     environment:
