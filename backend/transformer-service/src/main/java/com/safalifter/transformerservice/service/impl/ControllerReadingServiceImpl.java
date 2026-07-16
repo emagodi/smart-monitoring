@@ -59,6 +59,8 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                 .deviceId(controller.getDeviceId())
                 .deviceName(controller.getName())
                 .sensorType("CONTROLLER_TRIGGER")
+                .supplierCode(transformer.getSupplierCode() != null ? transformer.getSupplierCode() : controller.getSupplierCode())
+                .supplierName(transformer.getSupplierName() != null ? transformer.getSupplierName() : controller.getSupplierName())
                 .isAlert(true)
                 .value(triggerSummary)
                 .message("Controller trigger detected on " + transformer.getName() + " (" + triggerSummary + ")")

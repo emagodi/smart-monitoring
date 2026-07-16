@@ -62,6 +62,12 @@ public class Alert {
     @Column(name = "sensor_type")
     private String sensorType;
 
+    @Column(name = "supplier_code")
+    private String supplierCode;
+
+    @Column(name = "supplier_name")
+    private String supplierName;
+
     @Column(name = "image_url")
     private String imageUrl;
 

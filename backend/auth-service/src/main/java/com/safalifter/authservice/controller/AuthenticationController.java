@@ -29,6 +29,7 @@ import com.safalifter.authservice.exception.UserNotFoundException;
 import com.safalifter.authservice.payload.request.*;
 import com.safalifter.authservice.payload.response.AuthenticationResponse;
 import com.safalifter.authservice.payload.response.RefreshTokenResponse;
+import com.safalifter.authservice.payload.response.UserAccessResponse;
 import com.safalifter.authservice.repository.UserRepository;
 import com.safalifter.authservice.service.AuthenticationService;
 import com.safalifter.authservice.service.RbacAuthorizationService;
@@ -182,6 +183,24 @@ public class AuthenticationController {
                 .map(User::getRole)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.ok(com.safalifter.authservice.enums.Role.USER));
+    }
+
+    @GetMapping("/access/email/{email}")
+    @Operation(summary = "Find user access profile by email",
+            description = "Returns the legacy role and supplier scope associated with the given user email.")
+    public ResponseEntity<UserAccessResponse> getAccessByEmail(@PathVariable String email) {
+        return userRepository.findDetailedByEmail(email)
+                .map(user -> UserAccessResponse.builder()
+                        .role(user.getRole() != null ? user.getRole() : com.safalifter.authservice.enums.Role.USER)
+                        .userType(user.getUserType() != null ? user.getUserType().getName() : null)
+                        .supplierId(user.getSupplier() != null ? user.getSupplier().getId() : null)
+                        .supplierCode(user.getSupplier() != null ? user.getSupplier().getCode() : null)
+                        .supplierName(user.getSupplier() != null ? user.getSupplier().getName() : null)
+                        .build())
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.ok(UserAccessResponse.builder()
+                        .role(com.safalifter.authservice.enums.Role.USER)
+                        .build()));
     }
 
     @GetMapping("user/id/{id}")

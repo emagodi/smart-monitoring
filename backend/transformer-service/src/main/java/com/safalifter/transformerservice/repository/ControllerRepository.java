@@ -11,4 +11,8 @@ public interface ControllerRepository extends JpaRepository<Controller, Long> {
     Optional<Controller> findByTransformerIdAndDeviceId(Long transformerId, String deviceId);
     Optional<Controller> findByDeviceId(String deviceId);
     Optional<Controller> findByDevEui(String devEui);
+    List<Controller> findAllBySupplierCode(String supplierCode);
+    Optional<Controller> findByIdAndSupplierCode(Long id, String supplierCode);
+    List<Controller> findByTransformerIdAndSupplierCode(Long transformerId, String supplierCode);
+    Optional<Controller> findByDevEuiAndSupplierCode(String devEui, String supplierCode);
 }

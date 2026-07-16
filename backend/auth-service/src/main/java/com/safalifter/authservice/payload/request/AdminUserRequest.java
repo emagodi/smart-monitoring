@@ -27,4 +27,5 @@ public class AdminUserRequest {
     private Long districtId;
     private String depot;
     private Long depotId;
+    private Long supplierId;
 }

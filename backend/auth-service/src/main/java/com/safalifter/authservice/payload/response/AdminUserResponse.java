@@ -27,6 +27,9 @@ public class AdminUserResponse {
     private String region;
     private String district;
     private String depot;
+    private Long supplierId;
+    private String supplierCode;
+    private String supplierName;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdDate;
 }

@@ -59,10 +59,11 @@ const StatCard = ({
 );
 
 export default function DashboardHome() {
-  const { token, user } = useAuth();
+  const { token, user, hasPermission } = useAuth();
   const { hasNationalAccess, hasRegionAccess, hasDepotAccess, loading: accessLoading } = useUserAccess();
   const { realtimeData } = useRealtimeUpdates(token);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
 
   const [stats, setStats] = useState<DashboardStats>({
     totalRegions: 0,
@@ -79,11 +80,12 @@ export default function DashboardHome() {
   const [error, setError] = useState<string | null>(null);
 
   const accessLabel = useMemo(() => {
+    if (isSupplierUser) return user?.supplierName || 'Supplier';
     if (hasNationalAccess()) return 'National';
     if (hasRegionAccess()) return 'Region';
     if (hasDepotAccess()) return 'Depot';
     return 'Limited';
-  }, [hasDepotAccess, hasNationalAccess, hasRegionAccess]);
+  }, [hasDepotAccess, hasNationalAccess, hasRegionAccess, isSupplierUser, user?.supplierName]);
 
   const liveAlertCount = useMemo(
     () => realtimeData.filter((item: SensorUpdate) => item.is_alert).length,
@@ -119,8 +121,12 @@ export default function DashboardHome() {
         setError(null);
 
         const [regionsRes, depotsRes, transformersRes, sensorsRes, alertsRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/v1/regions`, { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get(`${API_BASE_URL}/api/v1/depots`, { headers: { Authorization: `Bearer ${token}` } }),
+          hasPermission('regions.read')
+            ? axios.get(`${API_BASE_URL}/api/v1/regions`, { headers: { Authorization: `Bearer ${token}` } })
+            : Promise.resolve({ data: [] }),
+          hasPermission('depots.read')
+            ? axios.get(`${API_BASE_URL}/api/v1/depots`, { headers: { Authorization: `Bearer ${token}` } })
+            : Promise.resolve({ data: [] }),
           axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_BASE_URL}/api/v1/sensors`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_BASE_URL}/api/v1/alerts`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -160,7 +166,7 @@ export default function DashboardHome() {
     };
 
     fetchDashboard();
-  }, [API_BASE_URL, token]);
+  }, [API_BASE_URL, hasPermission, token]);
 
   if (loading || accessLoading) {
     return <div className="p-4">Loading dashboard...</div>;
@@ -203,8 +209,18 @@ export default function DashboardHome() {
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Regions" value={stats.totalRegions} subtitle="Operational coverage" icon={<MapPinned className="h-6 w-6" />} />
-        <StatCard title="Depots" value={stats.totalDepots} subtitle="Managed maintenance hubs" icon={<Warehouse className="h-6 w-6" />} />
+        <StatCard
+          title={isSupplierUser ? 'Organisation' : 'Regions'}
+          value={isSupplierUser ? (user?.supplierCode ? 1 : 0) : stats.totalRegions}
+          subtitle={isSupplierUser ? (user?.supplierName || 'Supplier-scoped portal') : 'Operational coverage'}
+          icon={<MapPinned className="h-6 w-6" />}
+        />
+        <StatCard
+          title={isSupplierUser ? 'Assigned Depots' : 'Depots'}
+          value={stats.totalDepots}
+          subtitle={isSupplierUser ? 'Transformer locations linked to this supplier' : 'Managed maintenance hubs'}
+          icon={<Warehouse className="h-6 w-6" />}
+        />
         <StatCard
           title="Transformers"
           value={stats.totalTransformers}

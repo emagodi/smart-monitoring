@@ -18,6 +18,8 @@ public class SensorResponse {
     private String devEui;
     private String name;
     private String type;
+    private String supplierCode;
+    private String supplierName;
     private Long transformerId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

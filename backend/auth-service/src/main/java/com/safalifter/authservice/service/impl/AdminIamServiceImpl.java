@@ -2,6 +2,7 @@ package com.safalifter.authservice.service.impl;
 
 import com.safalifter.authservice.entities.PermissionEntity;
 import com.safalifter.authservice.entities.RoleEntity;
+import com.safalifter.authservice.entities.SupplierEntity;
 import com.safalifter.authservice.entities.User;
 import com.safalifter.authservice.entities.UserTypeEntity;
 import com.safalifter.authservice.enums.Role;
@@ -14,9 +15,11 @@ import com.safalifter.authservice.payload.request.UserTypeRequest;
 import com.safalifter.authservice.payload.response.AdminUserResponse;
 import com.safalifter.authservice.payload.response.PermissionResponse;
 import com.safalifter.authservice.payload.response.RoleResponse;
+import com.safalifter.authservice.payload.response.SupplierResponse;
 import com.safalifter.authservice.payload.response.UserTypeResponse;
 import com.safalifter.authservice.repository.PermissionRepository;
 import com.safalifter.authservice.repository.RoleEntityRepository;
+import com.safalifter.authservice.repository.SupplierRepository;
 import com.safalifter.authservice.repository.UserRepository;
 import com.safalifter.authservice.repository.UserTypeRepository;
 import com.safalifter.authservice.service.AdminIamService;
@@ -38,6 +41,7 @@ public class AdminIamServiceImpl implements AdminIamService {
     private final RoleEntityRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final UserTypeRepository userTypeRepository;
+    private final SupplierRepository supplierRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -146,6 +150,12 @@ public class AdminIamServiceImpl implements AdminIamService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<SupplierResponse> listSuppliers() {
+        return supplierRepository.findAll().stream().map(this::toSupplierResponse).toList();
+    }
+
+    @Override
     public UserTypeResponse createUserType(UserTypeRequest request) {
         UserTypeEntity entity = UserTypeEntity.builder().build();
         applyUserTypeRequest(entity, request);
@@ -179,6 +189,7 @@ public class AdminIamServiceImpl implements AdminIamService {
         user.setDepot(normalizeOptional(request.getDepot()));
         user.setDepotId(request.getDepotId());
         user.setUserType(resolveUserType(request.getUserTypeId()));
+        user.setSupplier(resolveSupplier(request.getSupplierId()));
         user.setRoles(resolveRoles(request.getRoleIds()));
         syncLegacyRole(user);
 
@@ -221,6 +232,13 @@ public class AdminIamServiceImpl implements AdminIamService {
             return null;
         }
         return userTypeRepository.findById(userTypeId).orElseThrow(() -> new IllegalArgumentException("User type not found"));
+    }
+
+    private SupplierEntity resolveSupplier(Long supplierId) {
+        if (supplierId == null) {
+            return null;
+        }
+        return supplierRepository.findById(supplierId).orElseThrow(() -> new IllegalArgumentException("Supplier not found"));
     }
 
     private Set<RoleEntity> resolveRoles(List<Long> roleIds) {
@@ -279,6 +297,9 @@ public class AdminIamServiceImpl implements AdminIamService {
                 .region(user.getRegion())
                 .district(user.getDistrict())
                 .depot(user.getDepot())
+                .supplierId(user.getSupplier() != null ? user.getSupplier().getId() : null)
+                .supplierCode(user.getSupplier() != null ? user.getSupplier().getCode() : null)
+                .supplierName(user.getSupplier() != null ? user.getSupplier().getName() : null)
                 .lastLoginAt(user.getLastLoginAt())
                 .createdDate(user.getCreatedAt())
                 .build();
@@ -319,6 +340,16 @@ public class AdminIamServiceImpl implements AdminIamService {
                 .description(userType.getDescription())
                 .status(userType.getStatus())
                 .userCount(count)
+                .build();
+    }
+
+    private SupplierResponse toSupplierResponse(SupplierEntity supplier) {
+        return SupplierResponse.builder()
+                .id(supplier.getId())
+                .code(supplier.getCode())
+                .name(supplier.getName())
+                .description(supplier.getDescription())
+                .status(supplier.getStatus())
                 .build();
     }
 }

@@ -15,15 +15,15 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
-    @EntityGraph(attributePaths = {"roles", "roles.permissions", "userType"})
+    @EntityGraph(attributePaths = {"roles", "roles.permissions", "userType", "supplier"})
     @Query("select distinct u from User u where u.email = ?1")
     Optional<User> findDetailedByEmail(String email);
 
-    @EntityGraph(attributePaths = {"roles", "roles.permissions", "userType"})
+    @EntityGraph(attributePaths = {"roles", "roles.permissions", "userType", "supplier"})
     @Query("select distinct u from User u where u.id = ?1")
     Optional<User> findDetailedById(Long id);
 
-    @EntityGraph(attributePaths = {"roles", "roles.permissions", "userType"})
+    @EntityGraph(attributePaths = {"roles", "roles.permissions", "userType", "supplier"})
     @Query("select distinct u from User u")
     List<User> findAllWithIam();
 

@@ -11,6 +11,7 @@ import com.safalifter.transformerservice.payload.request.TransformerRequest;
 import com.safalifter.transformerservice.payload.response.SensorResponse;
 import com.safalifter.transformerservice.payload.response.ControllerResponse;
 import com.safalifter.transformerservice.payload.response.TransformerResponse;
+import com.safalifter.transformerservice.config.AccessScopeService;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
@@ -28,15 +29,27 @@ public class TransformerServiceImpl implements TransformerService {
     private final TransformerRepository transformerRepository;
     private final SensorRepository sensorRepository;
     private final ControllerRepository controllerRepository;
+    private final AccessScopeService accessScopeService;
 
     @Override
     public TransformerResponse create(TransformerRequest request) {
-        transformerRepository.findByDepotIdAndName(request.getDepotId(), request.getName()).ifPresent(t -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists in depot"); });
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        if (supplierCode != null) {
+            transformerRepository.findBySupplierCodeAndName(supplierCode, request.getName()).ifPresent(t -> {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists for supplier");
+            });
+        } else {
+            transformerRepository.findByDepotIdAndName(request.getDepotId(), request.getName()).ifPresent(t -> {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists in depot");
+            });
+        }
         Transformer transformer = Transformer.builder()
                 .name(request.getName())
                 .capacity(request.getCapacity())
                 .isActive(request.getIsActive())
                 .depotId(request.getDepotId())
+                .supplierCode(supplierCode)
+                .supplierName(accessScopeService.getCurrentSupplierName())
                 .type(request.getType() != null ? TransformerType.valueOf(request.getType()) : null)
                 .lat(request.getLat())
                 .lng(request.getLng())
@@ -47,28 +60,49 @@ public class TransformerServiceImpl implements TransformerService {
 
     @Override
     public TransformerResponse getById(Long id) {
-        Transformer transformer = transformerRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
+        Transformer transformer = findTransformerOrThrow(id);
         return toResponse(transformer);
     }
 
     @Override
     public List<TransformerResponse> getAll() {
-        return transformerRepository.findAll().stream().map(this::toResponse).toList();
+        return listScopedTransformers().stream().map(this::toResponse).toList();
     }
 
     @Override
     public List<TransformerResponse> listByDepotId(Long depotId) {
-        return transformerRepository.findByDepotId(depotId).stream().map(this::toResponse).toList();
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        List<Transformer> transformers = supplierCode != null
+                ? transformerRepository.findByDepotIdAndSupplierCode(depotId, supplierCode)
+                : transformerRepository.findByDepotId(depotId);
+        return transformers.stream().map(this::toResponse).toList();
     }
 
     @Override
     public TransformerResponse update(Long id, TransformerRequest request) {
-        Transformer transformer = transformerRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
-        transformerRepository.findByDepotIdAndName(request.getDepotId(), request.getName()).ifPresent(existing -> { if (!existing.getId().equals(id)) throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists in depot"); });
+        Transformer transformer = findTransformerOrThrow(id);
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        if (supplierCode != null) {
+            transformerRepository.findBySupplierCodeAndName(supplierCode, request.getName()).ifPresent(existing -> {
+                if (!existing.getId().equals(id)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists for supplier");
+                }
+            });
+        } else {
+            transformerRepository.findByDepotIdAndName(request.getDepotId(), request.getName()).ifPresent(existing -> {
+                if (!existing.getId().equals(id)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists in depot");
+                }
+            });
+        }
         transformer.setName(request.getName());
         transformer.setCapacity(request.getCapacity());
         transformer.setActive(request.getIsActive());
         transformer.setDepotId(request.getDepotId());
+        if (supplierCode != null) {
+            transformer.setSupplierCode(supplierCode);
+            transformer.setSupplierName(accessScopeService.getCurrentSupplierName());
+        }
         if (request.getType() != null && !request.getType().isEmpty()) {
             transformer.setType(TransformerType.valueOf(request.getType()));
         }
@@ -80,8 +114,21 @@ public class TransformerServiceImpl implements TransformerService {
 
     @Override
     public void delete(Long id) {
-        Transformer transformer = transformerRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
+        Transformer transformer = findTransformerOrThrow(id);
         transformerRepository.delete(transformer);
+    }
+
+    private List<Transformer> listScopedTransformers() {
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        return supplierCode != null ? transformerRepository.findAllBySupplierCode(supplierCode) : transformerRepository.findAll();
+    }
+
+    private Transformer findTransformerOrThrow(Long id) {
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        return (supplierCode != null
+                ? transformerRepository.findByIdAndSupplierCode(id, supplierCode)
+                : transformerRepository.findById(id))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
     }
 
     private TransformerResponse toResponse(Transformer transformer) {
@@ -92,6 +139,8 @@ public class TransformerServiceImpl implements TransformerService {
                         .devEui(s.getDevEui())
                         .name(s.getName())
                         .type(s.getType())
+                        .supplierCode(s.getSupplierCode())
+                        .supplierName(s.getSupplierName())
                         .transformerId(transformer.getId())
                         .createdAt(s.getCreatedAt())
                         .updatedAt(s.getUpdatedAt())
@@ -104,6 +153,8 @@ public class TransformerServiceImpl implements TransformerService {
                         .devEui(c.getDevEui())
                         .name(c.getName())
                         .type(c.getType())
+                        .supplierCode(c.getSupplierCode())
+                        .supplierName(c.getSupplierName())
                         .transformerId(transformer.getId())
                         .createdAt(c.getCreatedAt())
                         .updatedAt(c.getUpdatedAt())
@@ -115,6 +166,8 @@ public class TransformerServiceImpl implements TransformerService {
                 .capacity(transformer.getCapacity())
                 .isActive(transformer.isActive())
                 .depotId(transformer.getDepotId())
+                .supplierCode(transformer.getSupplierCode())
+                .supplierName(transformer.getSupplierName())
                 .type(transformer.getType() != null ? transformer.getType().name() : null)
                 .lat(transformer.getLat())
                 .lng(transformer.getLng())

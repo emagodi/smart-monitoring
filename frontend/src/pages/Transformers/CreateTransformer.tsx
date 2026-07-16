@@ -11,7 +11,8 @@ interface DepotOption { id: number; name: string }
 
 export default function CreateTransformer() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user, hasPermission } = useAuth();
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   
   const [depots, setDepots] = useState<DepotOption[]>([]);
   const [loadingDepots, setLoadingDepots] = useState(false);
@@ -54,15 +55,15 @@ export default function CreateTransformer() {
   }, [API_BASE_URL, headers]);
 
   useEffect(() => {
-    if (token) {
+    if (token && !isSupplierUser && hasPermission('depots.read')) {
       fetchDepots();
     }
-  }, [token, fetchDepots]);
+  }, [fetchDepots, hasPermission, isSupplierUser, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nameInput.trim()) { setFormError('Name is required'); return; }
-    if (!depotInput) { setFormError('Depot is required'); return; }
+    if (!isSupplierUser && !depotInput) { setFormError('Depot is required'); return; }
 
     try {
       setSaving(true);
@@ -72,7 +73,7 @@ export default function CreateTransformer() {
         name: nameInput,
         capacity: capacityInput ? Number(capacityInput) : 0,
         isActive: isActiveInput, // Reverted to isActive to match backend DTO
-        depotId: Number(depotInput),
+        depotId: isSupplierUser ? null : Number(depotInput),
         lat: latInput ? Number(latInput) : 0.0, // Reverted to lat
         lng: lngInput ? Number(lngInput) : 0.0 // Reverted to lng
       };
@@ -126,6 +127,7 @@ export default function CreateTransformer() {
               </div>
 
               {/* Depot */}
+              {!isSupplierUser && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
                   Depot <span className="text-red-500">*</span>
@@ -141,6 +143,7 @@ export default function CreateTransformer() {
                   />
                 )}
               </div>
+              )}
 
               {/* Capacity */}
               <div>

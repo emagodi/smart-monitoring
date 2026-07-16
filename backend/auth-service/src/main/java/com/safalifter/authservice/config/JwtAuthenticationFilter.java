@@ -36,7 +36,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (uri.equals("/api/v1/auth/register") ||
                 uri.equals("/api/v1/auth/authenticate") ||
                 uri.equals("/api/v1/auth/refresh-token") ||
-                uri.equals("/api/v1/auth/refresh-token-cookie")) {
+                uri.equals("/api/v1/auth/refresh-token-cookie") ||
+                uri.startsWith("/api/v1/auth/access/email/")) {
             return true;
         }
         return uri.startsWith("/v2/api-docs") ||

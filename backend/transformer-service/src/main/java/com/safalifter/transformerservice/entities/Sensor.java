@@ -28,6 +28,12 @@ public class Sensor {
 
     private String type;
 
+    @Column(name = "supplier_code")
+    private String supplierCode;
+
+    @Column(name = "supplier_name")
+    private String supplierName;
+
     @Column(name = "transformer_id")
     private Long transformerId;
 

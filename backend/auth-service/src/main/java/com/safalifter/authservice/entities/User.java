@@ -80,6 +80,10 @@ public class User implements UserDetails { // make our app User a spring securit
     @JoinColumn(name = "user_type_id")
     private UserTypeEntity userType;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "supplier_id")
+    private SupplierEntity supplier;
+
     @JsonIgnoreProperties({"users", "permissions"})
     @Builder.Default
     @ManyToMany(fetch = FetchType.EAGER)

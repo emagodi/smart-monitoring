@@ -19,6 +19,9 @@ type AdminUser = {
   status?: string;
   userType?: string;
   userTypeId?: number | null;
+  supplierId?: number | null;
+  supplierCode?: string | null;
+  supplierName?: string | null;
   roles: string[];
   roleIds: number[];
   region?: string;
@@ -38,6 +41,12 @@ type UserTypeOption = {
   name: string;
 };
 
+type SupplierOption = {
+  id: number;
+  code: string;
+  name: string;
+};
+
 type UserFormState = {
   firstname: string;
   lastname: string;
@@ -47,6 +56,7 @@ type UserFormState = {
   password: string;
   status: string;
   userTypeId: string;
+  supplierId: string;
   roleIds: string[];
   region: string;
   district: string;
@@ -64,6 +74,7 @@ const defaultFormState: UserFormState = {
   password: "",
   status: "ACTIVE",
   userTypeId: "",
+  supplierId: "",
   roleIds: [],
   region: "",
   district: "",
@@ -97,6 +108,7 @@ export default function Users() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [userTypes, setUserTypes] = useState<UserTypeOption[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +128,11 @@ export default function Users() {
   const [resetPassword, setResetPassword] = useState("Password@123");
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const selectedUserTypeName = useMemo(
+    () => userTypes.find((item) => String(item.id) === formState.userTypeId)?.name || "",
+    [formState.userTypeId, userTypes]
+  );
+  const isSupplierUserType = selectedUserTypeName.toLowerCase() === "supplier";
 
   const showNotice = (variant: "success" | "error" | "info" | "warning", title: string, message: string) => {
     setNotice({ variant, title, message });
@@ -126,15 +143,17 @@ export default function Users() {
     try {
       setLoading(true);
       setError(null);
-      const [usersResponse, rolesResponse, userTypesResponse] = await Promise.all([
+      const [usersResponse, rolesResponse, userTypesResponse, suppliersResponse] = await Promise.all([
         axios.get<AdminUser[]>(`${API_BASE_URL}/api/v1/admin/users`, { headers }),
         axios.get<RoleOption[]>(`${API_BASE_URL}/api/v1/admin/roles`, { headers }),
         axios.get<UserTypeOption[]>(`${API_BASE_URL}/api/v1/admin/user-types`, { headers }),
+        axios.get<SupplierOption[]>(`${API_BASE_URL}/api/v1/admin/suppliers`, { headers }),
       ]);
 
       setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
       setRoles(Array.isArray(rolesResponse.data) ? rolesResponse.data : []);
       setUserTypes(Array.isArray(userTypesResponse.data) ? userTypesResponse.data : []);
+      setSuppliers(Array.isArray(suppliersResponse.data) ? suppliersResponse.data : []);
     } catch (fetchError) {
       setError("Failed to load administration users.");
       console.error(fetchError);
@@ -149,6 +168,12 @@ export default function Users() {
     }
   }, [token, fetchAll]);
 
+  useEffect(() => {
+    if (!isSupplierUserType && formState.supplierId) {
+      setFormState((current) => ({ ...current, supplierId: "" }));
+    }
+  }, [formState.supplierId, isSupplierUserType]);
+
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     return users.filter((user) => {
@@ -157,7 +182,8 @@ export default function Users() {
         `${user.firstname} ${user.lastname}`.toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
         (user.employeeNumber || "").toLowerCase().includes(query) ||
-        (user.phone || "").toLowerCase().includes(query);
+        (user.phone || "").toLowerCase().includes(query) ||
+        (user.supplierName || "").toLowerCase().includes(query);
       const matchesRole = roleFilter === "ALL" || user.roles.includes(roleFilter);
       const matchesUserType = userTypeFilter === "ALL" || user.userType === userTypeFilter;
       const matchesStatus = statusFilter === "ALL" || (user.status || "ACTIVE") === statusFilter;
@@ -189,6 +215,7 @@ export default function Users() {
       password: "",
       status: user.status || "ACTIVE",
       userTypeId: user.userTypeId ? String(user.userTypeId) : "",
+      supplierId: user.supplierId ? String(user.supplierId) : "",
       roleIds: (user.roleIds || []).map((value) => String(value)),
       region: user.region || "",
       district: user.district || "",
@@ -220,6 +247,10 @@ export default function Users() {
       showNotice("warning", "Validation", "Assign at least one role.");
       return;
     }
+    if (isSupplierUserType && !formState.supplierId) {
+      showNotice("warning", "Validation", "Select a supplier for supplier-scoped users.");
+      return;
+    }
 
     const payload = {
       firstname: formState.firstname.trim(),
@@ -230,6 +261,7 @@ export default function Users() {
       password: formState.password.trim() || undefined,
       status: formState.status,
       userTypeId: formState.userTypeId ? Number(formState.userTypeId) : null,
+      supplierId: formState.supplierId ? Number(formState.supplierId) : null,
       roleIds: formState.roleIds.map(Number),
       region: formState.region.trim(),
       district: formState.district.trim(),
@@ -475,7 +507,7 @@ export default function Users() {
                       }
                     />
                   </th>
-                  {["User", "Employee #", "Contact", "User Type", "Roles", "Status", "Last Login", "Created", "Actions"].map((label) => (
+                  {["User", "Employee #", "Contact", "User Type", "Organisation", "Roles", "Status", "Last Login", "Created", "Actions"].map((label) => (
                     <th key={label} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                       {label}
                     </th>
@@ -505,6 +537,9 @@ export default function Users() {
                     <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">{user.phone || "N/A"}</td>
                     <td className="px-4 py-4">
                       <Badge color="info">{user.userType || "Unassigned"}</Badge>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                      {user.supplierName || "Internal"}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex max-w-[220px] flex-wrap gap-2">
@@ -624,6 +659,22 @@ export default function Users() {
                   ]}
                 />
               </div>
+              {isSupplierUserType ? (
+                <div className="space-y-2">
+                  <SelectField
+                    label="Supplier"
+                    value={formState.supplierId}
+                    onChange={(value) => updateForm("supplierId", value)}
+                    options={suppliers.map((item) => ({
+                      value: String(item.id),
+                      label: item.name,
+                    }))}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Supplier users are restricted to devices, transformers, alerts, and other records owned by the selected organisation.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Roles</label>
@@ -696,6 +747,7 @@ export default function Users() {
               <InfoItem label="Employee Number" value={activeUser.employeeNumber || "N/A"} />
               <InfoItem label="Phone" value={activeUser.phone || "N/A"} />
               <InfoItem label="User Type" value={activeUser.userType || "Unassigned"} />
+              <InfoItem label="Organisation" value={activeUser.supplierName || "Internal"} />
               <InfoItem label="Status" value={activeUser.status || "ACTIVE"} />
               <InfoItem label="Region" value={activeUser.region || "N/A"} />
               <InfoItem label="District" value={activeUser.district || "N/A"} />

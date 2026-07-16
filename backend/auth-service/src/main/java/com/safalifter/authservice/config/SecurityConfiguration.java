@@ -36,6 +36,7 @@ public class SecurityConfiguration {
                                 "/api/v1/auth/authenticate",
                                 "/api/v1/auth/refresh-token",
                                 "/api/v1/auth/refresh-token-cookie",
+                                "/api/v1/auth/access/email/**",
                                 "/v2/api-docs", "/v3/api-docs/**",
                                 "/swagger-resources/**", "/swagger-ui/**",
                                 "/webjars/**", "/swagger-ui.html"

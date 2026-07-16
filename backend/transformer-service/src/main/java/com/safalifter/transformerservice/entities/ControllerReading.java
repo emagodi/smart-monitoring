@@ -25,6 +25,10 @@ public class ControllerReading {
     @Column(name = "raw_payload", columnDefinition = "TEXT")
     private String rawPayload;
 
+    @Lob
+    @Column(name = "decoded_payload", columnDefinition = "TEXT")
+    private String decodedPayload;
+
     @Column(name = "di1")
     private Boolean di1; // Motion
 

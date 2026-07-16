@@ -2,11 +2,13 @@ package com.safalifter.authservice.config;
 
 import com.safalifter.authservice.entities.PermissionEntity;
 import com.safalifter.authservice.entities.RoleEntity;
+import com.safalifter.authservice.entities.SupplierEntity;
 import com.safalifter.authservice.entities.User;
 import com.safalifter.authservice.entities.UserTypeEntity;
 import com.safalifter.authservice.enums.Role;
 import com.safalifter.authservice.repository.PermissionRepository;
 import com.safalifter.authservice.repository.RoleEntityRepository;
+import com.safalifter.authservice.repository.SupplierRepository;
 import com.safalifter.authservice.repository.UserRepository;
 import com.safalifter.authservice.repository.UserTypeRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 @Component
@@ -30,20 +33,28 @@ public class DataLoader implements CommandLineRunner {
     private final PermissionRepository permissionRepository;
     private final RoleEntityRepository roleRepository;
     private final UserTypeRepository userTypeRepository;
+    private final SupplierRepository supplierRepository;
     private final JdbcTemplate jdbcTemplate;
 
     @Override
     public void run(String... args) {
         seedUserTypes();
+        seedSuppliers();
         seedPermissions();
         purgeObsoletePermissions(List.of("cameras", "simulation"));
         seedAdministratorRole();
+        seedSupplierAdministratorRole();
         createOrUpdateSuperAdmin();
+        createOrUpdateOculusSupplierUser();
     }
 
     private void seedUserTypes() {
         upsertUserType("ZESA", "Internal organization users");
         upsertUserType("Supplier", "Supplier-scoped external users");
+    }
+
+    private void seedSuppliers() {
+        upsertSupplier("oculus", "Oculus", "Supplier integration for Oculus websocket and Dragino telemetry");
     }
 
     private void seedPermissions() {
@@ -91,6 +102,30 @@ public class DataLoader implements CommandLineRunner {
         roleRepository.save(administratorRole);
     }
 
+    private void seedSupplierAdministratorRole() {
+        RoleEntity supplierRole = roleRepository.findByName("Supplier Administrator")
+                .orElseGet(() -> RoleEntity.builder()
+                        .name("Supplier Administrator")
+                        .description("Supplier-scoped portal access for owned transformers, controllers, sensors, and alerts")
+                        .status("ACTIVE")
+                        .build());
+        supplierRole.setPermissions(resolvePermissionsByName(List.of(
+                "dashboard.read",
+                "dashboard.supplier",
+                "transformers.create",
+                "transformers.read",
+                "transformers.update",
+                "controllers.create",
+                "controllers.read",
+                "controllers.update",
+                "sensors.create",
+                "sensors.read",
+                "sensors.update",
+                "sites.read"
+        )));
+        roleRepository.save(supplierRole);
+    }
+
     private void createOrUpdateSuperAdmin() {
         RoleEntity adminRole = roleRepository.findByName("Administrator").orElseThrow();
         UserTypeEntity zesaType = userTypeRepository.findByName("ZESA").orElse(null);
@@ -106,6 +141,7 @@ public class DataLoader implements CommandLineRunner {
         adminUser.setStatus("ACTIVE");
         adminUser.setTemporaryPassword(false);
         adminUser.setUserType(zesaType);
+        adminUser.setSupplier(null);
         userRepository.save(adminUser);
         assignRoleIfMissing(adminUser.getId(), adminRole.getId());
 
@@ -126,11 +162,40 @@ public class DataLoader implements CommandLineRunner {
                         user.setUserType(zesaType);
                         changed = true;
                     }
+                    if (user.getSupplier() != null) {
+                        user.setSupplier(null);
+                        changed = true;
+                    }
                     if (changed) {
                         userRepository.save(user);
                     }
                     assignRoleIfMissing(user.getId(), adminRole.getId());
                 });
+    }
+
+    private void createOrUpdateOculusSupplierUser() {
+        RoleEntity supplierRole = roleRepository.findByName("Supplier Administrator").orElseThrow();
+        UserTypeEntity supplierType = userTypeRepository.findByName("Supplier").orElse(null);
+        SupplierEntity oculus = supplierRepository.findByCode("oculus").orElseThrow();
+
+        User supplierUser = userRepository.findByEmail("magodi@oculus.co.zw").orElseGet(User::new);
+        supplierUser.setFirstname("Edwin");
+        supplierUser.setLastname("Magodi");
+        supplierUser.setEmail("magodi@oculus.co.zw");
+        supplierUser.setPassword(passwordEncoder.encode("Password@123"));
+        supplierUser.setRole(Role.USER);
+        supplierUser.setStatus("ACTIVE");
+        supplierUser.setTemporaryPassword(false);
+        supplierUser.setUserType(supplierType);
+        supplierUser.setSupplier(oculus);
+        supplierUser.setRegion(null);
+        supplierUser.setRegionId(null);
+        supplierUser.setDistrict(null);
+        supplierUser.setDistrictId(null);
+        supplierUser.setDepot(null);
+        supplierUser.setDepotId(null);
+        userRepository.save(supplierUser);
+        assignRoleIfMissing(supplierUser.getId(), supplierRole.getId());
     }
 
     private void assignRoleIfMissing(Long userId, Long roleId) {
@@ -148,6 +213,15 @@ public class DataLoader implements CommandLineRunner {
         userTypeRepository.save(type);
     }
 
+    private void upsertSupplier(String code, String name, String description) {
+        SupplierEntity supplier = supplierRepository.findByCode(code).orElseGet(SupplierEntity::new);
+        supplier.setCode(code);
+        supplier.setName(name);
+        supplier.setDescription(description);
+        supplier.setStatus("ACTIVE");
+        supplierRepository.save(supplier);
+    }
+
     private void upsertPermission(String module, String action) {
         String name = module + "." + action;
         PermissionEntity permission = permissionRepository.findByName(name).orElseGet(PermissionEntity::new);
@@ -157,5 +231,13 @@ public class DataLoader implements CommandLineRunner {
         permission.setDescription("Allows " + action + " access on " + module);
         permission.setStatus("ACTIVE");
         permissionRepository.save(permission);
+    }
+
+    private Set<PermissionEntity> resolvePermissionsByName(List<String> permissionNames) {
+        return permissionNames.stream()
+                .map(permissionRepository::findByName)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(java.util.stream.Collectors.toSet());
     }
 }

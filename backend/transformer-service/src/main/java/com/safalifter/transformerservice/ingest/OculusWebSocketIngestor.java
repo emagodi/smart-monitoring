@@ -26,12 +26,12 @@ import java.util.concurrent.*;
 
 @Component
 @RequiredArgsConstructor
-public class PowerTelWebSocketIngestor implements ApplicationRunner {
+public class OculusWebSocketIngestor implements ApplicationRunner {
 
-    private static final Logger log = LoggerFactory.getLogger(PowerTelWebSocketIngestor.class);
+    private static final Logger log = LoggerFactory.getLogger(OculusWebSocketIngestor.class);
 
-    @Value("${powertel.ws.url:}")
-    private String powertelWsUrlProp;
+    @Value("${oculus.ws.url:${powertel.ws.url:}}")
+    private String oculusWsUrlProp;
 
     private final SensorRepository sensorRepository;
     private final SensorReadingRepository sensorReadingRepository;
@@ -42,7 +42,7 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${powertel.ws.log:false}")
+    @Value("${oculus.ws.log:${powertel.ws.log:false}}")
     private boolean logWs;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -50,8 +50,8 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
 
-        if (powertelWsUrlProp == null || powertelWsUrlProp.isBlank()) {
-            log.info("PowerTel WebSocket URL not configured");
+        if (oculusWsUrlProp == null || oculusWsUrlProp.isBlank()) {
+            log.info("Oculus WebSocket URL not configured");
             return;
         }
 
@@ -65,8 +65,8 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
             HttpClient client = HttpClient.newHttpClient();
 
             client.newWebSocketBuilder()
-                    .buildAsync(URI.create(powertelWsUrlProp), new Listener())
-                    .thenAccept(ws -> log.info("Connected to PowerTel WebSocket"))
+                    .buildAsync(URI.create(oculusWsUrlProp), new Listener())
+                    .thenAccept(ws -> log.info("Connected to Oculus WebSocket"))
                     .exceptionally(ex -> {
                         log.error("WebSocket connection failed", ex);
                         reconnect();
@@ -148,7 +148,7 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
             String dataHex = root.path("data").asText();
             int port = root.path("port").asInt(2);
 
-            Optional<Controller> controllerOpt = controllerRepository.findByDevEui(devEui);
+            Optional<Controller> controllerOpt = controllerRepository.findByDevEuiAndSupplierCode(devEui, "oculus");
 
             Controller controller = controllerOpt.orElseGet(() -> {
 
@@ -157,6 +157,8 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
                         .deviceId(devEui)
                         .name("Controller " + devEui)
                         .type("DRAGINO_LT22222")
+                        .supplierCode("oculus")
+                        .supplierName("Oculus")
                         .build();
 
                 return controllerRepository.save(c);
@@ -180,6 +182,7 @@ public class PowerTelWebSocketIngestor implements ApplicationRunner {
             ControllerReading reading = ControllerReading.builder()
                     .controllerId(controller.getId())
                     .rawPayload(payload)
+                    .decodedPayload(objectMapper.writeValueAsString(decoded))
                     .di1(di1)
                     .di2(di2)
                     .battery(battery)

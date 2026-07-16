@@ -29,6 +29,12 @@ public class Transformer {
     @Column(name = "depot_id")
     private Long depotId;
 
+    @Column(name = "supplier_code")
+    private String supplierCode;
+
+    @Column(name = "supplier_name")
+    private String supplierName;
+
     @Enumerated(EnumType.STRING)
     private TransformerType type;
 

@@ -19,7 +19,6 @@ public class TransformerRequest {
     private Integer capacity;
     @NotNull(message = "isActive is required")
     private Boolean isActive;
-    @NotNull(message = "depotId is required")
     private Long depotId;
     private String type;
     private BigDecimal lat;

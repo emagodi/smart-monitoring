@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -59,14 +58,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         final String userEmail = jwtService.extractUserName(jwt);
         if (!StringUtils.isEmpty(userEmail) && org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() == null) {
-            Role role;
+            UserAccessProfile accessProfile;
             try {
-                role = remoteUserService.getRoleByEmail(userEmail);
+                accessProfile = remoteUserService.getAccessByEmail(userEmail);
             } catch (Exception ex) {
-                role = Role.USER;
+                accessProfile = UserAccessProfile.builder().role(Role.USER).build();
             }
+            Role role = accessProfile != null && accessProfile.getRole() != null ? accessProfile.getRole() : Role.USER;
             List<SimpleGrantedAuthority> authorities = role != null ? role.getAuthorities() : List.of(new SimpleGrantedAuthority("ROLE_USER"));
-            User principal = new User(userEmail, "", authorities);
+            AuthenticatedUserPrincipal principal = new AuthenticatedUserPrincipal(
+                    userEmail,
+                    accessProfile != null ? accessProfile.getUserType() : null,
+                    accessProfile != null ? accessProfile.getSupplierId() : null,
+                    accessProfile != null ? accessProfile.getSupplierCode() : null,
+                    accessProfile != null ? accessProfile.getSupplierName() : null,
+                    authorities
+            );
             if (jwtService.isTokenValid(jwt, principal)) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         principal, null, authorities

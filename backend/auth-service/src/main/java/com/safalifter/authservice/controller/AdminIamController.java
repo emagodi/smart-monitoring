@@ -8,6 +8,7 @@ import com.safalifter.authservice.payload.request.UserTypeRequest;
 import com.safalifter.authservice.payload.response.AdminUserResponse;
 import com.safalifter.authservice.payload.response.PermissionResponse;
 import com.safalifter.authservice.payload.response.RoleResponse;
+import com.safalifter.authservice.payload.response.SupplierResponse;
 import com.safalifter.authservice.payload.response.UserTypeResponse;
 import com.safalifter.authservice.service.AdminIamService;
 import lombok.RequiredArgsConstructor;
@@ -132,6 +133,12 @@ public class AdminIamController {
     @PreAuthorize("@rbacAuthorizationService.hasPermission(authentication, 'usertypes.read')")
     public ResponseEntity<List<UserTypeResponse>> listUserTypes() {
         return ResponseEntity.ok(adminIamService.listUserTypes());
+    }
+
+    @GetMapping("/suppliers")
+    @PreAuthorize("@rbacAuthorizationService.hasPermission(authentication, 'users.read')")
+    public ResponseEntity<List<SupplierResponse>> listSuppliers() {
+        return ResponseEntity.ok(adminIamService.listSuppliers());
     }
 
     @PostMapping("/user-types")

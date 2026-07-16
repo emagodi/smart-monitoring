@@ -12,7 +12,8 @@ interface DepotOption { id: number; name: string }
 export default function EditTransformer() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user, hasPermission } = useAuth();
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   
   const [depots, setDepots] = useState<DepotOption[]>([]);
   const [loadingDepots, setLoadingDepots] = useState(false);
@@ -96,14 +97,20 @@ export default function EditTransformer() {
 
   useEffect(() => {
     if (token && id) {
-      fetchDepots().then(() => fetchTransformer());
+      const load = async () => {
+        if (!isSupplierUser && hasPermission('depots.read')) {
+          await fetchDepots();
+        }
+        await fetchTransformer();
+      };
+      load();
     }
-  }, [token, id, fetchDepots, fetchTransformer]);
+  }, [token, id, fetchDepots, fetchTransformer, hasPermission, isSupplierUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nameInput.trim()) { setError('Name is required'); return; }
-    if (!depotInput) { setError('Depot is required'); return; }
+    if (!isSupplierUser && !depotInput) { setError('Depot is required'); return; }
 
     try {
       setSaving(true);
@@ -113,7 +120,7 @@ export default function EditTransformer() {
         name: nameInput,
         capacity: capacityInput ? Number(capacityInput) : undefined,
         isActive: isActiveInput,
-        depotId: Number(depotInput),
+        depotId: isSupplierUser ? null : Number(depotInput),
         lat: latInput ? Number(latInput) : undefined,
         lng: lngInput ? Number(lngInput) : undefined
       };
@@ -175,6 +182,7 @@ export default function EditTransformer() {
               </div>
 
               {/* Depot */}
+              {!isSupplierUser && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
                   Depot <span className="text-red-500">*</span>
@@ -190,6 +198,7 @@ export default function EditTransformer() {
                   />
                 )}
               </div>
+              )}
 
               {/* Capacity */}
               <div>

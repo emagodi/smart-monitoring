@@ -47,6 +47,15 @@ public class AuthenticationResponse {
     @JsonProperty("depot_id")
     private Long depotId;
 
+    @JsonProperty("supplier_id")
+    private Long supplierId;
+
+    @JsonProperty("supplier_code")
+    private String supplierCode;
+
+    @JsonProperty("supplier_name")
+    private String supplierName;
+
     private List<String> roles;
 
     private List<String> permissions;

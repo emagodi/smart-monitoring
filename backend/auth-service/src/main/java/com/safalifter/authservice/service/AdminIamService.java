@@ -8,6 +8,7 @@ import com.safalifter.authservice.payload.request.UserTypeRequest;
 import com.safalifter.authservice.payload.response.AdminUserResponse;
 import com.safalifter.authservice.payload.response.PermissionResponse;
 import com.safalifter.authservice.payload.response.RoleResponse;
+import com.safalifter.authservice.payload.response.SupplierResponse;
 import com.safalifter.authservice.payload.response.UserTypeResponse;
 
 import java.util.List;
@@ -35,4 +36,6 @@ public interface AdminIamService {
     UserTypeResponse createUserType(UserTypeRequest request);
     UserTypeResponse updateUserType(Long userTypeId, UserTypeRequest request);
     void deleteUserType(Long userTypeId);
+
+    List<SupplierResponse> listSuppliers();
 }
