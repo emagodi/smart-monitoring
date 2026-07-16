@@ -32,7 +32,8 @@ const normalizeList = (payload: unknown): any[] => {
 export default function EditController() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   
   const [controller, setController] = useState<Controller | null>(null);
   const [transformers, setTransformers] = useState<TransformerOption[]>([]);
@@ -54,9 +55,13 @@ export default function EditController() {
       setError(null);
       
       // Fetch transformers
-      const tRes = await axios.get<any>(`${API_BASE_URL}/api/v1/transformers`, { headers });
+      const tRes = await axios.get<any>(`${API_BASE_URL}/api/v1/transformers/assignment-options`, { headers });
       const tArr = normalizeList(tRes.data);
-      setTransformers(tArr.map((t) => ({ id: t.id, name: t.name })));
+      setTransformers(
+        tArr
+          .map((t) => ({ id: t.id, name: t.name }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
 
       // Fetch controller details
       try {
@@ -185,7 +190,7 @@ export default function EditController() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>
-                    Select a transformer to link this controller. 
+                    {isSupplierUser ? 'Select any transformer in the assignment catalogue to link this controller.' : 'Select a transformer to link this controller.'}
                     <span className="font-semibold text-gray-700 dark:text-gray-300 ml-1">Leave empty to keep unassigned.</span>
                 </span>
                 </div>

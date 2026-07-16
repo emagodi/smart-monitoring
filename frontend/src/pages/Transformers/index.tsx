@@ -36,6 +36,8 @@ interface Transformer {
   isActive?: boolean;
   depotId?: number;
   depot?: { id: number; name: string };
+  supplierCode?: string;
+  supplierName?: string;
   lat?: number;
   lng?: number;
   sensors?: Sensor[];
@@ -62,11 +64,8 @@ interface ControllerReading {
   id: number;
   controllerId: number;
   rawPayload: string;
-  di1: boolean;
-  di2: boolean;
-  battery: number;
-  rssi: number;
-  snr: number;
+  decodedPayload?: string;
+  attributes: Record<string, any>;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,16 +83,17 @@ interface Controller {
 type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'READINGS' | 'CONTROLLERS' | 'CONTROLLER_READINGS';
 
 export default function TransformersIndex() {
-  const { token, hasPermission } = useAuth();
+  const { token, hasPermission, user } = useAuth();
   const navigate = useNavigate();
-  const canCreateTransformers = hasPermission('transformers.create');
-  const canUpdateTransformers = hasPermission('transformers.update');
-  const canDeleteTransformers = hasPermission('transformers.delete');
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
+  const canCreateTransformers = !isSupplierUser && hasPermission('transformers.create');
+  const canUpdateTransformers = !isSupplierUser && hasPermission('transformers.update');
+  const canDeleteTransformers = !isSupplierUser && hasPermission('transformers.delete');
   const canReadSensors = hasPermission('sensors.read');
   const canReadControllers = hasPermission('controllers.read');
   
   // --- Navigation State ---
-  const [viewMode, setViewMode] = useState<ViewMode>('REGIONS');
+  const [viewMode, setViewMode] = useState<ViewMode>(isSupplierUser ? 'TRANSFORMERS' : 'REGIONS');
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedDepot, setSelectedDepot] = useState<Depot | null>(null);
@@ -204,10 +204,13 @@ export default function TransformersIndex() {
     }
   }, [API_BASE_URL, headers]);
 
-  const fetchTransformers = useCallback(async (depotId: number) => {
+  const fetchTransformers = useCallback(async (depotId?: number | null) => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE_URL}/api/v1/transformers/depot/${depotId}`, { headers });
+      const url = typeof depotId === 'number'
+        ? `${API_BASE_URL}/api/v1/transformers/depot/${depotId}`
+        : `${API_BASE_URL}/api/v1/transformers`;
+      const res = await axios.get(url, { headers });
       const list = normalizeList(res.data);
       setTransformers(list);
       setTotalElements(list.length);
@@ -321,8 +324,8 @@ export default function TransformersIndex() {
       fetchDistricts(selectedRegion.id);
     } else if (viewMode === 'DEPOTS' && selectedDistrict) {
       fetchDepots(selectedDistrict.id);
-    } else if (viewMode === 'TRANSFORMERS' && selectedDepot) {
-      fetchTransformers(selectedDepot.id);
+    } else if (viewMode === 'TRANSFORMERS' && (selectedDepot || isSupplierUser)) {
+      fetchTransformers(selectedDepot?.id ?? null);
     } else if (viewMode === 'SENSORS' && selectedTransformer) {
       fetchSensors(selectedTransformer.id);
     } else if (viewMode === 'READINGS' && selectedSensor) {
@@ -332,7 +335,16 @@ export default function TransformersIndex() {
     } else if (viewMode === 'CONTROLLER_READINGS' && selectedController) {
       fetchControllerReadings(selectedController.id);
     }
-  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedController, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchReadings, fetchControllers, fetchControllerReadings]);
+  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedController, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchReadings, fetchControllers, fetchControllerReadings, isSupplierUser]);
+
+  useEffect(() => {
+    if (isSupplierUser) {
+      setViewMode('TRANSFORMERS');
+      setSelectedRegion(null);
+      setSelectedDistrict(null);
+      setSelectedDepot(null);
+    }
+  }, [isSupplierUser]);
 
   // --- Event Handlers ---
 
@@ -390,6 +402,9 @@ export default function TransformersIndex() {
   };
 
   const handleBack = () => {
+    if (isSupplierUser) {
+      return;
+    }
     setPage(1);
     setSearch('');
     if (viewMode === 'READINGS') {
@@ -417,6 +432,10 @@ export default function TransformersIndex() {
   };
 
   const navigateTo = (mode: ViewMode) => {
+      if (isSupplierUser && mode !== 'TRANSFORMERS' && mode !== 'SENSORS' && mode !== 'CONTROLLERS' && mode !== 'READINGS' && mode !== 'CONTROLLER_READINGS') {
+          setViewMode('TRANSFORMERS');
+          return;
+      }
       setPage(1);
       setSearch('');
       if (mode === 'REGIONS') {
@@ -480,6 +499,41 @@ export default function TransformersIndex() {
   // --- Render Helpers ---
 
   const renderBreadcrumbs = () => (
+      isSupplierUser ? (
+      <nav className="flex items-center text-sm text-gray-500 mb-6 overflow-x-auto whitespace-nowrap">
+          <span className="font-bold text-brand-600">{user?.supplierName || 'Supplier'} Transformers</span>
+          {selectedTransformer && ['SENSORS', 'CONTROLLERS'].includes(viewMode) && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-medium text-gray-700">{selectedTransformer.name}</span>
+              </>
+          )}
+          {viewMode === 'SENSORS' && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Sensors</span>
+              </>
+          )}
+          {viewMode === 'CONTROLLERS' && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Controllers</span>
+              </>
+          )}
+          {selectedSensor && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Readings</span>
+              </>
+          )}
+          {selectedController && (
+              <>
+                  <ChevronRight className="h-4 w-4 mx-2" />
+                  <span className="font-bold text-brand-600">Controller Readings</span>
+              </>
+          )}
+      </nav>
+      ) : (
       <nav className="flex items-center text-sm text-gray-500 mb-6 overflow-x-auto whitespace-nowrap">
           <button onClick={() => navigateTo('REGIONS')} className={`hover:text-brand-600 ${viewMode === 'REGIONS' ? 'font-bold text-brand-600' : ''}`}>
               Regions
@@ -545,6 +599,7 @@ export default function TransformersIndex() {
               </>
           )}
       </nav>
+      )
   );
 
   const filteredList = <T extends { name: string }>(list: T[]) => {
@@ -565,7 +620,9 @@ export default function TransformersIndex() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Transformers</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage electrical infrastructure hierarchy</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {isSupplierUser ? 'View transformers assigned to your organisation and use them for controller or sensor assignment' : 'Manage electrical infrastructure hierarchy'}
+          </p>
         </div>
         {viewMode === 'TRANSFORMERS' && canCreateTransformers && (
             <Button onClick={handleAddTransformer} icon={<Plus className="h-4 w-4" />}>
@@ -759,7 +816,7 @@ export default function TransformersIndex() {
                               </tr>
                           ))}
                           {transformers.length === 0 && (
-                              <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">No transformers found in {selectedDepot?.name}.</td></tr>
+                              <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500">{isSupplierUser ? 'No transformers found for your organisation.' : `No transformers found in ${selectedDepot?.name}.`}</td></tr>
                           )}
                       </tbody>
                   </table>
@@ -817,9 +874,7 @@ export default function TransformersIndex() {
                                       {new Date(r.createdAt).toLocaleString()}
                                   </td>
                                   <td className="px-6 py-4 text-sm text-gray-500">
-                                      <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-100 overflow-x-auto whitespace-pre-wrap">
-                                          {JSON.stringify(r.attributes || {}, null, 2)}
-                                      </pre>
+                                          <AttributeGrid attributes={r.attributes || {}} />
                                   </td>
                               </tr>
                           ))}
@@ -1006,11 +1061,7 @@ export default function TransformersIndex() {
                           <thead className="bg-gray-50">
                               <tr>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DI1</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DI2</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Battery</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">RSSI</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SNR</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Decoded Metrics</th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Raw Payload</th>
                               </tr>
                           </thead>
@@ -1020,16 +1071,14 @@ export default function TransformersIndex() {
                                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                           {new Date(r.createdAt).toLocaleString()}
                                       </td>
-                                      <td className="px-6 py-4 text-sm text-gray-500">{r.di1 ? 'True' : 'False'}</td>
-                                      <td className="px-6 py-4 text-sm text-gray-500">{r.di2 ? 'True' : 'False'}</td>
-                                      <td className="px-6 py-4 text-sm text-gray-500">{r.battery}</td>
-                                      <td className="px-6 py-4 text-sm text-gray-500">{r.rssi}</td>
-                                      <td className="px-6 py-4 text-sm text-gray-500">{r.snr}</td>
-                                      <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={r.rawPayload}>{r.rawPayload}</td>
+                                      <td className="px-6 py-4 text-sm text-gray-500 min-w-[360px]">
+                                          <AttributeGrid attributes={r.attributes || {}} />
+                                      </td>
+                                      <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={r.rawPayload}>{r.rawPayload || '—'}</td>
                                   </tr>
                               ))}
                               {controllerReadings.length === 0 && (
-                                  <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">No readings found.</td></tr>
+                                  <tr><td colSpan={3} className="px-6 py-12 text-center text-gray-500">No readings found.</td></tr>
                               )}
                           </tbody>
                       </table>
@@ -1143,10 +1192,17 @@ export default function TransformersIndex() {
                           <label className="block text-xs font-medium text-gray-500 uppercase">Capacity</label>
                           <p className="mt-1 text-sm text-gray-900">{activeTransformer.capacity ? `${activeTransformer.capacity} kVA` : '—'}</p>
                       </div>
+                      {!isSupplierUser ? (
                       <div>
                           <label className="block text-xs font-medium text-gray-500 uppercase">Depot</label>
                           <p className="mt-1 text-sm text-gray-900">{activeTransformer.depot?.name ?? '—'}</p>
                       </div>
+                      ) : (
+                      <div>
+                          <label className="block text-xs font-medium text-gray-500 uppercase">Organisation</label>
+                          <p className="mt-1 text-sm text-gray-900">{activeTransformer.supplierName ?? user?.supplierName ?? '—'}</p>
+                      </div>
+                      )}
                       <div>
                           <label className="block text-xs font-medium text-gray-500 uppercase">Coordinates</label>
                           <p className="mt-1 text-sm text-gray-900">
@@ -1163,4 +1219,48 @@ export default function TransformersIndex() {
 
     </div>
   );
+}
+
+function AttributeGrid({ attributes }: { attributes: Record<string, any> }) {
+  const entries = flattenAttributes(attributes);
+  if (entries.length === 0) {
+    return <span className="text-sm text-gray-400">No decoded metrics</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {entries.map(([key, value]) => (
+        <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{key}</div>
+          <div className="mt-1 text-sm font-medium text-gray-900">{formatAttributeValue(value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function flattenAttributes(input: Record<string, any>, prefix = ''): Array<[string, any]> {
+  const entries: Array<[string, any]> = [];
+  Object.entries(input || {}).forEach(([key, value]) => {
+    const nextKey = prefix ? `${prefix}.${key}` : key;
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      entries.push(...flattenAttributes(value as Record<string, any>, nextKey));
+      return;
+    }
+    entries.push([nextKey, value]);
+  });
+  return entries;
+}
+
+function formatAttributeValue(value: any) {
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'True' : 'False';
+  }
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  return String(value);
 }

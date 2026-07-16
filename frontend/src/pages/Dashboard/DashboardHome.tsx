@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Activity, MapPinned, ShieldCheck, Warehouse, Zap } from 'lucide-react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useUserAccess } from '../../hooks/useUserAccess';
 import { useRealtimeUpdates } from '../../services/realtimeService';
@@ -242,7 +243,17 @@ export default function DashboardHome() {
               <h3 className="text-lg font-semibold text-gray-900">Latest Alerts</h3>
               <p className="text-sm text-gray-500">Most recent monitoring events</p>
             </div>
-            <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">{stats.totalAlerts} total</span>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">{stats.totalAlerts} total</span>
+              {hasPermission('alerts.read') && (
+                <Link
+                  to="/alerts"
+                  className="rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 transition hover:bg-brand-100"
+                >
+                  View All
+                </Link>
+              )}
+            </div>
           </div>
 
           {recentAlerts.length === 0 ? (

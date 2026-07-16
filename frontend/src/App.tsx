@@ -24,10 +24,12 @@ import NewControllersIndex from "./pages/NewControllers";
 import EditController from "./pages/NewControllers/EditController";
 import CreateTransformer from "./pages/Transformers/CreateTransformer";
 import EditTransformer from "./pages/Transformers/EditTransformer";
+import AlertsIndex from "./pages/Alerts";
 import SiteIndex from "./pages/Site";
 
 const AppRoutes = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
   return isAuthenticated ? (
     <Routes>
       <Route
@@ -61,7 +63,7 @@ const AppRoutes = () => {
           path="regions"
           element={
             <ProtectedRoute permission="regions.read">
-              <RegionsIndex />
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <RegionsIndex />}
             </ProtectedRoute>
           }
         />
@@ -69,7 +71,7 @@ const AppRoutes = () => {
           path="districts"
           element={
             <ProtectedRoute permission="districts.read">
-              <DistrictsIndex />
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <DistrictsIndex />}
             </ProtectedRoute>
           }
         />
@@ -77,7 +79,7 @@ const AppRoutes = () => {
           path="depots"
           element={
             <ProtectedRoute permission="depots.read">
-              <DepotsIndex />
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <DepotsIndex />}
             </ProtectedRoute>
           }
         />
@@ -92,7 +94,7 @@ const AppRoutes = () => {
         <Route
           path="transformers/new"
           element={
-            <ProtectedRoute permission="transformers.create">
+            <ProtectedRoute permission="transformers.create" disallowSupplier>
               <CreateTransformer />
             </ProtectedRoute>
           }
@@ -100,7 +102,7 @@ const AppRoutes = () => {
         <Route
           path="transformers/:id/edit"
           element={
-            <ProtectedRoute permission="transformers.update">
+            <ProtectedRoute permission="transformers.update" disallowSupplier>
               <EditTransformer />
             </ProtectedRoute>
           }
@@ -130,6 +132,14 @@ const AppRoutes = () => {
           }
         />
         <Route
+          path="alerts"
+          element={
+            <ProtectedRoute permission="alerts.read">
+              <AlertsIndex />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="sites"
           element={
             <ProtectedRoute permission="sites.read">
@@ -150,7 +160,7 @@ const AppRoutes = () => {
           path="users"
           element={
             <ProtectedRoute permission="users.read">
-                <Users />
+                {isSupplierUser ? <Navigate to="/dashboard" replace /> : <Users />}
             </ProtectedRoute>
           }
         />
@@ -158,7 +168,7 @@ const AppRoutes = () => {
           path="roles"
           element={
             <ProtectedRoute permission="roles.read">
-              <RolesPage />
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <RolesPage />}
             </ProtectedRoute>
           }
         />
@@ -166,7 +176,7 @@ const AppRoutes = () => {
           path="permissions"
           element={
             <ProtectedRoute permission="permissions.read">
-              <PermissionsPage />
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <PermissionsPage />}
             </ProtectedRoute>
           }
         />
@@ -174,7 +184,7 @@ const AppRoutes = () => {
           path="user-types"
           element={
             <ProtectedRoute permission="usertypes.read">
-              <UserTypesPage />
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <UserTypesPage />}
             </ProtectedRoute>
           }
         />

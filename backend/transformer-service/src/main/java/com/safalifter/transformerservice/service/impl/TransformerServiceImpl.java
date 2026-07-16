@@ -33,7 +33,9 @@ public class TransformerServiceImpl implements TransformerService {
 
     @Override
     public TransformerResponse create(TransformerRequest request) {
+        forbidSupplierCrud();
         String supplierCode = accessScopeService.getCurrentSupplierCode();
+        TransformerType transformerType = resolveTransformerType(request.getType());
         if (supplierCode != null) {
             transformerRepository.findBySupplierCodeAndName(supplierCode, request.getName()).ifPresent(t -> {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Transformer already exists for supplier");
@@ -50,7 +52,7 @@ public class TransformerServiceImpl implements TransformerService {
                 .depotId(request.getDepotId())
                 .supplierCode(supplierCode)
                 .supplierName(accessScopeService.getCurrentSupplierName())
-                .type(request.getType() != null ? TransformerType.valueOf(request.getType()) : null)
+                .type(transformerType)
                 .lat(request.getLat())
                 .lng(request.getLng())
                 .build();
@@ -70,6 +72,11 @@ public class TransformerServiceImpl implements TransformerService {
     }
 
     @Override
+    public List<TransformerResponse> getAssignmentOptions() {
+        return transformerRepository.findAll().stream().map(this::toResponse).toList();
+    }
+
+    @Override
     public List<TransformerResponse> listByDepotId(Long depotId) {
         String supplierCode = accessScopeService.getCurrentSupplierCode();
         List<Transformer> transformers = supplierCode != null
@@ -80,8 +87,10 @@ public class TransformerServiceImpl implements TransformerService {
 
     @Override
     public TransformerResponse update(Long id, TransformerRequest request) {
+        forbidSupplierCrud();
         Transformer transformer = findTransformerOrThrow(id);
         String supplierCode = accessScopeService.getCurrentSupplierCode();
+        TransformerType transformerType = resolveTransformerType(request.getType());
         if (supplierCode != null) {
             transformerRepository.findBySupplierCodeAndName(supplierCode, request.getName()).ifPresent(existing -> {
                 if (!existing.getId().equals(id)) {
@@ -103,9 +112,7 @@ public class TransformerServiceImpl implements TransformerService {
             transformer.setSupplierCode(supplierCode);
             transformer.setSupplierName(accessScopeService.getCurrentSupplierName());
         }
-        if (request.getType() != null && !request.getType().isEmpty()) {
-            transformer.setType(TransformerType.valueOf(request.getType()));
-        }
+        transformer.setType(transformerType);
         transformer.setLat(request.getLat());
         transformer.setLng(request.getLng());
         Transformer saved = transformerRepository.save(transformer);
@@ -114,6 +121,7 @@ public class TransformerServiceImpl implements TransformerService {
 
     @Override
     public void delete(Long id) {
+        forbidSupplierCrud();
         Transformer transformer = findTransformerOrThrow(id);
         transformerRepository.delete(transformer);
     }
@@ -129,6 +137,20 @@ public class TransformerServiceImpl implements TransformerService {
                 ? transformerRepository.findByIdAndSupplierCode(id, supplierCode)
                 : transformerRepository.findById(id))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
+    }
+
+    private void forbidSupplierCrud() {
+        if (accessScopeService.isSupplierScoped()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Supplier users cannot create, update, or delete transformers");
+        }
+    }
+
+    private TransformerType resolveTransformerType(String typeValue) {
+        TransformerType parsed = TransformerType.fromValue(typeValue);
+        if (typeValue != null && !typeValue.isBlank() && parsed == null) {
+            log.warn("Ignoring unsupported transformer type value '{}'", typeValue);
+        }
+        return parsed;
     }
 
     private TransformerResponse toResponse(Transformer transformer) {

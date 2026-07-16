@@ -174,6 +174,17 @@ export default function Users() {
     }
   }, [formState.supplierId, isSupplierUserType]);
 
+  useEffect(() => {
+    if (isSupplierUserType && (formState.region || formState.district || formState.depot)) {
+      setFormState((current) => ({
+        ...current,
+        region: "",
+        district: "",
+        depot: "",
+      }));
+    }
+  }, [formState.depot, formState.district, formState.region, isSupplierUserType]);
+
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     return users.filter((user) => {
@@ -716,11 +727,13 @@ export default function Users() {
               <ShieldCheck className="h-4 w-4 text-brand-500" />
               Scope & Location
             </header>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field label="Region" value={formState.region} onChange={(value) => updateForm("region", value)} />
-              <Field label="District" value={formState.district} onChange={(value) => updateForm("district", value)} />
-              <Field label="Depot" value={formState.depot} onChange={(value) => updateForm("depot", value)} />
-            </div>
+              {!isSupplierUserType ? (
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Field label="Region" value={formState.region} onChange={(value) => updateForm("region", value)} />
+                  <Field label="District" value={formState.district} onChange={(value) => updateForm("district", value)} />
+                  <Field label="Depot" value={formState.depot} onChange={(value) => updateForm("depot", value)} />
+                </div>
+              ) : null}
           </section>
 
           <div className="flex justify-end gap-3">
@@ -749,9 +762,9 @@ export default function Users() {
               <InfoItem label="User Type" value={activeUser.userType || "Unassigned"} />
               <InfoItem label="Organisation" value={activeUser.supplierName || "Internal"} />
               <InfoItem label="Status" value={activeUser.status || "ACTIVE"} />
-              <InfoItem label="Region" value={activeUser.region || "N/A"} />
-              <InfoItem label="District" value={activeUser.district || "N/A"} />
-              <InfoItem label="Depot" value={activeUser.depot || "N/A"} />
+              {activeUser.userType !== "Supplier" ? <InfoItem label="Region" value={activeUser.region || "N/A"} /> : null}
+              {activeUser.userType !== "Supplier" ? <InfoItem label="District" value={activeUser.district || "N/A"} /> : null}
+              {activeUser.userType !== "Supplier" ? <InfoItem label="Depot" value={activeUser.depot || "N/A"} /> : null}
               <InfoItem label="Last Login" value={formatDate(activeUser.lastLoginAt)} />
             </div>
             <div className="space-y-2">

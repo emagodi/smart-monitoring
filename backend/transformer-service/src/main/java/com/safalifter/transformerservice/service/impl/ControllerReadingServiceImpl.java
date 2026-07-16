@@ -4,11 +4,14 @@ import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.ControllerReading;
 import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.payload.response.ControllerReadingDetailResponse;
 import com.safalifter.transformerservice.repository.ControllerReadingRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.service.ControllerReadingService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -17,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -28,6 +33,7 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     private final ControllerRepository controllerRepository;
     private final TransformerRepository transformerRepository;
     private final AlertService alertService;
+    private final ObjectMapper objectMapper;
 
     @Override
     public ControllerReading save(ControllerReading reading) {
@@ -87,5 +93,69 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     @Override
     public Page<ControllerReading> getByControllerIdAndDateRange(Long controllerId, java.time.LocalDateTime start, java.time.LocalDateTime end, Pageable pageable) {
         return repository.findByControllerIdAndCreatedAtBetween(controllerId, start, end, pageable);
+    }
+
+    @Override
+    public Page<ControllerReadingDetailResponse> getDetailedByControllerId(Long controllerId, Pageable pageable) {
+        return repository.findByControllerId(controllerId, pageable).map(this::toDetailedResponse);
+    }
+
+    @Override
+    public Page<ControllerReadingDetailResponse> getDetailedByControllerIdAndDateRange(Long controllerId, java.time.LocalDateTime start, java.time.LocalDateTime end, Pageable pageable) {
+        return repository.findByControllerIdAndCreatedAtBetween(controllerId, start, end, pageable).map(this::toDetailedResponse);
+    }
+
+    private ControllerReadingDetailResponse toDetailedResponse(ControllerReading reading) {
+        return ControllerReadingDetailResponse.builder()
+                .id(reading.getId())
+                .controllerId(reading.getControllerId())
+                .createdAt(reading.getCreatedAt() != null ? reading.getCreatedAt().toString() : null)
+                .updatedAt(reading.getUpdatedAt() != null ? reading.getUpdatedAt().toString() : null)
+                .rawPayload(reading.getRawPayload())
+                .decodedPayload(reading.getDecodedPayload())
+                .attributes(buildAttributes(reading))
+                .build();
+    }
+
+    private Map<String, Object> buildAttributes(ControllerReading reading) {
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        mergeIfPresent(attrs, parseJson(reading.getDecodedPayload()));
+        if (attrs.isEmpty()) {
+            mergeIfPresent(attrs, parseJson(reading.getRawPayload()));
+        }
+        if (reading.getDi1() != null) {
+            attrs.putIfAbsent("di1", reading.getDi1());
+        }
+        if (reading.getDi2() != null) {
+            attrs.putIfAbsent("di2", reading.getDi2());
+        }
+        if (reading.getBattery() != null) {
+            attrs.putIfAbsent("battery", reading.getBattery());
+        }
+        if (reading.getRssi() != null) {
+            attrs.putIfAbsent("rssi", reading.getRssi());
+        }
+        if (reading.getSnr() != null) {
+            attrs.putIfAbsent("snr", reading.getSnr());
+        }
+        return attrs;
+    }
+
+    private Map<String, Object> parseJson(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ignored) {
+            return Map.of();
+        }
+    }
+
+    private void mergeIfPresent(Map<String, Object> target, Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        source.forEach(target::putIfAbsent);
     }
 }

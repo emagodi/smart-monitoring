@@ -32,7 +32,8 @@ interface Sensor {
 }
 
 export default function SiteIndex() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   const [items, setItems] = useState<Transformer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +164,14 @@ export default function SiteIndex() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-800">Site Map</h2>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-800">Sites</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            {isSupplierUser
+              ? `Showing only locations where ${user?.supplierName || 'your organisation'} has assigned transformers.`
+              : 'Showing transformer locations across the monitored network.'}
+          </p>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-white p-4 shadow-sm">
@@ -192,6 +200,7 @@ export default function SiteIndex() {
                   <div className="font-medium">{t.name}</div>
                   <div>Capacity: {typeof t.capacity === 'number' ? t.capacity : '—'}</div>
                   <div>Status: {t.isActive ? 'Active' : 'Inactive'}</div>
+                  {isSupplierUser ? <div>Organisation: {user?.supplierName || 'Supplier'}</div> : null}
                   <div>Lat/Lng: {t.lat}, {t.lng}</div>
                   <div className="pt-2">
                     <button onClick={openDetails} className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">View details</button>
@@ -226,6 +235,12 @@ export default function SiteIndex() {
               <div className="text-xs text-gray-500">Depot</div>
               <div className="text-sm font-medium text-gray-900">{depotName || selected.depot?.name || '—'}</div>
             </div>
+            {isSupplierUser ? (
+            <div>
+              <div className="text-xs text-gray-500">Organisation</div>
+              <div className="text-sm font-medium text-gray-900">{user?.supplierName || 'Supplier'}</div>
+            </div>
+            ) : null}
             <div>
               <div className="text-xs text-gray-500">Status</div>
               <div className="text-sm font-medium text-gray-900">{selected.isActive ? 'Active' : 'Inactive'}</div>

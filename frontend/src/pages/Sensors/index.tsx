@@ -5,7 +5,7 @@ import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import Button from '../../components/ui/button/Button';
-import { Plus, X, Search, Filter, Loader2, Activity, Cpu, Radio, Router } from 'lucide-react';
+import { Plus, X, Search, Filter, Loader2, Activity, Cpu, Radio, Router, Link2, Save } from 'lucide-react';
 
 interface Sensor {
   id: number;
@@ -16,13 +16,16 @@ interface Sensor {
   transformerId?: number;
   transformer?: { id: number; name: string };
   sensor_reading?: Array<Record<string, any>>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface TransformerOption { id: number; name: string }
 const SENSOR_TYPES = ['temperature', 'contact', 'suspicious_tilt', 'motion', 'video', 'controller'] as const;
 
 export default function SensorsIndex() {
-  const { token, hasPermission } = useAuth();
+  const { token, hasPermission, user } = useAuth();
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   const [items, setItems] = useState<Sensor[]>([]);
   const [transformers, setTransformers] = useState<TransformerOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,10 @@ export default function SensorsIndex() {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showAssign, setShowAssign] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Sensor | null>(null);
 
   const [transformerFilter, setTransformerFilter] = useState<number | ''>('');
 
@@ -69,9 +76,13 @@ export default function SensorsIndex() {
 
   const fetchTransformerOptions = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers });
+      const res = await axios.get(`${API_BASE_URL}/api/v1/transformers/assignment-options`, { headers });
       const arr = Array.isArray(res.data) ? (res.data as TransformerOption[]) : ((res.data?.data as TransformerOption[]) ?? []);
-      setTransformers(arr.map((t) => ({ id: t.id, name: t.name })));
+      setTransformers(
+        arr
+          .map((t) => ({ id: t.id, name: t.name }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
     } catch {
       setTransformers([]);
     }
@@ -95,6 +106,8 @@ export default function SensorsIndex() {
         transformerId: s.transformerId ?? s.transformer_id,
         transformer: s.transformer,
         sensor_reading: Array.isArray(s.sensor_reading) ? s.sensor_reading : [],
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
       })) as Sensor[]);
     } catch {
       setError('Failed to fetch sensors');
@@ -219,6 +232,49 @@ export default function SensorsIndex() {
     setShowDelete(true);
   };
 
+  const openAssign = (row: Sensor) => {
+    setAssignTarget(row);
+    setTransformerInput(row.transformer?.id ?? row.transformerId ?? '');
+    setAssignError(null);
+    setShowAssign(true);
+  };
+
+  const submitAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignTarget) return;
+    try {
+      if (!transformerInput || typeof transformerInput !== 'number') {
+        setAssignError('Select a transformer for this sensor.');
+        return;
+      }
+      setAssigning(true);
+      setAssignError(null);
+      await axios.put(
+        `${API_BASE_URL}/api/v1/sensors/${assignTarget.id}`,
+        {
+          deviceId: assignTarget.deviceId,
+          devEui: assignTarget.devEui,
+          name: assignTarget.name,
+          type: assignTarget.type,
+          transformerId: transformerInput,
+        },
+        { headers }
+      );
+      setShowAssign(false);
+      setAssignTarget(null);
+      setTransformerInput('');
+      await fetchSensors();
+      await fetchTransformerOptions();
+      setNotice({ variant: 'success', title: 'Sensor assigned', message: 'The sensor assignment was updated successfully.' });
+      setTimeout(() => setNotice(null), 4000);
+    } catch (err: any) {
+      console.error(err);
+      setAssignError(err.response?.data?.message || 'Failed to assign sensor.');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!active) return;
     try {
@@ -271,7 +327,9 @@ export default function SensorsIndex() {
       <div className="flex justify-between items-center">
         <div>
            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sensors</h2>
-           <p className="mt-1 text-sm text-gray-500">Manage and monitor your IoT sensors.</p>
+           <p className="mt-1 text-sm text-gray-500">
+             {isSupplierUser ? 'Manage sensors and assign them to any transformer visible to your organisation.' : 'Manage and monitor your IoT sensors.'}
+           </p>
         </div>
         <div className="flex items-center gap-2">
           {canCreate ? <Button size="sm" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add Sensor</Button> : null}
@@ -390,6 +448,11 @@ export default function SensorsIndex() {
                           onView={() => openView(s)}
                           onEdit={canUpdate ? () => openEdit(s) : undefined}
                           onDelete={canDelete ? () => openDelete(s) : undefined}
+                          extras={canUpdate ? [{
+                            label: 'Assign To Transformer',
+                            onClick: () => openAssign(s),
+                            icon: <Link2 className="w-4 h-4" />
+                          }] : undefined}
                         />
                       </td>
                     </tr>
@@ -471,6 +534,53 @@ export default function SensorsIndex() {
         deleting={deleting} 
         error={deleteError} 
       />
+      <Modal isOpen={showAssign} onClose={() => setShowAssign(false)} className="max-w-xl w-full p-0 overflow-hidden rounded-2xl bg-white shadow-xl transition-all" backdropBlur={true}>
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-6">
+          <h3 className="text-xl font-bold text-white">Assign To Transformer</h3>
+          <p className="mt-1 text-sm text-blue-100">Link this sensor to a transformer visible to your organisation.</p>
+        </div>
+        <form onSubmit={submitAssign} className="space-y-6 p-6">
+          {assignError ? <Alert variant="error" title="Assignment" message={assignError} /> : null}
+          <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+            <AssignmentInfo label="Sensor" value={assignTarget?.name || '—'} />
+            <AssignmentInfo label="Device ID" value={assignTarget?.deviceId || '—'} />
+            <AssignmentInfo
+              label="Current Assignment"
+              value={
+                transformers.find((item) => item.id === (assignTarget?.transformer?.id ?? assignTarget?.transformerId))?.name ||
+                assignTarget?.transformer?.name ||
+                'Unassigned'
+              }
+            />
+            <AssignmentInfo label="Last Updated" value={assignTarget?.updatedAt ? new Date(assignTarget.updatedAt).toLocaleString() : 'Not yet updated'} />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">Transformer</label>
+            <SearchableSelect options={transformers} value={transformerInput} onChange={setTransformerInput} placeholder="Select organisation transformer" />
+            <p className="mt-2 text-xs text-gray-500">
+              {isSupplierUser ? 'Only transformers visible to your organisation are listed here.' : 'Select the transformer that should own this sensor.'}
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
+            <Button type="button" variant="secondary" onClick={() => setShowAssign(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={assigning}>
+              {!assigning ? <Save className="w-4 h-4 mr-1" /> : null}
+              Save Assignment
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function AssignmentInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-gray-900">{value}</p>
     </div>
   );
 }
@@ -535,11 +645,6 @@ function SearchableSelect({ options, value, onChange, placeholder, compact }: { 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const selected = typeof value === 'number' ? options.find(o => o.id === value) : undefined;
-
-  useEffect(() => {
-    setQuery(selected ? selected.name : '');
-  }, [selected]);
-
   const filtered = options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
@@ -550,16 +655,33 @@ function SearchableSelect({ options, value, onChange, placeholder, compact }: { 
         </span>
         <input
           type="text"
-          value={query}
+          value={open ? query : (query || selected?.name || '')}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            if (!open && query === selected?.name) {
+              setQuery('');
+            }
+            setOpen(true);
+          }}
           placeholder={placeholder || 'Search…'}
           className={compact 
             ? "block w-full pl-9 pr-8 py-1.5 border-none bg-transparent text-sm font-medium focus:ring-0 placeholder-gray-400"
             : "mt-1 block w-full rounded-md border border-gray-300 bg-white pl-10 pr-8 py-2 shadow-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:text-sm hover:border-gray-400"
           }
         />
-        <button type="button" onClick={() => setOpen(v => !v)} className="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-gray-600">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(v => {
+              const next = !v;
+              if (next && query === selected?.name) {
+                setQuery('');
+              }
+              return next;
+            });
+          }}
+          className="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-gray-600"
+        >
            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.25 8.27a.75.75 0 01-.02-1.06z"/></svg>
         </button>
       </div>

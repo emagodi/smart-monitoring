@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Alert from '../../components/ui/alert/Alert';
 import Button from '../../components/ui/button/Button';
-import { Search, Loader2, Cpu, Settings } from 'lucide-react';
+import { Search, Loader2, Cpu, Settings, Link2, Save } from 'lucide-react';
+import { Modal } from '../../components/ui/modal';
+import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 
 interface Controller {
   id: number;
@@ -14,17 +16,31 @@ interface Controller {
   type: string;
   transformerId?: number;
   transformer?: { id: number; name: string };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface TransformerOption {
+  id: number;
+  name: string;
 }
 
 export default function NewControllersIndex() {
-  const { token, hasPermission } = useAuth();
+  const { token, hasPermission, user } = useAuth();
   const navigate = useNavigate();
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   const [items, setItems] = useState<Controller[]>([]);
+  const [transformers, setTransformers] = useState<TransformerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [active, setActive] = useState<Controller | null>(null);
+  const [showAssign, setShowAssign] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [transformerInput, setTransformerInput] = useState<number | ''>('');
   
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
@@ -58,13 +74,70 @@ export default function NewControllersIndex() {
     }
   }, [API_BASE_URL, headers]);
 
+  const fetchTransformers = useCallback(async () => {
+    try {
+      const res = await axios.get<any>(`${API_BASE_URL}/api/v1/transformers/assignment-options`, { headers });
+      const list = normalizeList(res.data);
+      setTransformers(
+        list
+          .map((item) => ({ id: item.id, name: item.name }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+    } catch (err) {
+      console.error('Transformer lookup error:', err);
+      setTransformers([]);
+    }
+  }, [API_BASE_URL, headers]);
+
   useEffect(() => {
     if (token) {
       fetchControllers();
+      fetchTransformers();
     } else {
        console.log('No token available');
     }
-  }, [token, fetchControllers]);
+  }, [token, fetchControllers, fetchTransformers]);
+
+  const openAssign = (controller: Controller) => {
+    setActive(controller);
+    setTransformerInput(controller.transformerId ?? '');
+    setAssignError(null);
+    setShowAssign(true);
+  };
+
+  const submitAssign = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!active) return;
+    if (!transformerInput || typeof transformerInput !== 'number') {
+      setAssignError('Select a transformer for this controller.');
+      return;
+    }
+    try {
+      setAssigning(true);
+      setAssignError(null);
+      await axios.put(
+        `${API_BASE_URL}/api/v1/controllers/${active.id}`,
+        {
+          deviceId: active.deviceId,
+          devEui: active.devEui,
+          type: active.type,
+          name: active.name,
+          transformerId: transformerInput,
+        },
+        { headers }
+      );
+      setShowAssign(false);
+      setActive(null);
+      setTransformerInput('');
+      await fetchControllers();
+      await fetchTransformers();
+    } catch (err: any) {
+      console.error(err);
+      setAssignError(err.response?.data?.message || 'Failed to assign controller.');
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const filtered = items.filter((c) => {
     const q = search.trim().toLowerCase();
@@ -103,7 +176,11 @@ export default function NewControllersIndex() {
              <Cpu className="w-8 h-8 text-brand-500" />
              New Controllers
            </h2>
-           <p className="mt-1 text-sm text-gray-500">Manage unassigned controllers and assign them to transformers.</p>
+           <p className="mt-1 text-sm text-gray-500">
+             {isSupplierUser
+               ? 'Assign unlinked controllers to any transformer visible to your organisation.'
+               : 'Manage unassigned controllers and assign them to transformers.'}
+           </p>
         </div>
       </div>
 
@@ -181,9 +258,14 @@ export default function NewControllersIndex() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                       {canUpdate ? (
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/new-controllers/${c.id}/edit`)}>
-                          <Settings className="w-4 h-4 mr-1" /> Edit / Assign
-                        </Button>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openAssign(c)}>
+                            <Link2 className="w-4 h-4 mr-1" /> Assign
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/new-controllers/${c.id}/edit`)}>
+                            <Settings className="w-4 h-4 mr-1" /> Edit
+                          </Button>
+                        </div>
                       ) : (
                         <span className="text-xs text-gray-400">No access</span>
                       )}
@@ -217,6 +299,54 @@ export default function NewControllersIndex() {
           </div>
         )}
       </div>
+
+      <Modal isOpen={showAssign} onClose={() => setShowAssign(false)} className="max-w-xl w-full p-0 overflow-hidden rounded-2xl bg-white shadow-xl" backdropBlur={true}>
+        <div className="bg-gradient-to-r from-brand-600 to-brand-800 px-6 py-6">
+          <h3 className="text-xl font-bold text-white">Assign To Transformer</h3>
+          <p className="mt-1 text-sm text-brand-100">Link this controller to a supplier-visible transformer.</p>
+        </div>
+        <form onSubmit={submitAssign} className="space-y-6 p-6">
+          {assignError ? <Alert variant="error" title="Assignment" message={assignError} /> : null}
+          <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+            <InfoCard label="Controller" value={active?.name || '—'} />
+            <InfoCard label="Device ID" value={active?.deviceId || '—'} />
+            <InfoCard label="Current Assignment" value={active?.transformer?.name || 'Unassigned'} />
+            <InfoCard label="Last Updated" value={active?.updatedAt ? new Date(active.updatedAt).toLocaleString() : 'Not yet updated'} />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">Transformer</label>
+            <SearchableSelect
+              options={transformers}
+              value={transformerInput}
+              onChange={(value) => setTransformerInput(value)}
+              placeholder={isSupplierUser ? 'Select organisation transformer...' : 'Select transformer...'}
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              {isSupplierUser
+                ? 'Only transformers visible to your organisation are listed here.'
+                : 'Select the transformer that should own this controller.'}
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
+            <Button type="button" variant="secondary" onClick={() => setShowAssign(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={assigning}>
+              {!assigning ? <Save className="w-4 h-4 mr-1" /> : null}
+              Save Assignment
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-gray-900">{value}</p>
     </div>
   );
 }

@@ -32,6 +32,7 @@ interface NavItem {
   path?: string;
   subItems?: { name: string; path: string }[];
   permission?: string;
+  hideForSupplier?: boolean;
 }
 
 interface NavGroup {
@@ -71,18 +72,21 @@ const navGroups: NavGroup[] = [
         name: "Regions",
         path: "/regions",
         permission: "regions.read",
+        hideForSupplier: true,
       },
       {
         icon: <MapPinned className="w-5 h-5" />,
         name: "Districts",
         path: "/districts",
         permission: "districts.read",
+        hideForSupplier: true,
       },
       {
         icon: <Warehouse className="w-5 h-5" />,
         name: "Depots",
         path: "/depots",
         permission: "depots.read",
+        hideForSupplier: true,
       },
       {
         icon: <Building className="w-5 h-5" />,
@@ -95,6 +99,12 @@ const navGroups: NavGroup[] = [
         name: "Transformers",
         path: "/transformers",
         permission: "transformers.read",
+      },
+      {
+        icon: <AlertTriangle className="w-5 h-5" />,
+        name: "Alerts",
+        path: "/alerts",
+        permission: "alerts.read",
       },
       {
         icon: <Activity className="w-5 h-5" />,
@@ -118,24 +128,28 @@ const navGroups: NavGroup[] = [
         name: "Users",
         path: "/users",
         permission: "users.read",
+        hideForSupplier: true,
       },
       {
         icon: <Shield className="w-5 h-5" />,
         name: "Roles",
         path: "/roles",
         permission: "roles.read",
+        hideForSupplier: true,
       },
       {
         icon: <KeySquare className="w-5 h-5" />,
         name: "Permissions",
         path: "/permissions",
         permission: "permissions.read",
+        hideForSupplier: true,
       },
       {
         icon: <Building className="w-5 h-5" />,
         name: "User Types",
         path: "/user-types",
         permission: "usertypes.read",
+        hideForSupplier: true,
       },
       {
         icon: <User className="w-5 h-5" />,
@@ -148,9 +162,10 @@ const navGroups: NavGroup[] = [
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen } = useSidebar();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const location = useLocation();
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
+  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -165,10 +180,12 @@ const AppSidebar: React.FC = () => {
     return navGroups
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => !item.permission || hasPermission(item.permission)),
+        items: group.items.filter(
+          (item) => (!item.permission || hasPermission(item.permission)) && !(isSupplierUser && item.hideForSupplier)
+        ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [hasPermission]);
+  }, [hasPermission, isSupplierUser]);
 
   return (
     <aside

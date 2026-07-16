@@ -71,6 +71,7 @@ public class DataLoader implements CommandLineRunner {
         moduleActions.put("transformers", List.of("create", "read", "update", "delete"));
         moduleActions.put("controllers", List.of("create", "read", "update", "delete"));
         moduleActions.put("sensors", List.of("create", "read", "update", "delete"));
+        moduleActions.put("alerts", List.of("create", "read", "update", "delete"));
         moduleActions.put("reports", List.of("read", "export"));
 
         moduleActions.forEach((module, actions) -> actions.forEach(action -> upsertPermission(module, action)));
@@ -112,15 +113,14 @@ public class DataLoader implements CommandLineRunner {
         supplierRole.setPermissions(resolvePermissionsByName(List.of(
                 "dashboard.read",
                 "dashboard.supplier",
-                "transformers.create",
                 "transformers.read",
-                "transformers.update",
                 "controllers.create",
                 "controllers.read",
                 "controllers.update",
                 "sensors.create",
                 "sensors.read",
                 "sensors.update",
+                "alerts.read",
                 "sites.read"
         )));
         roleRepository.save(supplierRole);

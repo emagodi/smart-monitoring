@@ -9,6 +9,7 @@ public interface TransformerService {
     TransformerResponse create(TransformerRequest request);
     TransformerResponse getById(Long id);
     List<TransformerResponse> getAll();
+    List<TransformerResponse> getAssignmentOptions();
     List<TransformerResponse> listByDepotId(Long depotId);
     TransformerResponse update(Long id, TransformerRequest request);
     void delete(Long id);

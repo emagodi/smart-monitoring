@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -25,12 +26,13 @@ import java.util.*;
 import java.util.concurrent.*;
 
 @Component
+@ConditionalOnProperty(prefix = "oculus.ws", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class OculusWebSocketIngestor implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(OculusWebSocketIngestor.class);
 
-    @Value("${oculus.ws.url:${powertel.ws.url:}}")
+    @Value("${oculus.ws.url:}")
     private String oculusWsUrlProp;
 
     private final SensorRepository sensorRepository;
@@ -42,7 +44,7 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${oculus.ws.log:${powertel.ws.log:false}}")
+    @Value("${oculus.ws.log:false}")
     private boolean logWs;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();

@@ -15,6 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 import com.safalifter.transformerservice.payload.request.ControllerRequest;
 import com.safalifter.transformerservice.payload.response.ControllerResponse;
+import com.safalifter.transformerservice.payload.response.ControllerReadingDetailResponse;
 import com.safalifter.transformerservice.entities.ControllerReading;
 import com.safalifter.transformerservice.service.ControllerReadingService;
 import com.safalifter.transformerservice.service.ControllerService;
@@ -72,17 +73,17 @@ public class ControllerController {
     @GetMapping("/{id}/readings")
     @Operation(summary = "List controller readings")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
-    public ResponseEntity<Page<ControllerReading>> getReadings(
+    public ResponseEntity<Page<ControllerReadingDetailResponse>> getReadings(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(controllerReadingService.getByControllerId(id, PageRequest.of(page, size, Sort.by("createdAt").descending())));
+        return ResponseEntity.ok(controllerReadingService.getDetailedByControllerId(id, PageRequest.of(page, size, Sort.by("createdAt").descending())));
     }
 
     @GetMapping("/{id}/readings/filter")
     @Operation(summary = "Filter controller readings")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
-    public ResponseEntity<Page<ControllerReading>> getReadingsFiltered(
+    public ResponseEntity<Page<ControllerReadingDetailResponse>> getReadingsFiltered(
             @PathVariable Long id,
             @RequestParam String start,
             @RequestParam String end,
@@ -92,14 +93,14 @@ public class ControllerController {
             // Parse ISO dates (ZonedDateTime handles 'Z' suffix, unlike LocalDateTime)
             java.time.ZonedDateTime zStart = java.time.ZonedDateTime.parse(start);
             java.time.ZonedDateTime zEnd = java.time.ZonedDateTime.parse(end);
-            return ResponseEntity.ok(controllerReadingService.getByControllerIdAndDateRange(id, zStart.toLocalDateTime(), zEnd.toLocalDateTime(), PageRequest.of(page, size, Sort.by("createdAt").descending())));
+            return ResponseEntity.ok(controllerReadingService.getDetailedByControllerIdAndDateRange(id, zStart.toLocalDateTime(), zEnd.toLocalDateTime(), PageRequest.of(page, size, Sort.by("createdAt").descending())));
         } catch (Exception e) {
             log.error("Invalid date format: " + e.getMessage());
             // Fallback to LocalDateTime parsing if ZonedDateTime fails (e.g. no timezone)
             try {
                 java.time.LocalDateTime lStart = java.time.LocalDateTime.parse(start);
                 java.time.LocalDateTime lEnd = java.time.LocalDateTime.parse(end);
-                return ResponseEntity.ok(controllerReadingService.getByControllerIdAndDateRange(id, lStart, lEnd, PageRequest.of(page, size, Sort.by("createdAt").descending())));
+                return ResponseEntity.ok(controllerReadingService.getDetailedByControllerIdAndDateRange(id, lStart, lEnd, PageRequest.of(page, size, Sort.by("createdAt").descending())));
             } catch (Exception ex) {
                 log.error("Fallback parsing failed", ex);
                 return ResponseEntity.badRequest().build();

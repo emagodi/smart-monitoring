@@ -46,6 +46,13 @@ public class TransformerController {
         return ResponseEntity.ok(transformerService.getAll());
     }
 
+    @GetMapping("/assignment-options")
+    @Operation(summary = "List transformers for controller or sensor assignment")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<List<TransformerResponse>> getAssignmentOptions() {
+        return ResponseEntity.ok(transformerService.getAssignmentOptions());
+    }
+
     @GetMapping("/depot/{depotId}")
     @Operation(summary = "List transformers by depot")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
