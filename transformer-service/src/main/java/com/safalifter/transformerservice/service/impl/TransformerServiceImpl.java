@@ -10,11 +10,9 @@ import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.payload.request.TransformerRequest;
 import com.safalifter.transformerservice.payload.response.SensorResponse;
 import com.safalifter.transformerservice.payload.response.ControllerResponse;
-import com.safalifter.transformerservice.payload.response.CameraResponse;
 import com.safalifter.transformerservice.payload.response.TransformerResponse;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
-import com.safalifter.transformerservice.repository.CameraRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.TransformerService;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +28,6 @@ public class TransformerServiceImpl implements TransformerService {
     private final TransformerRepository transformerRepository;
     private final SensorRepository sensorRepository;
     private final ControllerRepository controllerRepository;
-    private final CameraRepository cameraRepository;
 
     @Override
     public TransformerResponse create(TransformerRequest request) {
@@ -112,20 +109,6 @@ public class TransformerServiceImpl implements TransformerService {
                         .updatedAt(c.getUpdatedAt())
                         .build())
                 .toList();
-        List<CameraResponse> cameras = cameraRepository.findByTransformerId(transformer.getId()).stream()
-                .map(c -> CameraResponse.builder()
-                        .id(c.getId())
-                        .name(c.getName())
-                        .topic(c.getTopic())
-                        .transformerId(c.getTransformerId())
-                        .status(c.getStatus())
-                        .model(c.getModel())
-                        .wifiSsid(c.getWifiSsid())
-                        .macAddress(c.getMacAddress())
-                        .ipAddress(c.getIpAddress())
-                        .build())
-                .toList();
-        log.info("Transformer {}: Found {} cameras", transformer.getId(), cameras.size());
         return TransformerResponse.builder()
                 .id(transformer.getId())
                 .name(transformer.getName())
@@ -137,7 +120,6 @@ public class TransformerServiceImpl implements TransformerService {
                 .lng(transformer.getLng())
                 .sensors(sensors)
                 .controllers(controllers)
-                .cameras(cameras)
                 .build();
     }
 }

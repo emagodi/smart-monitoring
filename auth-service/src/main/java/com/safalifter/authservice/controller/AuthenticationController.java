@@ -31,6 +31,7 @@ import com.safalifter.authservice.payload.response.AuthenticationResponse;
 import com.safalifter.authservice.payload.response.RefreshTokenResponse;
 import com.safalifter.authservice.repository.UserRepository;
 import com.safalifter.authservice.service.AuthenticationService;
+import com.safalifter.authservice.service.RbacAuthorizationService;
 import com.safalifter.authservice.service.EmailService;
 import com.safalifter.authservice.service.JwtService;
 import com.safalifter.authservice.service.RefreshTokenService;
@@ -61,6 +62,7 @@ public class AuthenticationController {
     private final EmailService emailService;
 
     private final UserRepository userRepository;
+    private final RbacAuthorizationService rbacAuthorizationService;
 
     @PostMapping("/register")
     @Operation(summary = "Register New User",
@@ -219,7 +221,7 @@ public class AuthenticationController {
 
     @GetMapping("/users")
     @Operation(summary = "List all users")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN')")
+    @PreAuthorize("@rbacAuthorizationService.hasPermission(authentication, 'users.read')")
     public ResponseEntity<List<User>> listAllUsers() {
         List<User> users = userRepository.findAll();
         return ResponseEntity.ok(users);

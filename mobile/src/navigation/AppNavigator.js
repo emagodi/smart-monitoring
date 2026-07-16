@@ -8,7 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen'; // Transformers List
-import SimulationScreen from '../screens/SimulationScreen';
 import TransformerDetailsScreen from '../screens/TransformerDetailsScreen';
 import AlertsScreen from '../screens/AlertsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -18,12 +17,10 @@ import DistrictListScreen from '../screens/DistrictListScreen';
 import DepotListScreen from '../screens/DepotListScreen';
 import TransformerCrudScreen from '../screens/TransformerCrudScreen';
 import NewSensorsScreen from '../screens/NewSensorsScreen'; // Re-verified
-import CameraFormScreen from '../screens/CameraFormScreen';
 import RegionFormScreen from '../screens/RegionFormScreen';
 import DistrictFormScreen from '../screens/DistrictFormScreen';
 import DepotFormScreen from '../screens/DepotFormScreen';
 import TransformerFormScreen from '../screens/TransformerFormScreen';
-import CameraImagesScreen from '../screens/CameraImagesScreen';
 // import LogoutButton from '../components/LogoutButton';
 
 const Stack = createNativeStackNavigator();
@@ -125,8 +122,6 @@ const DrawerNavigator = () => {
             iconName = focused ? 'grid' : 'grid-outline';
           } else if (route.name === 'Alerts') {
             iconName = focused ? 'notifications' : 'notifications-outline';
-          } else if (route.name === 'Simulation') {
-            iconName = focused ? 'construct' : 'construct-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           } else if (route.name === 'Map') {
@@ -153,7 +148,6 @@ const DrawerNavigator = () => {
         options={{ headerShown: false }}
       />
       <Drawer.Screen name="Alerts" component={AlertsScreen} />
-      <Drawer.Screen name="Simulation" component={SimulationScreen} />
       <Drawer.Screen name="Map" component={MapScreen} />
       <Drawer.Screen name="Regions" component={RegionListScreen} />
       <Drawer.Screen name="Districts" component={DistrictListScreen} />
@@ -190,11 +184,6 @@ const AppNavigator = () => {
           <Stack.Screen name="MainApp" component={DrawerNavigator} />
         )}
         <Stack.Screen 
-          name="CameraForm" 
-          component={CameraFormScreen} 
-          options={{ headerShown: true, title: 'Camera' }}
-        />
-        <Stack.Screen 
           name="RegionForm" 
           component={RegionFormScreen} 
           options={{ headerShown: true, title: 'Region' }}
@@ -213,11 +202,6 @@ const AppNavigator = () => {
           name="TransformerForm" 
           component={TransformerFormScreen} 
           options={{ headerShown: true, title: 'Transformer' }}
-        />
-         <Stack.Screen 
-          name="CameraImages" 
-          component={CameraImagesScreen} 
-          options={{ headerShown: true, title: 'Camera Images' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

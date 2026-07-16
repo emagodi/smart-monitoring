@@ -18,7 +18,7 @@ interface Depot {
 interface DistrictOption { id: number; name: string; regionId?: number }
 
 export default function DepotsIndex() {
-  const { token } = useAuth();
+  const { token, hasPermission } = useAuth();
   const [depots, setDepots] = useState<Depot[]>([]);
   const [districts, setDistricts] = useState<DistrictOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +41,9 @@ export default function DepotsIndex() {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
+  const canCreate = hasPermission('depots.create');
+  const canUpdate = hasPermission('depots.update');
+  const canDelete = hasPermission('depots.delete');
 
   const normalizeList = (payload: unknown): Depot[] => {
     if (Array.isArray(payload)) return payload as Depot[];
@@ -225,7 +228,7 @@ export default function DepotsIndex() {
         <h2 className="text-xl font-semibold text-black dark:text-white">Depots</h2>
         <div className="flex items-center gap-2">
           {/* <button onClick={fetchDepots} className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300">Refresh</button> */}
-          <Button size="xs" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add Depot</Button>
+          {canCreate ? <Button size="xs" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add Depot</Button> : null}
         </div>
       </div>
 
@@ -311,7 +314,7 @@ export default function DepotsIndex() {
                     No depots found.
                     <div className="mt-4 flex items-center justify-center gap-2">
                       <button onClick={fetchDepots} className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300">Refresh</button>
-                      <button onClick={openCreate} className="rounded bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90">Add Depot</button>
+                      {canCreate ? <button onClick={openCreate} className="rounded bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90">Add Depot</button> : null}
                     </div>
                   </td>
                 </tr>
@@ -327,8 +330,8 @@ export default function DepotsIndex() {
                         <ActionMenu
                           placement="bottom-end"
                           onView={() => openView(d)}
-                          onEdit={() => openEdit(d)}
-                          onDelete={() => deleteDepot(d.id)}
+                          onEdit={canUpdate ? () => openEdit(d) : undefined}
+                          onDelete={canDelete ? () => deleteDepot(d.id) : undefined}
                         />
                       </td>
                     </tr>

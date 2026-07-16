@@ -26,6 +26,12 @@ public class AuthenticationResponse {
 
     private String phone;
 
+    private String employeeNumber;
+
+    private String status;
+
+    private String userType;
+
     private String region;
 
     private String district;
@@ -42,6 +48,8 @@ public class AuthenticationResponse {
     private Long depotId;
 
     private List<String> roles;
+
+    private List<String> permissions;
 
     private boolean temporaryPassword;
 

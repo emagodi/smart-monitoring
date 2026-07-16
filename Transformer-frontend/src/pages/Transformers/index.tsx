@@ -8,7 +8,7 @@ import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import Button from '../../components/ui/button/Button';
-import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search, Camera as CameraIcon, Cpu, List as ListIcon, Image as ImageIcon, Eye as EyeIcon, ChevronLeft as ChevronLeftIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
+import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search, Cpu, List as ListIcon, ChevronLeft as ChevronLeftIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 
 // --- Interfaces ---
 
@@ -39,7 +39,6 @@ interface Transformer {
   lat?: number;
   lng?: number;
   sensors?: Sensor[];
-  cameras?: Camera[];
   controllers?: Controller[];
 }
 
@@ -72,23 +71,6 @@ interface ControllerReading {
   updatedAt: string;
 }
 
-interface Camera {
-  id: number;
-  name: string;
-  topic?: string;
-  model?: string;
-  status?: string;
-  transformerId?: number;
-}
-
-interface CameraImage {
-  id: number;
-  imageUrl: string;
-  capturedAt: string;
-  cameraMacAddress?: string;
-  cameraModel?: string;
-}
-
 interface Controller {
   id: number;
   deviceId: string;
@@ -99,11 +81,16 @@ interface Controller {
   transformer?: { id: number; name: string };
 }
 
-type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'CAMERAS' | 'READINGS' | 'IMAGES' | 'CONTROLLERS' | 'CONTROLLER_READINGS';
+type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'READINGS' | 'CONTROLLERS' | 'CONTROLLER_READINGS';
 
 export default function TransformersIndex() {
-  const { token } = useAuth();
+  const { token, hasPermission } = useAuth();
   const navigate = useNavigate();
+  const canCreateTransformers = hasPermission('transformers.create');
+  const canUpdateTransformers = hasPermission('transformers.update');
+  const canDeleteTransformers = hasPermission('transformers.delete');
+  const canReadSensors = hasPermission('sensors.read');
+  const canReadControllers = hasPermission('controllers.read');
   
   // --- Navigation State ---
   const [viewMode, setViewMode] = useState<ViewMode>('REGIONS');
@@ -112,7 +99,6 @@ export default function TransformersIndex() {
   const [selectedDepot, setSelectedDepot] = useState<Depot | null>(null);
   const [selectedTransformer, setSelectedTransformer] = useState<Transformer | null>(null);
   const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null);
-  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedController, setSelectedController] = useState<Controller | null>(null);
 
   // --- Data State ---
@@ -121,27 +107,15 @@ export default function TransformersIndex() {
   const [depots, setDepots] = useState<Depot[]>([]);
   const [transformers, setTransformers] = useState<Transformer[]>([]);
   const [sensors, setSensors] = useState<Sensor[]>([]);
-  const [cameras, setCameras] = useState<Camera[]>([]);
   const [controllers, setControllers] = useState<Controller[]>([]);
   const [readings, setReadings] = useState<Reading[]>([]);
   const [controllerReadings, setControllerReadings] = useState<ControllerReading[]>([]);
-  const [images, setImages] = useState<CameraImage[]>([]);
-
-  // Image Filter & Pagination State
-  const [imageStartDate, setImageStartDate] = useState<Date | null>(null);
-  const [imageStartTime, setImageStartTime] = useState<Date | null>(null);
-  const [imageEndDate, setImageEndDate] = useState<Date | null>(null);
-  const [imageEndTime, setImageEndTime] = useState<Date | null>(null);
 
   // Controller Filter State
   const [controllerStartDate, setControllerStartDate] = useState<Date | null>(null);
   const [controllerStartTime, setControllerStartTime] = useState<Date | null>(null);
   const [controllerEndDate, setControllerEndDate] = useState<Date | null>(null);
   const [controllerEndTime, setControllerEndTime] = useState<Date | null>(null);
-  const [imagePage, setImagePage] = useState(1);
-  const [imagePageSize] = useState(10);
-  const [showImagePreview, setShowImagePreview] = useState(false);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   
   // --- Global Options (for modal) ---
 
@@ -181,15 +155,6 @@ export default function TransformersIndex() {
       if (typeof obj?.totalElements === 'number') return obj.totalElements;
       if (typeof obj?.total === 'number') return obj.total;
       return listLength; // fallback
-  };
-
-  const getImageUrl = (url: string) => {
-    if (!url) return '';
-    if (url.startsWith('http')) return url;
-    if (API_BASE_URL && !url.startsWith(API_BASE_URL)) {
-        return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-    }
-    return url;
   };
 
   // --- Data Fetching ---
@@ -269,21 +234,6 @@ export default function TransformersIndex() {
     }
   }, [API_BASE_URL, headers]);
 
-  const fetchCameras = useCallback(async (transformerId: number) => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`${API_BASE_URL}/api/v1/cameras/transformer/${transformerId}`, { headers });
-      const list = normalizeList(res.data);
-      setCameras(list);
-      setTotalElements(list.length);
-    } catch (err) {
-      console.error(err);
-      setError('Failed to fetch cameras');
-    } finally {
-      setLoading(false);
-    }
-  }, [API_BASE_URL, headers]);
-
   const fetchReadings = useCallback(async (sensorId: number) => {
     try {
       setLoading(true);
@@ -300,49 +250,6 @@ export default function TransformersIndex() {
       setLoading(false);
     }
   }, [API_BASE_URL, headers]);
-
-  const fetchImages = useCallback(async (cameraId: number) => {
-    try {
-      setLoading(true);
-      let url = `${API_BASE_URL}/api/v1/cameras/${cameraId}/images`;
-      const params: any = {};
-      
-      if (imageStartDate && imageEndDate) {
-          url = `${API_BASE_URL}/api/v1/cameras/${cameraId}/images/filter`;
-          
-          const formatDate = (date: any) => {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-          };
-
-          const formatTime = (date: any) => {
-            if (!date) return "00:00"; // Default to midnight if time not selected
-            const h = String(date.getHours()).padStart(2, '0');
-            const m = String(date.getMinutes()).padStart(2, '0');
-            return `${h}:${m}`;
-          };
-
-          const start = `${formatDate(imageStartDate)}T${formatTime(imageStartTime)}:00`;
-          const end = `${formatDate(imageEndDate)}T${formatTime(imageEndTime)}:59`; // End at last second of minute if time provided
-          
-          params.start = new Date(start).toISOString();
-          params.end = new Date(end).toISOString();
-      }
-
-      const res = await axios.get(url, { headers, params });
-      const list = normalizeList(res.data);
-      setImages(list);
-      setTotalElements(list.length);
-      setImagePage(1); // Reset to first page on new fetch
-    } catch (err) {
-      console.error(err);
-      setError('Failed to fetch images');
-    } finally {
-      setLoading(false);
-    }
-  }, [API_BASE_URL, headers, imageStartDate, imageStartTime, imageEndDate, imageEndTime]);
 
   const fetchControllers = useCallback(async (transformerId: number) => {
     try {
@@ -406,16 +313,6 @@ export default function TransformersIndex() {
   // --- Effects ---
 
   useEffect(() => {
-    if (transformers.length > 0) {
-      console.log('Transformers loaded:', transformers);
-      transformers.forEach(t => {
-        console.log(`Transformer ${t.id} cameras:`, t.cameras);
-      });
-    }
-  }, [transformers]);
-
-
-  useEffect(() => {
     if (!token) return;
     setError(null);
     if (viewMode === 'REGIONS') {
@@ -428,18 +325,14 @@ export default function TransformersIndex() {
       fetchTransformers(selectedDepot.id);
     } else if (viewMode === 'SENSORS' && selectedTransformer) {
       fetchSensors(selectedTransformer.id);
-    } else if (viewMode === 'CAMERAS' && selectedTransformer) {
-      fetchCameras(selectedTransformer.id);
     } else if (viewMode === 'READINGS' && selectedSensor) {
       fetchReadings(selectedSensor.id);
-    } else if (viewMode === 'IMAGES' && selectedCamera) {
-      fetchImages(selectedCamera.id);
     } else if (viewMode === 'CONTROLLERS' && selectedTransformer) {
       fetchControllers(selectedTransformer.id);
     } else if (viewMode === 'CONTROLLER_READINGS' && selectedController) {
       fetchControllerReadings(selectedController.id);
     }
-  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedCamera, selectedController, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchCameras, fetchReadings, fetchImages, fetchControllers, fetchControllerReadings]);
+  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedController, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchReadings, fetchControllers, fetchControllerReadings]);
 
   // --- Event Handlers ---
 
@@ -471,29 +364,11 @@ export default function TransformersIndex() {
     setSearch('');
   };
 
-  const handleViewCameras = (transformer: Transformer) => {
-    setSelectedTransformer(transformer);
-    setViewMode('CAMERAS');
-    setPage(1);
-    setSearch('');
-  };
-
   const handleViewReadings = (sensor: Sensor) => {
     setSelectedSensor(sensor);
     setViewMode('READINGS');
     setPage(1);
     setSearch('');
-  };
-
-  const handleViewImages = (camera: Camera) => {
-    setSelectedCamera(camera);
-    setViewMode('IMAGES');
-    setPage(1);
-    setSearch('');
-    setImageStartDate(null);
-    setImageStartTime(null);
-    setImageEndDate(null);
-    setImageEndTime(null);
   };
 
   const handleViewControllers = (transformer: Transformer) => {
@@ -517,15 +392,9 @@ export default function TransformersIndex() {
   const handleBack = () => {
     setPage(1);
     setSearch('');
-    if (viewMode === 'IMAGES') {
-      setViewMode('CAMERAS');
-      setSelectedCamera(null);
-    } else if (viewMode === 'READINGS') {
+    if (viewMode === 'READINGS') {
       setViewMode('SENSORS');
       setSelectedSensor(null);
-    } else if (viewMode === 'CAMERAS') {
-      setViewMode('TRANSFORMERS');
-      setSelectedTransformer(null);
     } else if (viewMode === 'SENSORS') {
       setViewMode('TRANSFORMERS');
       setSelectedTransformer(null);
@@ -557,32 +426,25 @@ export default function TransformersIndex() {
           setSelectedDepot(null);
           setSelectedTransformer(null);
           setSelectedSensor(null);
-          setSelectedCamera(null);
       } else if (mode === 'DISTRICTS') {
           setViewMode('DISTRICTS');
           setSelectedDistrict(null);
           setSelectedDepot(null);
           setSelectedTransformer(null);
           setSelectedSensor(null);
-          setSelectedCamera(null);
       } else if (mode === 'DEPOTS') {
           setViewMode('DEPOTS');
           setSelectedDepot(null);
           setSelectedTransformer(null);
           setSelectedSensor(null);
-          setSelectedCamera(null);
       } else if (mode === 'TRANSFORMERS') {
           setViewMode('TRANSFORMERS');
           setSelectedTransformer(null);
           setSelectedSensor(null);
-          setSelectedCamera(null);
           setSelectedController(null);
       } else if (mode === 'SENSORS') {
           setViewMode('SENSORS');
           setSelectedSensor(null);
-      } else if (mode === 'CAMERAS') {
-          setViewMode('CAMERAS');
-          setSelectedCamera(null);
       } else if (mode === 'CONTROLLERS') {
           setViewMode('CONTROLLERS');
           setSelectedController(null);
@@ -649,7 +511,7 @@ export default function TransformersIndex() {
           {selectedTransformer && (
               <>
                   <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className={`hover:text-brand-600 ${['SENSORS', 'CAMERAS', 'CONTROLLERS'].includes(viewMode) ? 'font-bold text-brand-600' : ''}`}>
+                  <span className={`hover:text-brand-600 ${['SENSORS', 'CONTROLLERS'].includes(viewMode) ? 'font-bold text-brand-600' : ''}`}>
                       {selectedTransformer.name}
                   </span>
               </>
@@ -658,12 +520,6 @@ export default function TransformersIndex() {
               <>
                   <ChevronRight className="h-4 w-4 mx-2" />
                   <span className="font-bold text-brand-600">Sensors</span>
-              </>
-          )}
-          {viewMode === 'CAMERAS' && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Cameras</span>
               </>
           )}
           {viewMode === 'CONTROLLERS' && (
@@ -678,14 +534,6 @@ export default function TransformersIndex() {
                   <button onClick={() => navigateTo('SENSORS')} className="hover:text-brand-600">Sensors</button>
                   <ChevronRight className="h-4 w-4 mx-2" />
                   <span className="font-bold text-brand-600">Readings</span>
-              </>
-          )}
-          {selectedCamera && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <button onClick={() => navigateTo('CAMERAS')} className="hover:text-brand-600">Cameras</button>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Images</span>
               </>
           )}
           {selectedController && (
@@ -719,7 +567,7 @@ export default function TransformersIndex() {
           <h1 className="text-2xl font-bold text-gray-900">Transformers</h1>
           <p className="text-gray-500 text-sm mt-1">Manage electrical infrastructure hierarchy</p>
         </div>
-        {viewMode === 'TRANSFORMERS' && (
+        {viewMode === 'TRANSFORMERS' && canCreateTransformers && (
             <Button onClick={handleAddTransformer} icon={<Plus className="h-4 w-4" />}>
                 Add Transformer
             </Button>
@@ -851,7 +699,6 @@ export default function TransformersIndex() {
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Sensors</th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Cameras</th>
                               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Controllers</th>
                               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                           </tr>
@@ -874,53 +721,45 @@ export default function TransformersIndex() {
                                       </span>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                                      <button 
-                                          onClick={() => handleViewSensors(t)}
-                                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                                      >
-                                          <Cpu className="h-3 w-3 mr-1.5" />
-                                          Sensors
-                                          <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
-                                              {t.sensors?.length || 0}
-                                          </span>
-                                      </button>
+                                      {canReadSensors ? (
+                                        <button
+                                            onClick={() => handleViewSensors(t)}
+                                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                                        >
+                                            <Cpu className="h-3 w-3 mr-1.5" />
+                                            Sensors
+                                            <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
+                                                {t.sensors?.length || 0}
+                                            </span>
+                                        </button>
+                                      ) : <span className="text-xs text-gray-400">No access</span>}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                                      <button 
-                                          onClick={() => handleViewCameras(t)}
-                                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors"
-                                      >
-                                          <CameraIcon className="h-3 w-3 mr-1.5" />
-                                          Cameras
-                                          <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
-                                              {t.cameras?.length || 0}
-                                          </span>
-                                      </button>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                      <button 
-                                          onClick={() => handleViewControllers(t)}
-                                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
-                                      >
-                                          <Cpu className="h-3 w-3 mr-1.5" />
-                                          Controllers
-                                          <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
-                                              {t.controllers?.length || 0}
-                                          </span>
-                                      </button>
+                                      {canReadControllers ? (
+                                        <button
+                                            onClick={() => handleViewControllers(t)}
+                                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                                        >
+                                            <Cpu className="h-3 w-3 mr-1.5" />
+                                            Controllers
+                                            <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
+                                                {t.controllers?.length || 0}
+                                            </span>
+                                        </button>
+                                      ) : <span className="text-xs text-gray-400">No access</span>}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                       <ActionMenu
                                           placement="bottom-end"
                                           onView={() => openViewModal(t)}
-                                          onEdit={() => handleEditTransformer(t)}
-                                          onDelete={() => handleDelete(t.id)}
+                                          onEdit={canUpdateTransformers ? () => handleEditTransformer(t) : undefined}
+                                          onDelete={canDeleteTransformers ? () => handleDelete(t.id) : undefined}
                                       />
                                   </td>
                               </tr>
                           ))}
                           {transformers.length === 0 && (
-                              <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500">No transformers found in {selectedDepot?.name}.</td></tr>
+                              <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">No transformers found in {selectedDepot?.name}.</td></tr>
                           )}
                       </tbody>
                   </table>
@@ -962,46 +801,6 @@ export default function TransformersIndex() {
                   </table>
               )}
 
-              {/* CAMERAS VIEW */}
-              {viewMode === 'CAMERAS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Camera Name</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredList(cameras).map((c) => (
-                              <tr key={c.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                          <CameraIcon className="h-5 w-5 text-gray-400 mr-3" />
-                                          <div className="text-sm font-medium text-gray-900">{c.name}</div>
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{c.model || '-'}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'online' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                                          {c.status || 'Unknown'}
-                                      </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                      <Button variant="secondary" size="sm" onClick={() => handleViewImages(c)} icon={<ImageIcon className="h-4 w-4" />}>
-                                          Images
-                                      </Button>
-                                  </td>
-                              </tr>
-                          ))}
-                          {cameras.length === 0 && (
-                              <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No cameras found for {selectedTransformer?.name}.</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-
               {/* READINGS VIEW */}
               {viewMode === 'READINGS' && (
                   <table className="min-w-full divide-y divide-gray-200">
@@ -1031,201 +830,6 @@ export default function TransformersIndex() {
                   </table>
               )}
 
-              {/* IMAGES VIEW */}
-              {viewMode === 'IMAGES' && (
-                  <div className="p-6">
-                      <div className="flex flex-col gap-4 mb-6">
-                          <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-gray-900">Images for {selectedCamera?.name}</h2>
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => { 
-                                    setImageStartDate(null); 
-                                    setImageStartTime(null); 
-                                    setImageEndDate(null); 
-                                    setImageEndTime(null); 
-                                }}
-                                className="text-xs"
-                            >
-                                Clear Filters
-                            </Button>
-                          </div>
-                          
-                          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  {/* From Section */}
-                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
-                                      <div className="flex items-center gap-2 mb-2">
-                                          <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">From</label>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-3">
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                selected={imageStartDate}
-                                                onChange={(date: Date | null) => setImageStartDate(date)}
-                                                dateFormat="MM/dd/yyyy"
-                                                placeholderText="Select Date"
-                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
-                                            />
-                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                selected={imageStartTime}
-                                                onChange={(date: Date | null) => setImageStartTime(date)}
-                                                showTimeSelect
-                                                showTimeSelectOnly
-                                                      timeIntervals={15}
-                                                      timeCaption="Time"
-                                                      dateFormat="h:mm aa"
-                                                      placeholderText="--:-- --"
-                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
-                                                  />
-                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-
-                                  {/* To Section */}
-                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
-                                      <div className="flex items-center gap-2 mb-2">
-                                          <div className="h-2 w-2 rounded-full bg-indigo-500"></div>
-                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">To</label>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-3">
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                selected={imageEndDate}
-                                                onChange={(date: Date | null) => setImageEndDate(date)}
-                                                dateFormat="MM/dd/yyyy"
-                                                placeholderText="Select Date"
-                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
-                                            />
-                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                      selected={imageEndTime}
-                                                      onChange={(date) => setImageEndTime(date)}
-                                                      showTimeSelect
-                                                      showTimeSelectOnly
-                                                      timeIntervals={15}
-                                                      timeCaption="Time"
-                                                      dateFormat="h:mm aa"
-                                                      placeholderText="--:-- --"
-                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
-                                                  />
-                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-
-                      <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
-                          <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
-                                  <tr>
-                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Captured At</th>
-                                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                                  </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-200">
-                                  {images.slice((imagePage - 1) * imagePageSize, imagePage * imagePageSize).map((img) => (
-                                      <tr key={img.id} className="hover:bg-gray-50">
-                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                              #{img.id}
-                                          </td>
-                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                              {new Date(img.capturedAt).toLocaleString()}
-                                          </td>
-                                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                              <Button 
-                                                  size="sm" 
-                                                  onClick={() => {
-                                                      setPreviewImageUrl(getImageUrl(img.imageUrl));
-                                                      setShowImagePreview(true);
-                                                  }}
-                                                  icon={<EyeIcon className="h-4 w-4" />}
-                                              >
-                                                  View
-                                              </Button>
-                                          </td>
-                                      </tr>
-                                  ))}
-                                  {images.length === 0 && (
-                                      <tr><td colSpan={3} className="px-6 py-12 text-center text-gray-500">No images found.</td></tr>
-                                  )}
-                              </tbody>
-                          </table>
-                      </div>
-
-                      {/* Pagination Controls */}
-                      {images.length > 0 && (
-                          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-4">
-                              <div className="flex flex-1 justify-between sm:hidden">
-                                  <Button 
-                                      onClick={() => setImagePage(p => Math.max(1, p - 1))} 
-                                      disabled={imagePage === 1}
-                                      variant="outline"
-                                  >
-                                      Previous
-                                  </Button>
-                                  <Button 
-                                      onClick={() => setImagePage(p => Math.min(Math.ceil(images.length / imagePageSize), p + 1))} 
-                                      disabled={imagePage >= Math.ceil(images.length / imagePageSize)}
-                                      variant="outline"
-                                  >
-                                      Next
-                                  </Button>
-                              </div>
-                              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                                  <div>
-                                      <p className="text-sm text-gray-700">
-                                          Showing <span className="font-medium">{(imagePage - 1) * imagePageSize + 1}</span> to <span className="font-medium">{Math.min(imagePage * imagePageSize, images.length)}</span> of <span className="font-medium">{images.length}</span> results
-                                      </p>
-                                  </div>
-                                  <div>
-                                      <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                          <button
-                                              onClick={() => setImagePage(p => Math.max(1, p - 1))}
-                                              disabled={imagePage === 1}
-                                              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                                          >
-                                              <span className="sr-only">Previous</span>
-                                              <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
-                                          </button>
-                                          <button
-                                              onClick={() => setImagePage(p => Math.min(Math.ceil(images.length / imagePageSize), p + 1))}
-                                              disabled={imagePage >= Math.ceil(images.length / imagePageSize)}
-                                              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                                          >
-                                              <span className="sr-only">Next</span>
-                                              <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                                          </button>
-                                      </nav>
-                                  </div>
-                              </div>
-                          </div>
-                      )}
-                  </div>
-              )}
           </div>
       )}
 
@@ -1557,21 +1161,6 @@ export default function TransformersIndex() {
           )}
       </Modal>
 
-      {/* IMAGE PREVIEW MODAL */}
-      <Modal isOpen={showImagePreview} onClose={() => setShowImagePreview(false)} title="Image Preview" className="max-w-4xl w-full">
-          <div className="flex justify-center bg-black rounded-lg overflow-hidden">
-              {previewImageUrl && (
-                  <img 
-                      src={previewImageUrl} 
-                      alt="Preview" 
-                      className="max-h-[80vh] w-auto object-contain" 
-                  />
-              )}
-          </div>
-          <div className="mt-4 flex justify-end">
-              <Button variant="outline" onClick={() => setShowImagePreview(false)}>Close</Button>
-          </div>
-      </Modal>
     </div>
   );
 }

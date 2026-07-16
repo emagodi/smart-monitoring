@@ -1,18 +1,23 @@
 package com.safalifter.authservice.entities;
 
-import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import com.safalifter.authservice.enums.Role;
 
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Builder
 @NoArgsConstructor
@@ -41,6 +46,18 @@ public class User implements UserDetails { // make our app User a spring securit
 
     private String phone;
 
+    @Column(name = "employee_number")
+    private String employeeNumber;
+
+    @Builder.Default
+    private String status = "ACTIVE";
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
     @Enumerated(EnumType.STRING)
     private Role role;
 
@@ -59,6 +76,20 @@ public class User implements UserDetails { // make our app User a spring securit
     @Column(name = "depot_id")
     private Long depotId;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_type_id")
+    private UserTypeEntity userType;
+
+    @JsonIgnoreProperties({"users", "permissions"})
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<RoleEntity> roles = new HashSet<>();
+
     @OneToOne(mappedBy = "user")
     private ForgotPassword forgotPassword;
 
@@ -71,7 +102,20 @@ public class User implements UserDetails { // make our app User a spring securit
     // we should return a list of roles
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return role.getAuthorities();
+        Set<SimpleGrantedAuthority> authorities = new LinkedHashSet<>();
+
+        for (RoleEntity assignedRole : roles) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + assignedRole.getName().toUpperCase().replace(' ', '_')));
+            for (PermissionEntity permission : assignedRole.getPermissions()) {
+                authorities.add(new SimpleGrantedAuthority(permission.getName()));
+            }
+        }
+
+        if (authorities.isEmpty() && role != null) {
+            authorities.addAll(role.getAuthorities());
+        }
+
+        return authorities;
     }
 
     @Override
@@ -101,6 +145,16 @@ public class User implements UserDetails { // make our app User a spring securit
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return !"INACTIVE".equalsIgnoreCase(status);
+    }
+
+    @PrePersist
+    public void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (status == null || status.isBlank()) {
+            status = "ACTIVE";
+        }
     }
 }

@@ -18,7 +18,7 @@ interface District {
 interface RegionOption { id: number; name: string }
 
 export default function DistrictsIndex() {
-  const { token } = useAuth();
+  const { token, hasPermission } = useAuth();
   const [districts, setDistricts] = useState<District[]>([]);
   const [regions, setRegions] = useState<RegionOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +46,9 @@ export default function DistrictsIndex() {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
+  const canCreate = hasPermission('districts.create');
+  const canUpdate = hasPermission('districts.update');
+  const canDelete = hasPermission('districts.delete');
 
   const normalizeList = (payload: unknown): District[] => {
     if (Array.isArray(payload)) return payload as District[];
@@ -252,7 +255,7 @@ export default function DistrictsIndex() {
            <p className="mt-1 text-sm text-gray-500">Manage and monitor your districts.</p>
         </div>
         <div className="flex items-center gap-2">
-         <Button size="sm" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add District</Button> 
+         {canCreate ? <Button size="sm" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add District</Button> : null}
         </div>
       </div>
 
@@ -339,7 +342,7 @@ export default function DistrictsIndex() {
                     No districts found.
                     <div className="mt-4 flex items-center justify-center gap-2">
                       <button onClick={fetchDistricts} className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300">Refresh</button>
-                      <button onClick={openCreate} className="rounded bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Add District</button>
+                      {canCreate ? <button onClick={openCreate} className="rounded bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Add District</button> : null}
                     </div>
                   </td>
                 </tr>
@@ -354,8 +357,8 @@ export default function DistrictsIndex() {
                         <ActionMenu
                           placement="bottom-end"
                           onView={() => openView(d)}
-                          onEdit={() => openEdit(d)}
-                          onDelete={() => openDelete(d)}
+                          onEdit={canUpdate ? () => openEdit(d) : undefined}
+                          onDelete={canDelete ? () => openDelete(d) : undefined}
                         />
                       </td>
                     </tr>

@@ -8,7 +8,6 @@ import LogoutButton from '../components/LogoutButton';
 import transformerService from '../services/transformer';
 import infrastructureService from '../services/infrastructure';
 import sensorService from '../services/sensor';
-import cameraService from '../services/camera';
 
 const TransformerCrudScreen = () => {
     const navigation = useNavigation();
@@ -62,16 +61,6 @@ const TransformerCrudScreen = () => {
             labelKey: 'statusLabel',
             valueKey: 'id'
         }
-    ];
-
-    // Camera fields
-    const cameraFields = [
-        { name: 'name', label: 'Camera Name', placeholder: 'Enter camera name', required: true },
-        { name: 'topic', label: 'MQTT Topic', placeholder: 'Enter MQTT topic', required: true },
-        { name: 'model', label: 'Camera Model', placeholder: 'Enter camera model' },
-        { name: 'ipAddress', label: 'IP Address', placeholder: 'Enter IP address' },
-        { name: 'macAddress', label: 'MAC Address', placeholder: 'Enter MAC address' },
-        { name: 'wifiSsid', label: 'WiFi SSID', placeholder: 'Enter WiFi SSID' }
     ];
 
     const fetchTransformers = async (page, size, search) => {
@@ -131,11 +120,6 @@ const TransformerCrudScreen = () => {
         setViewLevel('sensors');
     };
 
-    const handleSelectTransformerForCameras = (transformer) => {
-        setSelectedTransformer(transformer);
-        setViewLevel('cameras');
-    };
-
     const handleSelectSensor = (sensor) => {
         setSelectedSensor(sensor);
         setViewLevel('sensor_readings');
@@ -144,7 +128,6 @@ const TransformerCrudScreen = () => {
     const handleBack = () => {
         if (viewLevel === 'sensor_readings') setViewLevel('sensors');
         else if (viewLevel === 'sensors') setViewLevel('transformers');
-        else if (viewLevel === 'cameras') setViewLevel('transformers');
         else if (viewLevel === 'transformers') setViewLevel('depots');
         else if (viewLevel === 'depots') setViewLevel('districts');
         else if (viewLevel === 'districts') setViewLevel('regions');
@@ -276,55 +259,6 @@ const TransformerCrudScreen = () => {
         );
     };
 
-    // Render custom item for Cameras
-    const renderCameraItem = (item, onEdit, onDelete) => (
-        <View style={[styles.card, { flexDirection: 'column', alignItems: 'stretch' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <LinearGradient colors={['#7e57c2', '#512da8']} style={styles.iconContainer}>
-                        <Ionicons name="camera" size={16} color="#fff" />
-                    </LinearGradient>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.cardTitle}>{item.name}</Text>
-                        <Text style={styles.cardSubtitle}>{item.model} • {item.topic}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, justifyContent: 'space-between' }}>
-                            <View style={styles.statusBadge}>
-                                <View style={[styles.statusDot, { backgroundColor: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]} />
-                                <Text style={[styles.statusText, { color: item.status === 'ACTIVE' ? '#4CAF50' : '#F44336' }]}>
-                                    {item.status || 'Unknown'}
-                                </Text>
-                            </View>
-                            <TouchableOpacity 
-                                style={{ 
-                                    flexDirection: 'row', 
-                                    alignItems: 'center', 
-                                    backgroundColor: '#0067A5', 
-                                    paddingVertical: 4, 
-                                    paddingHorizontal: 8, 
-                                    borderRadius: 12, 
-                                    marginLeft: 8 
-                                }}
-                                onPress={() => navigation.navigate('CameraImages', { cameraId: item.id, cameraName: item.name })}
-                            >
-                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginRight: 4 }}>Images</Text>
-                                <Ionicons name="images" size={12} color="#fff" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-
-                <View style={styles.cardActions}>
-                    <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
-                        <Ionicons name="create-outline" size={20} color="#4CAF50" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
-                        <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </View>
-    );
-
     // Render custom item for Transformers
     const renderTransformerItem = (item, onEdit, onDelete) => (
         <View style={[styles.card, { flexDirection: 'column', alignItems: 'stretch' }]}>
@@ -370,18 +304,10 @@ const TransformerCrudScreen = () => {
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
                 <TouchableOpacity 
-                    style={[styles.viewSensorsButton, { flex: 1, marginRight: 5 }]}
+                    style={[styles.viewSensorsButton, { flex: 1 }]}
                     onPress={() => handleSelectTransformerForSensors(item)}
                 >
                     <Text style={styles.viewSensorsText}>View Sensors</Text>
-                    <Ionicons name="chevron-forward" size={12} color="#fff" />
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                    style={[styles.viewSensorsButton, { flex: 1, marginLeft: 5, backgroundColor: '#7e57c2' }]}
-                    onPress={() => handleSelectTransformerForCameras(item)}
-                >
-                    <Text style={styles.viewSensorsText}>View Cameras</Text>
                     <Ionicons name="chevron-forward" size={12} color="#fff" />
                 </TouchableOpacity>
             </View>
@@ -501,40 +427,6 @@ const TransformerCrudScreen = () => {
                 renderCustomItem: (item) => renderSensorItem(item),
                 createItem: null, // Read-only for now as per request "open all sensors"
                 onBack: handleBack
-            };
-            break;
-        case 'cameras':
-            screenProps = {
-                title: 'Cameras',
-                subtitle: selectedTransformer?.name,
-                fetchData: async (page, size, search) => {
-                    try {
-                        const data = await cameraService.getByTransformerId(selectedTransformer.id);
-                        if (search) {
-                            const query = search.toLowerCase();
-                            return data.filter(c => c.name.toLowerCase().includes(query) || c.topic.toLowerCase().includes(query));
-                        }
-                        return data;
-                    } catch (error) {
-                        console.error("Error fetching cameras", error);
-                        return [];
-                    }
-                },
-                fields: cameraFields,
-                createItem: cameraService.registerCamera,
-                updateItem: cameraService.updateCamera,
-                deleteItem: null, // Handle manually via modal
-                onAddPress: () => navigation.navigate('CameraForm', { transformerId: selectedTransformer.id }),
-                onEditPress: (item) => navigation.navigate('CameraForm', { transformerId: selectedTransformer.id, camera: item }),
-                transformDataBeforeSubmit: (data) => ({
-                    ...data,
-                    transformerId: selectedTransformer.id
-                }),
-                entityName: 'Camera',
-                addButtonLabel: 'Add Camera',
-                renderCustomItem: renderCameraItem,
-                onBack: handleBack,
-                autoOpenCreate: action === 'add' // Auto open create if navigated with action='add'
             };
             break;
         case 'sensor_readings':

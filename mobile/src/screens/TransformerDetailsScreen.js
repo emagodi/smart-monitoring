@@ -94,16 +94,6 @@ const TransformerDetailsScreen = ({ route, navigation }) => {
             >
                 <Text style={styles.actionButtonText}>View Sensors</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity 
-                style={[styles.actionButton, styles.cameraButton]}
-                onPress={() => navigation.navigate('TransformerCrud', { 
-                    transformer: transformer,
-                    viewLevel: 'cameras'
-                })}
-            >
-                <Text style={styles.actionButtonText}>View Cameras</Text>
-            </TouchableOpacity>
         </View>
 
         {transformer.lat && transformer.lng && (
@@ -250,9 +240,6 @@ const styles = StyleSheet.create({
   },
   sensorButton: {
     backgroundColor: '#0067A5',
-  },
-  cameraButton: {
-    backgroundColor: '#2E7D32', // Green for cameras
   },
   actionButtonText: {
     color: 'white',

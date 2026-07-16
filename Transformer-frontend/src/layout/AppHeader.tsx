@@ -27,7 +27,6 @@ const AppHeader: React.FC = () => {
     if (pathname.includes("/sensors")) return "Sensors";
     if (pathname.includes("/sites")) return "Sites";
     if (pathname.includes("/users")) return "User Management";
-    if (pathname.includes("/simulation")) return "Simulation";
     if (pathname.includes("/profile")) return "Profile";
     return "Dashboard";
   };

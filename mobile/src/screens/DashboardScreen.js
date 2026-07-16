@@ -6,7 +6,6 @@ import transformerService from '../services/transformer';
 import alertService from '../services/alert';
 import infrastructureService from '../services/infrastructure';
 import sensorService from '../services/sensor';
-import cameraService from '../services/camera';
 import LogoutButton from '../components/LogoutButton';
 
 const { width } = Dimensions.get('window');
@@ -22,7 +21,6 @@ const DashboardScreen = ({ navigation }) => {
     totalSensors: 0,
     unassignedSensors: 0,
     totalDepots: 0,
-    totalCameras: 0,
     recentAlerts: []
   });
   const [loading, setLoading] = useState(true);
@@ -30,13 +28,12 @@ const DashboardScreen = ({ navigation }) => {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const [transformersRes, alertsRes, depotsRes, sensorsRes, unassignedSensorsRes, camerasRes] = await Promise.all([
+      const [transformersRes, alertsRes, depotsRes, sensorsRes, unassignedSensorsRes] = await Promise.all([
         transformerService.getAllTransformers(0, 1000).catch(() => []),
         alertService.getAllAlerts().catch(() => []),
         infrastructureService.getAllDepots(0, 1000).catch(() => []),
         sensorService.getAllSensors(0, 1000).catch(() => []),
-        sensorService.getUnassignedSensors().catch(() => []),
-        cameraService.getAllCameras().catch(() => [])
+        sensorService.getUnassignedSensors().catch(() => [])
       ]);
 
       const transformers = Array.isArray(transformersRes) ? transformersRes : (transformersRes.content || []);
@@ -44,7 +41,6 @@ const DashboardScreen = ({ navigation }) => {
       const depots = Array.isArray(depotsRes) ? depotsRes : (depotsRes.content || []);
       const sensors = Array.isArray(sensorsRes) ? sensorsRes : (sensorsRes.content || []);
       const unassignedSensors = Array.isArray(unassignedSensorsRes) ? unassignedSensorsRes : [];
-      const cameras = Array.isArray(camerasRes) ? camerasRes : [];
 
       const active = transformers.filter(t => t.active === true || t.isActive === true).length;
       
@@ -63,7 +59,6 @@ const DashboardScreen = ({ navigation }) => {
         totalSensors: sensors.length,
         unassignedSensors: unassignedSensors.length,
         totalDepots: depots.length,
-        totalCameras: cameras.length,
         recentAlerts: sortedAlerts
       });
     } catch (error) {
@@ -184,13 +179,6 @@ const DashboardScreen = ({ navigation }) => {
 
         <SectionHeader title="Alert Status" actionText="View All" onAction={() => navigation.navigate('Alerts')} />
         <View style={styles.gridContainer}>
-             <DashboardCard 
-                title="Cameras" 
-                value={stats.totalCameras} 
-                icon="camera" 
-                colors={['#7C3AED', '#8B5CF6']} 
-                onPress={() => navigation.navigate('Transformers Mgmt')} // Navigate to where cameras are managed
-            />
              <DashboardCard 
                 title="Critical Alerts" 
                 value={stats.criticalAlerts} 

@@ -17,7 +17,7 @@ interface Controller {
 }
 
 export default function NewControllersIndex() {
-  const { token } = useAuth();
+  const { token, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<Controller[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +28,7 @@ export default function NewControllersIndex() {
   
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
+  const canUpdate = hasPermission('controllers.update');
 
   const normalizeList = (payload: unknown): Controller[] => {
     if (Array.isArray(payload)) return payload as Controller[];
@@ -179,9 +180,13 @@ export default function NewControllersIndex() {
                          </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/new-controllers/${c.id}/edit`)}>
-                        <Settings className="w-4 h-4 mr-1" /> Edit / Assign
-                      </Button>
+                      {canUpdate ? (
+                        <Button size="sm" variant="outline" onClick={() => navigate(`/new-controllers/${c.id}/edit`)}>
+                          <Settings className="w-4 h-4 mr-1" /> Edit / Assign
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-gray-400">No access</span>
+                      )}
                     </td>
                   </tr>
                 ))

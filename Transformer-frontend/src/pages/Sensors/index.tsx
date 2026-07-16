@@ -22,7 +22,7 @@ interface TransformerOption { id: number; name: string }
 const SENSOR_TYPES = ['temperature', 'contact', 'suspicious_tilt', 'motion', 'video', 'controller'] as const;
 
 export default function SensorsIndex() {
-  const { token } = useAuth();
+  const { token, hasPermission } = useAuth();
   const [items, setItems] = useState<Sensor[]>([]);
   const [transformers, setTransformers] = useState<TransformerOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +52,9 @@ export default function SensorsIndex() {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
+  const canCreate = hasPermission('sensors.create');
+  const canUpdate = hasPermission('sensors.update');
+  const canDelete = hasPermission('sensors.delete');
 
   const normalizeList = (payload: unknown): Sensor[] => {
     if (Array.isArray(payload)) return payload as Sensor[];
@@ -271,7 +274,7 @@ export default function SensorsIndex() {
            <p className="mt-1 text-sm text-gray-500">Manage and monitor your IoT sensors.</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* <Button size="sm" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add Sensor</Button> */}
+          {canCreate ? <Button size="sm" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add Sensor</Button> : null}
         </div>
       </div>
 
@@ -362,7 +365,7 @@ export default function SensorsIndex() {
                     No sensors found.
                     <div className="mt-4 flex items-center justify-center gap-2">
                       <button onClick={fetchSensors} className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300">Refresh</button>
-                      <button onClick={openCreate} className="rounded bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Add Sensor</button>
+                      {canCreate ? <button onClick={openCreate} className="rounded bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Add Sensor</button> : null}
                     </div>
                   </td>
                 </tr>
@@ -385,8 +388,8 @@ export default function SensorsIndex() {
                         <ActionMenu
                           placement="bottom-end"
                           onView={() => openView(s)}
-                          onEdit={() => openEdit(s)}
-                          onDelete={() => openDelete(s)}
+                          onEdit={canUpdate ? () => openEdit(s) : undefined}
+                          onDelete={canDelete ? () => openDelete(s) : undefined}
                         />
                       </td>
                     </tr>

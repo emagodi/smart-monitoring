@@ -32,10 +32,7 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 "/v2/api-docs", "/v3/api-docs/**",
                                 "/swagger-resources/**", "/swagger-ui/**",
-                                "/webjars/**", "/swagger-ui.html", "/error",
-                                "/api/v1/cameras/event",
-                                "/api/v1/cameras/images/**",
-                                "/api/v1/simulation/**").permitAll()
+                                "/webjars/**", "/swagger-ui.html", "/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(STATELESS))

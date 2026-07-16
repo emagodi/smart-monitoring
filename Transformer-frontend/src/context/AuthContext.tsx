@@ -1,22 +1,31 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 
-interface User {
+export interface AuthUser {
   id: number;
   username: string;
   email: string;
   first_name: string;
   last_name: string;
   phone?: string;
+  employeeNumber?: string;
+  status?: string;
+  userType?: string;
+  roles: string[];
+  permissions: string[];
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   token: string | null;
   login: (username: string, password: string, remember?: boolean) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
-  updateUser: (updatedData: Partial<User>) => void;
+  updateUser: (updatedData: Partial<AuthUser>) => void;
+  permissions: string[];
+  roles: string[];
+  hasPermission: (permission?: string | null) => boolean;
+  hasAnyPermission: (permissions?: Array<string | null | undefined>) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,7 +45,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token') || sessionStorage.getItem('token'));
-  const [user, setUser] = useState<User | null>(() => {
+  const [user, setUser] = useState<AuthUser | null>(() => {
     const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
     return storedUser ? JSON.parse(storedUser) : null;
   });
@@ -72,12 +81,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string, remember: boolean = true): Promise<boolean> => {
     try {
+      const email = (username || '').trim();
+      const pwd = (password || '');
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/authenticate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: username, password }),
+        body: JSON.stringify({ email, password: pwd }),
       });
 
       const data = await response.json();
@@ -89,13 +100,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (tokenValue) storage.setItem('token', tokenValue);
         if (refreshToken) storage.setItem('refresh_token', refreshToken);
 
-        const userInfo: User = {
+        const userInfo: AuthUser = {
           id: data?.id ?? 0,
           username: data?.email ?? username,
           email: data?.email ?? '',
           first_name: data?.firstname ?? data?.first_name ?? '',
           last_name: data?.lastname ?? data?.last_name ?? '',
           phone: data?.phone ?? '',
+          employeeNumber: data?.employeeNumber ?? data?.employee_number ?? '',
+          status: data?.status ?? 'ACTIVE',
+          userType: data?.userType ?? data?.user_type ?? '',
+          roles: Array.isArray(data?.roles) ? data.roles : [],
+          permissions: Array.isArray(data?.permissions) ? data.permissions : [],
         };
         storage.setItem('user', JSON.stringify(userInfo));
 
@@ -141,6 +157,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const isAuthenticated = !!token;
+  const permissions = useMemo(() => user?.permissions ?? [], [user]);
+  const roles = useMemo(() => user?.roles ?? [], [user]);
+
+  const hasPermission = (permission?: string | null) => {
+    if (!permission) return true;
+    return permissions.includes(permission) || roles.includes('Administrator') || roles.includes('ADMIN');
+  };
+
+  const hasAnyPermission = (requiredPermissions?: Array<string | null | undefined>) => {
+    if (!requiredPermissions || requiredPermissions.length === 0) return true;
+    return requiredPermissions.some((permission) => hasPermission(permission));
+  };
 
   // Attach axios interceptors for auth and handle 401
   useEffect(() => {
@@ -200,7 +228,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, [token]);
 
-  const updateUser = (updatedData: Partial<User>) => {
+  const updateUser = (updatedData: Partial<AuthUser>) => {
     setUser((prevUser) => {
       if (!prevUser) return null;
       const newUser = { ...prevUser, ...updatedData };
@@ -215,8 +243,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated, updateUser }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated, updateUser, permissions, roles, hasPermission, hasAnyPermission }}>
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const usePermissions = () => {
+  const { permissions, hasPermission, hasAnyPermission } = useAuth();
+  return { permissions, hasPermission, hasAnyPermission };
+};
+
+export const useRoles = () => {
+  const { roles } = useAuth();
+  return roles;
 };

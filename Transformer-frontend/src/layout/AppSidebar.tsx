@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
+import { useAuth } from "../context/AuthContext";
 
 // Import icons from lucide-react
 import {
@@ -11,6 +12,7 @@ import {
   Activity,
   User,
   Users,
+  Shield,
   ChevronDown,
   Building,
   LogOut,
@@ -21,8 +23,7 @@ import {
   Clock,
   Briefcase,
   Cpu,
-  TestTube,
-  Camera
+  KeySquare
 } from 'lucide-react';
 
 interface NavItem {
@@ -30,6 +31,7 @@ interface NavItem {
   icon: React.ReactNode;
   path?: string;
   subItems?: { name: string; path: string }[];
+  permission?: string;
 }
 
 interface NavGroup {
@@ -45,6 +47,7 @@ const navGroups: NavGroup[] = [
         icon: <Grid className="w-5 h-5" />,
         name: "Dashboard",
         path: "/dashboard",
+        permission: "dashboard.read",
       },
     ],
   },
@@ -67,46 +70,43 @@ const navGroups: NavGroup[] = [
         icon: <MapPinned className="w-5 h-5" />,
         name: "Regions",
         path: "/regions",
+        permission: "regions.read",
       },
       {
         icon: <MapPinned className="w-5 h-5" />,
         name: "Districts",
         path: "/districts",
+        permission: "districts.read",
       },
       {
         icon: <Warehouse className="w-5 h-5" />,
         name: "Depots",
         path: "/depots",
+        permission: "depots.read",
       },
       {
         icon: <Building className="w-5 h-5" />,
         name: "Sites",
         path: "/sites",
+        permission: "sites.read",
       },
       {
         icon: <Zap className="w-5 h-5" />,
         name: "Transformers",
         path: "/transformers",
+        permission: "transformers.read",
       },
       {
         icon: <Activity className="w-5 h-5" />,
         name: "Sensors",
         path: "/sensors",
+        permission: "sensors.read",
       },
       {
         icon: <Cpu className="w-5 h-5" />,
         name: "New Controllers",
         path: "/new-controllers",
-      },
-      {
-        icon: <Camera className="w-5 h-5" />,
-        name: "Cameras",
-        path: "/cameras",
-      },
-      {
-        icon: <TestTube className="w-5 h-5" />,
-        name: "Simulation",
-        path: "/simulation",
+        permission: "controllers.read",
       },
     ],
   },
@@ -115,8 +115,27 @@ const navGroups: NavGroup[] = [
     items: [
       {
         icon: <Users className="w-5 h-5" />,
-        name: "User",
+        name: "Users",
         path: "/users",
+        permission: "users.read",
+      },
+      {
+        icon: <Shield className="w-5 h-5" />,
+        name: "Roles",
+        path: "/roles",
+        permission: "roles.read",
+      },
+      {
+        icon: <KeySquare className="w-5 h-5" />,
+        name: "Permissions",
+        path: "/permissions",
+        permission: "permissions.read",
+      },
+      {
+        icon: <Building className="w-5 h-5" />,
+        name: "User Types",
+        path: "/user-types",
+        permission: "usertypes.read",
       },
       {
         icon: <User className="w-5 h-5" />,
@@ -129,6 +148,7 @@ const navGroups: NavGroup[] = [
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen } = useSidebar();
+  const { hasPermission } = useAuth();
   const location = useLocation();
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
 
@@ -140,6 +160,15 @@ const AppSidebar: React.FC = () => {
       [index]: !prev[index]
     }));
   };
+
+  const filteredNavGroups = useMemo(() => {
+    return navGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !item.permission || hasPermission(item.permission)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [hasPermission]);
 
   return (
     <aside
@@ -159,7 +188,7 @@ const AppSidebar: React.FC = () => {
 
       <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear no-scrollbar py-4">
         <nav className="px-4 space-y-6">
-          {navGroups.map((group, groupIndex) => (
+          {filteredNavGroups.map((group, groupIndex) => (
             <div key={groupIndex}>
               {(isExpanded || isMobileOpen) && group.items.length > 0 && (
                 <h3 className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider px-2">

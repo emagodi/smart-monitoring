@@ -13,7 +13,7 @@ interface Region {
 }
 
 export default function RegionsIndex() {
-  const { token } = useAuth();
+  const { token, hasPermission } = useAuth();
   const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +36,9 @@ export default function RegionsIndex() {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
+  const canCreate = hasPermission('regions.create');
+  const canUpdate = hasPermission('regions.update');
+  const canDelete = hasPermission('regions.delete');
 
   const normalizeRegions = (payload: unknown): Region[] => {
     if (Array.isArray(payload)) return payload as Region[];
@@ -186,13 +189,15 @@ export default function RegionsIndex() {
            <p className="mt-1 text-sm text-gray-500">Manage and monitor your regions.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button 
-            onClick={openCreate} 
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <Plus className="-ml-1 mr-2 h-4 w-4" />
-            Add Region
-          </button>
+          {canCreate ? (
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Plus className="-ml-1 mr-2 h-4 w-4" />
+              Add Region
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -265,7 +270,7 @@ export default function RegionsIndex() {
                     No regions found.
                     <div className="mt-4 flex items-center justify-center gap-2">
                       <button onClick={fetchRegions} className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300">Refresh</button>
-                      <button onClick={openCreate} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Add Region</button>
+                      {canCreate ? <button onClick={openCreate} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Add Region</button> : null}
                     </div>
                   </td>
                 </tr>
@@ -278,8 +283,8 @@ export default function RegionsIndex() {
                       <ActionMenu
                         placement="bottom-end"
                         onView={() => openView(region)}
-                        onEdit={() => openEdit(region)}
-                        onDelete={() => openDelete(region)}
+                        onEdit={canUpdate ? () => openEdit(region) : undefined}
+                        onDelete={canDelete ? () => openDelete(region) : undefined}
                       />
                     </td>
                   </tr>

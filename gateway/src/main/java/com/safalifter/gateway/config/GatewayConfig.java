@@ -40,6 +40,10 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://auth-service"))
 
+                .route("auth-admin", r -> r.path("/api/v1/admin/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://auth-service"))
+
                 .route("transformer-transformers", r -> r.path("/api/v1/transformers/**")
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
@@ -60,19 +64,6 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
 
-                .route("transformer-camera-events", r -> r.path("/api/v1/cameras/event")
-                        .uri("lb://transformer-service"))
-
-                .route("transformer-camera-images", r -> r.path("/api/v1/cameras/images/**")
-                        .uri("lb://transformer-service"))
-
-                .route("transformer-simulation-uploads", r -> r.path("/api/v1/simulation/uploads/**")
-                        .uri("lb://transformer-service"))
-
-                .route("transformer-cameras", r -> r.path("/api/v1/cameras/**")
-                        .filters(f -> f.filter(filter))
-                        .uri("lb://transformer-service"))
-
                 .route("auth-swagger-ui", r -> r.path("/auth/swagger-ui/**", "/auth/swagger-ui.html")
                         .filters(f -> f.rewritePath("/auth/(?<segment>.*)", "/${segment}"))
                         .uri("lb://auth-service"))
@@ -89,9 +80,6 @@ public class GatewayConfig {
 
                 .route("transformer-openapi", r -> r.path("/transformer/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/transformer/(?<segment>.*)", "/${segment}"))
-                        .uri("lb://transformer-service"))
-                .route("transformer-simulation", r -> r.path("/api/v1/simulation/**")
-                        .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
                 .route("notification-swagger-ui", r -> r.path("/notification/swagger-ui/**", "/notification/swagger-ui.html")
                         .filters(f -> f.rewritePath("/notification/(?<segment>.*)", "/${segment}"))
