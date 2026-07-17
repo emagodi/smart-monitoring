@@ -15,6 +15,7 @@ import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loa
 interface Region {
   id: number;
   name: string;
+  districts?: District[];
 }
 
 interface District {
@@ -93,7 +94,7 @@ export default function TransformersIndex() {
   const canReadControllers = hasPermission('controllers.read');
   
   // --- Navigation State ---
-  const [viewMode, setViewMode] = useState<ViewMode>(isSupplierUser ? 'TRANSFORMERS' : 'REGIONS');
+  const [viewMode, setViewMode] = useState<ViewMode>('REGIONS');
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedDepot, setSelectedDepot] = useState<Depot | null>(null);
@@ -106,6 +107,7 @@ export default function TransformersIndex() {
   const [districts, setDistricts] = useState<District[]>([]);
   const [depots, setDepots] = useState<Depot[]>([]);
   const [transformers, setTransformers] = useState<Transformer[]>([]);
+  const [supplierDepots, setSupplierDepots] = useState<Depot[]>([]);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [controllers, setControllers] = useState<Controller[]>([]);
   const [readings, setReadings] = useState<Reading[]>([]);
@@ -173,6 +175,47 @@ export default function TransformersIndex() {
       setLoading(false);
     }
   }, [API_BASE_URL, headers, page, pageSize]);
+
+  const fetchSupplierHierarchy = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [regionsRes, depotsRes, transformersRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }),
+        axios.get(`${API_BASE_URL}/api/v1/depots`, { headers }),
+        axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers }),
+      ]);
+
+      const regionList = normalizeList(regionsRes.data) as Region[];
+      const depotList = normalizeList(depotsRes.data) as Depot[];
+      const transformerList = normalizeList(transformersRes.data) as Transformer[];
+      const visibleDepotIds = new Set(
+        transformerList
+          .map((transformer) => transformer.depotId)
+          .filter((depotId): depotId is number => typeof depotId === 'number')
+      );
+      const filteredDepots = depotList.filter((depot) => visibleDepotIds.has(depot.id));
+      const visibleDistrictIds = new Set(
+        filteredDepots
+          .map((depot) => depot.districtId)
+          .filter((districtId): districtId is number => typeof districtId === 'number')
+      );
+      const filteredRegions = regionList
+        .map((region) => ({
+          ...region,
+          districts: (Array.isArray(region.districts) ? region.districts : []).filter((district) => visibleDistrictIds.has(district.id)),
+        }))
+        .filter((region) => (region.districts?.length ?? 0) > 0);
+
+      setSupplierDepots(filteredDepots);
+      setRegions(filteredRegions);
+      setTotalElements(filteredRegions.length);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch supplier transformer hierarchy');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL, headers]);
 
   const fetchDistricts = useCallback(async (regionId: number) => {
     try {
@@ -257,8 +300,17 @@ export default function TransformersIndex() {
   const fetchControllers = useCallback(async (transformerId: number) => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE_URL}/api/v1/controllers/transformer/${transformerId}`, { headers });
-      const list = normalizeList(res.data);
+      let list: any[] = [];
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/v1/controllers/transformer/${transformerId}`, { headers });
+        list = normalizeList(res.data);
+      } catch (err) {
+        if (!(axios.isAxiosError(err) && err.response?.status === 404)) {
+          throw err;
+        }
+        const fallbackRes = await axios.get(`${API_BASE_URL}/api/v1/controllers`, { headers });
+        list = normalizeList(fallbackRes.data).filter((controller) => controller?.transformerId === transformerId);
+      }
       setControllers(list);
       setTotalElements(list.length);
     } catch (err) {
@@ -318,14 +370,24 @@ export default function TransformersIndex() {
   useEffect(() => {
     if (!token) return;
     setError(null);
-    if (viewMode === 'REGIONS') {
+    if (viewMode === 'REGIONS' && isSupplierUser) {
+      fetchSupplierHierarchy();
+    } else if (viewMode === 'REGIONS') {
       fetchRegions();
+    } else if (viewMode === 'DISTRICTS' && selectedRegion && isSupplierUser) {
+      const filtered = (selectedRegion.districts || []) as District[];
+      setDistricts(filtered);
+      setTotalElements(filtered.length);
     } else if (viewMode === 'DISTRICTS' && selectedRegion) {
       fetchDistricts(selectedRegion.id);
+    } else if (viewMode === 'DEPOTS' && selectedDistrict && isSupplierUser) {
+      const filtered = supplierDepots.filter((depot) => depot.districtId === selectedDistrict.id);
+      setDepots(filtered);
+      setTotalElements(filtered.length);
     } else if (viewMode === 'DEPOTS' && selectedDistrict) {
       fetchDepots(selectedDistrict.id);
-    } else if (viewMode === 'TRANSFORMERS' && (selectedDepot || isSupplierUser)) {
-      fetchTransformers(selectedDepot?.id ?? null);
+    } else if (viewMode === 'TRANSFORMERS' && selectedDepot) {
+      fetchTransformers(selectedDepot.id);
     } else if (viewMode === 'SENSORS' && selectedTransformer) {
       fetchSensors(selectedTransformer.id);
     } else if (viewMode === 'READINGS' && selectedSensor) {
@@ -335,11 +397,11 @@ export default function TransformersIndex() {
     } else if (viewMode === 'CONTROLLER_READINGS' && selectedController) {
       fetchControllerReadings(selectedController.id);
     }
-  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedController, page, fetchRegions, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchReadings, fetchControllers, fetchControllerReadings, isSupplierUser]);
+  }, [token, viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedController, page, fetchRegions, fetchSupplierHierarchy, fetchDistricts, fetchDepots, fetchTransformers, fetchSensors, fetchReadings, fetchControllers, fetchControllerReadings, isSupplierUser]);
 
   useEffect(() => {
     if (isSupplierUser) {
-      setViewMode('TRANSFORMERS');
+      setViewMode('REGIONS');
       setSelectedRegion(null);
       setSelectedDistrict(null);
       setSelectedDepot(null);
@@ -402,9 +464,6 @@ export default function TransformersIndex() {
   };
 
   const handleBack = () => {
-    if (isSupplierUser) {
-      return;
-    }
     setPage(1);
     setSearch('');
     if (viewMode === 'READINGS') {
@@ -432,10 +491,6 @@ export default function TransformersIndex() {
   };
 
   const navigateTo = (mode: ViewMode) => {
-      if (isSupplierUser && mode !== 'TRANSFORMERS' && mode !== 'SENSORS' && mode !== 'CONTROLLERS' && mode !== 'READINGS' && mode !== 'CONTROLLER_READINGS') {
-          setViewMode('TRANSFORMERS');
-          return;
-      }
       setPage(1);
       setSearch('');
       if (mode === 'REGIONS') {
@@ -499,41 +554,6 @@ export default function TransformersIndex() {
   // --- Render Helpers ---
 
   const renderBreadcrumbs = () => (
-      isSupplierUser ? (
-      <nav className="flex items-center text-sm text-gray-500 mb-6 overflow-x-auto whitespace-nowrap">
-          <span className="font-bold text-brand-600">{user?.supplierName || 'Supplier'} Transformers</span>
-          {selectedTransformer && ['SENSORS', 'CONTROLLERS'].includes(viewMode) && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-medium text-gray-700">{selectedTransformer.name}</span>
-              </>
-          )}
-          {viewMode === 'SENSORS' && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Sensors</span>
-              </>
-          )}
-          {viewMode === 'CONTROLLERS' && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Controllers</span>
-              </>
-          )}
-          {selectedSensor && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Readings</span>
-              </>
-          )}
-          {selectedController && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Controller Readings</span>
-              </>
-          )}
-      </nav>
-      ) : (
       <nav className="flex items-center text-sm text-gray-500 mb-6 overflow-x-auto whitespace-nowrap">
           <button onClick={() => navigateTo('REGIONS')} className={`hover:text-brand-600 ${viewMode === 'REGIONS' ? 'font-bold text-brand-600' : ''}`}>
               Regions
@@ -599,7 +619,6 @@ export default function TransformersIndex() {
               </>
           )}
       </nav>
-      )
   );
 
   const filteredList = <T extends { name: string }>(list: T[]) => {
@@ -621,7 +640,7 @@ export default function TransformersIndex() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Transformers</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {isSupplierUser ? 'View transformers assigned to your organisation and use them for controller or sensor assignment' : 'Manage electrical infrastructure hierarchy'}
+            {isSupplierUser ? 'Browse the same region, district, and depot hierarchy as admin, filtered to transformers linked to your organisation devices.' : 'Manage electrical infrastructure hierarchy'}
           </p>
         </div>
         {viewMode === 'TRANSFORMERS' && canCreateTransformers && (
@@ -766,7 +785,14 @@ export default function TransformersIndex() {
                                   <td className="px-6 py-4 whitespace-nowrap">
                                       <div className="flex items-center">
                                           <Zap className="h-5 w-5 text-yellow-500 mr-3" />
-                                          <div className="text-sm font-medium text-gray-900">{t.name}</div>
+                                          <div>
+                                              <div className="text-sm font-medium text-gray-900">{t.name}</div>
+                                              {selectedDepot && (
+                                                <div className="text-xs text-gray-500">
+                                                  {selectedRegion?.name} / {selectedDistrict?.name} / {selectedDepot.name}
+                                                </div>
+                                              )}
+                                          </div>
                                       </div>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -884,14 +910,6 @@ export default function TransformersIndex() {
                       </tbody>
                   </table>
               )}
-
-          </div>
-      )}
-
-
-
-
-
               {/* CONTROLLERS VIEW */}
               {viewMode === 'CONTROLLERS' && (
                   <table className="min-w-full divide-y divide-gray-200">
@@ -1172,6 +1190,8 @@ export default function TransformersIndex() {
                       )}
                   </div>
               )}
+          </div>
+      )}
 
       {/* VIEW MODAL */}
       <Modal isOpen={showView} onClose={() => setShowView(false)} title="Transformer Details">
@@ -1183,6 +1203,18 @@ export default function TransformersIndex() {
                           <p className="mt-1 text-sm text-gray-900 font-medium">{activeTransformer.name}</p>
                       </div>
                       <div>
+                          <label className="block text-xs font-medium text-gray-500 uppercase">Region</label>
+                          <p className="mt-1 text-sm text-gray-900">{selectedRegion?.name ?? '—'}</p>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-medium text-gray-500 uppercase">District</label>
+                          <p className="mt-1 text-sm text-gray-900">{selectedDistrict?.name ?? '—'}</p>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-medium text-gray-500 uppercase">Depot</label>
+                          <p className="mt-1 text-sm text-gray-900">{selectedDepot?.name ?? activeTransformer.depot?.name ?? '—'}</p>
+                      </div>
+                      <div>
                           <label className="block text-xs font-medium text-gray-500 uppercase">Status</label>
                           <span className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${activeTransformer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                               {activeTransformer.isActive ? 'Active' : 'Maintenance'}
@@ -1192,17 +1224,12 @@ export default function TransformersIndex() {
                           <label className="block text-xs font-medium text-gray-500 uppercase">Capacity</label>
                           <p className="mt-1 text-sm text-gray-900">{activeTransformer.capacity ? `${activeTransformer.capacity} kVA` : '—'}</p>
                       </div>
-                      {!isSupplierUser ? (
                       <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Depot</label>
-                          <p className="mt-1 text-sm text-gray-900">{activeTransformer.depot?.name ?? '—'}</p>
+                          <label className="block text-xs font-medium text-gray-500 uppercase">{isSupplierUser ? 'Visible Through' : 'Organisation'}</label>
+                          <p className="mt-1 text-sm text-gray-900">
+                              {isSupplierUser ? (user?.supplierName ?? 'Supplier-linked assignment') : (activeTransformer.supplierName ?? '—')}
+                          </p>
                       </div>
-                      ) : (
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Organisation</label>
-                          <p className="mt-1 text-sm text-gray-900">{activeTransformer.supplierName ?? user?.supplierName ?? '—'}</p>
-                      </div>
-                      )}
                       <div>
                           <label className="block text-xs font-medium text-gray-500 uppercase">Coordinates</label>
                           <p className="mt-1 text-sm text-gray-900">

@@ -21,6 +21,7 @@ public class TransformerResponse {
     private String supplierCode;
     private String supplierName;
     private String type;
+    private String locationLabel;
     private BigDecimal lat;
     private BigDecimal lng;
     private List<SensorResponse> sensors;

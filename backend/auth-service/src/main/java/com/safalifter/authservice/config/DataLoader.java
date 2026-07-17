@@ -113,6 +113,9 @@ public class DataLoader implements CommandLineRunner {
         supplierRole.setPermissions(resolvePermissionsByName(List.of(
                 "dashboard.read",
                 "dashboard.supplier",
+                "regions.read",
+                "districts.read",
+                "depots.read",
                 "transformers.read",
                 "controllers.create",
                 "controllers.read",

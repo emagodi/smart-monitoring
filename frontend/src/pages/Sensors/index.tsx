@@ -20,7 +20,13 @@ interface Sensor {
   updatedAt?: string;
 }
 
-interface TransformerOption { id: number; name: string }
+interface TransformerOption {
+  id: number;
+  name: string;
+  description?: string;
+  searchText?: string;
+  badge?: string;
+}
 const SENSOR_TYPES = ['temperature', 'contact', 'suspicious_tilt', 'motion', 'video', 'controller'] as const;
 
 export default function SensorsIndex() {
@@ -80,7 +86,13 @@ export default function SensorsIndex() {
       const arr = Array.isArray(res.data) ? (res.data as TransformerOption[]) : ((res.data?.data as TransformerOption[]) ?? []);
       setTransformers(
         arr
-          .map((t) => ({ id: t.id, name: t.name }))
+          .map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            description: buildTransformerDescription(t),
+            searchText: buildTransformerSearchText(t),
+            badge: t.supplierName || t.type || undefined,
+          }))
           .sort((a, b) => a.name.localeCompare(b.name))
       );
     } catch {
@@ -641,11 +653,13 @@ export function SensorDeleteModal({ open, onClose, onConfirm, sensor, deleting, 
   );
 }
 
-function SearchableSelect({ options, value, onChange, placeholder, compact }: { options: { id: number; name: string }[]; value: number | ''; onChange: (v: number | '') => void; placeholder?: string; compact?: boolean }) {
+function SearchableSelect({ options, value, onChange, placeholder, compact }: { options: TransformerOption[]; value: number | ''; onChange: (v: number | '') => void; placeholder?: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const selected = typeof value === 'number' ? options.find(o => o.id === value) : undefined;
-  const filtered = options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = options.filter(o =>
+    `${o.name} ${o.description || ''} ${o.searchText || ''}`.toLowerCase().includes(query.trim().toLowerCase())
+  );
 
   return (
     <div className="relative">
@@ -698,7 +712,13 @@ function SearchableSelect({ options, value, onChange, placeholder, compact }: { 
                     onClick={() => { onChange(opt.id); setQuery(opt.name); setOpen(false); }}
                     className={`flex w-full px-3 py-2 text-left text-sm ${value === opt.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
                   >
-                    {opt.name}
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate">{opt.name}</span>
+                        {opt.badge ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">{opt.badge}</span> : null}
+                      </span>
+                      {opt.description ? <span className="mt-0.5 block truncate text-xs text-gray-500">{opt.description}</span> : null}
+                    </span>
                   </button>
                 </li>
               ))
@@ -708,6 +728,31 @@ function SearchableSelect({ options, value, onChange, placeholder, compact }: { 
       )}
     </div>
   );
+}
+
+function buildTransformerDescription(item: any) {
+  const parts = [
+    item.type ? item.type.replaceAll('_', ' ') : null,
+    item.capacity ? `${item.capacity} kVA` : null,
+    item.supplierName || null,
+    item.locationLabel || (item.lat != null && item.lng != null ? `${item.lat}, ${item.lng}` : null),
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
+function buildTransformerSearchText(item: any) {
+  return [
+    item.name,
+    item.type,
+    item.capacity,
+    item.supplierName,
+    item.supplierCode,
+    item.depotId,
+    item.lat,
+    item.lng,
+  ]
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .join(' ');
 }
 
 export function SensorCreateModal({ open, onClose, onSubmit, deviceId, setDeviceId, devEui, setDevEui, name, setName, type, setType, transformerId, setTransformerId, transformers, saving, error }: { open: boolean; onClose: () => void; onSubmit: (e: React.FormEvent) => void; deviceId: string; setDeviceId: (v: string) => void; devEui: string; setDevEui: (v: string) => void; name: string; setName: (v: string) => void; type: string; setType: (v: string) => void; transformerId: number | ''; setTransformerId: (v: number | '') => void; transformers: TransformerOption[]; saving?: boolean; error?: string | null; }) {

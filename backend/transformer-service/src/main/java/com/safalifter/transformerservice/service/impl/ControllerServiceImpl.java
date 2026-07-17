@@ -29,11 +29,11 @@ public class ControllerServiceImpl implements ControllerService {
     public ControllerResponse create(ControllerRequest request) {
         Transformer transformer = null;
         if (request.getTransformerId() != null) {
-            transformer = findTransformerOrThrow(request.getTransformerId());
+            transformer = findAssignmentTransformerOrThrow(request.getTransformerId());
             controllerRepository.findByTransformerIdAndDeviceId(request.getTransformerId(), request.getDeviceId()).ifPresent(s -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Controller already exists on transformer"); });
         }
-        String supplierCode = transformer != null ? transformer.getSupplierCode() : accessScopeService.getCurrentSupplierCode();
-        String supplierName = transformer != null ? transformer.getSupplierName() : accessScopeService.getCurrentSupplierName();
+        String supplierCode = resolveSupplierCode(transformer, null);
+        String supplierName = resolveSupplierName(transformer, null);
         Controller controller = Controller.builder()
                 .deviceId(request.getDeviceId())
                 .devEui(request.getDevEui())
@@ -79,20 +79,15 @@ public class ControllerServiceImpl implements ControllerService {
         Controller controller = findControllerOrThrow(id);
         Transformer transformer = null;
         if (request.getTransformerId() != null) {
-            transformer = findTransformerOrThrow(request.getTransformerId());
+            transformer = findAssignmentTransformerOrThrow(request.getTransformerId());
         }
         controller.setDeviceId(request.getDeviceId());
         controller.setDevEui(request.getDevEui());
         controller.setName(request.getName());
         controller.setType(request.getType());
         controller.setTransformerId(request.getTransformerId());
-        if (transformer != null) {
-            controller.setSupplierCode(transformer.getSupplierCode());
-            controller.setSupplierName(transformer.getSupplierName());
-        } else if (accessScopeService.isSupplierScoped()) {
-            controller.setSupplierCode(accessScopeService.getCurrentSupplierCode());
-            controller.setSupplierName(accessScopeService.getCurrentSupplierName());
-        }
+        controller.setSupplierCode(resolveSupplierCode(transformer, controller.getSupplierCode()));
+        controller.setSupplierName(resolveSupplierName(transformer, controller.getSupplierName()));
         Controller saved = controllerRepository.save(controller);
         return toResponse(saved);
     }
@@ -117,6 +112,31 @@ public class ControllerServiceImpl implements ControllerService {
                 ? transformerRepository.findByIdAndSupplierCode(transformerId, supplierCode)
                 : transformerRepository.findById(transformerId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found"));
+    }
+
+    private Transformer findAssignmentTransformerOrThrow(Long transformerId) {
+        return transformerRepository.findById(transformerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found"));
+    }
+
+    private String resolveSupplierCode(Transformer transformer, String existingSupplierCode) {
+        if (accessScopeService.isSupplierScoped()) {
+            return accessScopeService.getCurrentSupplierCode();
+        }
+        if (transformer != null && transformer.getSupplierCode() != null && !transformer.getSupplierCode().isBlank()) {
+            return transformer.getSupplierCode();
+        }
+        return existingSupplierCode;
+    }
+
+    private String resolveSupplierName(Transformer transformer, String existingSupplierName) {
+        if (accessScopeService.isSupplierScoped()) {
+            return accessScopeService.getCurrentSupplierName();
+        }
+        if (transformer != null && transformer.getSupplierName() != null && !transformer.getSupplierName().isBlank()) {
+            return transformer.getSupplierName();
+        }
+        return existingSupplierName;
     }
 
     private ControllerResponse toResponse(Controller controller) {

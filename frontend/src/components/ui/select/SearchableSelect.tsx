@@ -4,6 +4,9 @@ import { Search, ChevronDown, Check } from 'lucide-react';
 interface Option {
   id: number | string;
   name: string;
+  description?: string;
+  searchText?: string;
+  badge?: string;
 }
 
 interface SearchableSelectProps {
@@ -27,7 +30,7 @@ export const SearchableSelect = ({
 
   const selectedOption = options.find((o) => o.id === value);
   const filteredOptions = options.filter((o) =>
-    o.name.toLowerCase().includes(search.toLowerCase())
+    `${o.name} ${o.description || ''} ${o.searchText || ''}`.toLowerCase().includes(search.toLowerCase())
   );
 
   useEffect(() => {
@@ -49,8 +52,15 @@ export const SearchableSelect = ({
           compact ? 'h-9' : 'h-10'
         } ${!selectedOption ? 'text-gray-500' : ''}`}
       >
-        <span className="truncate">
-          {selectedOption ? selectedOption.name : placeholder}
+        <span className="min-w-0 text-left">
+          <span className="block truncate">
+            {selectedOption ? selectedOption.name : placeholder}
+          </span>
+          {selectedOption?.description ? (
+            <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+              {selectedOption.description}
+            </span>
+          ) : null}
         </span>
         <ChevronDown className="h-4 w-4 opacity-50" />
       </button>
@@ -85,9 +95,23 @@ export const SearchableSelect = ({
                   setSearch('');
                 }}
               >
-                <span className={`block truncate ${option.id === value ? 'font-semibold' : 'font-normal'}`}>
-                  {option.name}
-                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`block truncate ${option.id === value ? 'font-semibold' : 'font-normal'}`}>
+                      {option.name}
+                    </span>
+                    {option.badge ? (
+                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+                        {option.badge}
+                      </span>
+                    ) : null}
+                  </div>
+                  {option.description ? (
+                    <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
+                      {option.description}
+                    </span>
+                  ) : null}
+                </div>
                 {option.id === value && (
                   <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-brand-600 dark:text-brand-400">
                     <Check className="h-4 w-4" />

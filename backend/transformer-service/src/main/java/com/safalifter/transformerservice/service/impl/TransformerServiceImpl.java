@@ -18,7 +18,11 @@ import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.TransformerService;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -80,7 +84,9 @@ public class TransformerServiceImpl implements TransformerService {
     public List<TransformerResponse> listByDepotId(Long depotId) {
         String supplierCode = accessScopeService.getCurrentSupplierCode();
         List<Transformer> transformers = supplierCode != null
-                ? transformerRepository.findByDepotIdAndSupplierCode(depotId, supplierCode)
+                ? listScopedTransformers().stream()
+                    .filter(transformer -> Objects.equals(transformer.getDepotId(), depotId))
+                    .toList()
                 : transformerRepository.findByDepotId(depotId);
         return transformers.stream().map(this::toResponse).toList();
     }
@@ -128,15 +134,46 @@ public class TransformerServiceImpl implements TransformerService {
 
     private List<Transformer> listScopedTransformers() {
         String supplierCode = accessScopeService.getCurrentSupplierCode();
-        return supplierCode != null ? transformerRepository.findAllBySupplierCode(supplierCode) : transformerRepository.findAll();
+        if (supplierCode == null) {
+            return transformerRepository.findAll();
+        }
+
+        LinkedHashMap<Long, Transformer> visible = new LinkedHashMap<>();
+        transformerRepository.findAllBySupplierCode(supplierCode)
+                .forEach(transformer -> visible.put(transformer.getId(), transformer));
+
+        Set<Long> linkedTransformerIds = controllerRepository.findAllBySupplierCode(supplierCode).stream()
+                .map(c -> c.getTransformerId())
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        linkedTransformerIds.addAll(sensorRepository.findAllBySupplierCode(supplierCode).stream()
+                .map(s -> s.getTransformerId())
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+
+        transformerRepository.findAllById(linkedTransformerIds)
+                .forEach(transformer -> visible.put(transformer.getId(), transformer));
+
+        return List.copyOf(visible.values());
     }
 
     private Transformer findTransformerOrThrow(Long id) {
         String supplierCode = accessScopeService.getCurrentSupplierCode();
         return (supplierCode != null
-                ? transformerRepository.findByIdAndSupplierCode(id, supplierCode)
+                ? transformerRepository.findById(id).filter(transformer -> isVisibleToSupplier(transformer, supplierCode))
                 : transformerRepository.findById(id))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
+    }
+
+    private boolean isVisibleToSupplier(Transformer transformer, String supplierCode) {
+        if (transformer == null) {
+            return false;
+        }
+        if (supplierCode.equalsIgnoreCase(String.valueOf(transformer.getSupplierCode()))) {
+            return true;
+        }
+        return controllerRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode).stream().findAny().isPresent()
+                || sensorRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode).stream().findAny().isPresent();
     }
 
     private void forbidSupplierCrud() {
@@ -154,7 +191,10 @@ public class TransformerServiceImpl implements TransformerService {
     }
 
     private TransformerResponse toResponse(Transformer transformer) {
-        List<SensorResponse> sensors = sensorRepository.findByTransformerId(transformer.getId()).stream()
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        List<SensorResponse> sensors = (supplierCode != null
+                ? sensorRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode)
+                : sensorRepository.findByTransformerId(transformer.getId())).stream()
                 .map(s -> SensorResponse.builder()
                         .id(s.getId())
                         .deviceId(s.getDeviceId())
@@ -168,7 +208,9 @@ public class TransformerServiceImpl implements TransformerService {
                         .updatedAt(s.getUpdatedAt())
                         .build())
                 .toList();
-        List<ControllerResponse> controllers = controllerRepository.findByTransformerId(transformer.getId()).stream()
+        List<ControllerResponse> controllers = (supplierCode != null
+                ? controllerRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode)
+                : controllerRepository.findByTransformerId(transformer.getId())).stream()
                 .map(c -> ControllerResponse.builder()
                         .id(c.getId())
                         .deviceId(c.getDeviceId())
@@ -191,6 +233,7 @@ public class TransformerServiceImpl implements TransformerService {
                 .supplierCode(transformer.getSupplierCode())
                 .supplierName(transformer.getSupplierName())
                 .type(transformer.getType() != null ? transformer.getType().name() : null)
+                .locationLabel(transformer.getLat() != null && transformer.getLng() != null ? transformer.getLat() + ", " + transformer.getLng() : null)
                 .lat(transformer.getLat())
                 .lng(transformer.getLng())
                 .sensors(sensors)

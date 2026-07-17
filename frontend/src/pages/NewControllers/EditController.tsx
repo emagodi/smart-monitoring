@@ -16,7 +16,13 @@ interface Controller {
   transformerId?: number;
 }
 
-interface TransformerOption { id: number; name: string }
+interface TransformerOption {
+  id: number;
+  name: string;
+  description?: string;
+  searchText?: string;
+  badge?: string;
+}
 
 const normalizeList = (payload: unknown): any[] => {
   if (Array.isArray(payload)) return payload;
@@ -59,7 +65,13 @@ export default function EditController() {
       const tArr = normalizeList(tRes.data);
       setTransformers(
         tArr
-          .map((t) => ({ id: t.id, name: t.name }))
+          .map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: buildTransformerDescription(t),
+            searchText: buildTransformerSearchText(t),
+            badge: t.supplierName || t.type || undefined,
+          }))
           .sort((a, b) => a.name.localeCompare(b.name))
       );
 
@@ -210,4 +222,29 @@ export default function EditController() {
       </div>
     </div>
   );
+}
+
+function buildTransformerDescription(item: any) {
+  const parts = [
+    item.type ? item.type.replaceAll('_', ' ') : null,
+    item.capacity ? `${item.capacity} kVA` : null,
+    item.supplierName || null,
+    item.locationLabel || (item.lat != null && item.lng != null ? `${item.lat}, ${item.lng}` : null),
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
+function buildTransformerSearchText(item: any) {
+  return [
+    item.name,
+    item.type,
+    item.capacity,
+    item.supplierName,
+    item.supplierCode,
+    item.depotId,
+    item.lat,
+    item.lng,
+  ]
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .join(' ');
 }

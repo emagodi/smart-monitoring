@@ -23,6 +23,9 @@ interface Controller {
 interface TransformerOption {
   id: number;
   name: string;
+  description?: string;
+  searchText?: string;
+  badge?: string;
 }
 
 export default function NewControllersIndex() {
@@ -80,7 +83,13 @@ export default function NewControllersIndex() {
       const list = normalizeList(res.data);
       setTransformers(
         list
-          .map((item) => ({ id: item.id, name: item.name }))
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            description: buildTransformerDescription(item),
+            searchText: buildTransformerSearchText(item),
+            badge: item.supplierName || item.type || undefined,
+          }))
           .sort((a, b) => a.name.localeCompare(b.name))
       );
     } catch (err) {
@@ -349,4 +358,29 @@ function InfoCard({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm font-semibold text-gray-900">{value}</p>
     </div>
   );
+}
+
+function buildTransformerDescription(item: any) {
+  const parts = [
+    item.type ? item.type.replaceAll('_', ' ') : null,
+    item.capacity ? `${item.capacity} kVA` : null,
+    item.supplierName || null,
+    item.locationLabel || (item.lat != null && item.lng != null ? `${item.lat}, ${item.lng}` : null),
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
+function buildTransformerSearchText(item: any) {
+  return [
+    item.name,
+    item.type,
+    item.capacity,
+    item.supplierName,
+    item.supplierCode,
+    item.depotId,
+    item.lat,
+    item.lng,
+  ]
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .join(' ');
 }

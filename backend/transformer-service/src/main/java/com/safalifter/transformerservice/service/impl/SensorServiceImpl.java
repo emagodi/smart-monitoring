@@ -29,15 +29,15 @@ public class SensorServiceImpl implements SensorService {
 
     @Override
     public SensorResponse create(SensorRequest request) {
-        Transformer transformer = findTransformerOrThrow(request.getTransformerId());
+        Transformer transformer = findAssignmentTransformerOrThrow(request.getTransformerId());
         sensorRepository.findByTransformerIdAndDeviceId(request.getTransformerId(), request.getDeviceId()).ifPresent(s -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Sensor already exists on transformer"); });
         Sensor sensor = Sensor.builder()
                 .deviceId(request.getDeviceId())
                 .devEui(request.getDevEui())
                 .name(request.getName())
                 .type(request.getType())
-                .supplierCode(transformer.getSupplierCode())
-                .supplierName(transformer.getSupplierName())
+                .supplierCode(resolveSupplierCode(transformer, null))
+                .supplierName(resolveSupplierName(transformer, null))
                 .transformerId(request.getTransformerId())
                 .build();
         Sensor saved = sensorRepository.save(sensor);
@@ -90,14 +90,14 @@ public class SensorServiceImpl implements SensorService {
     @Override
     public SensorResponse update(Long id, SensorRequest request) {
         Sensor sensor = findSensorOrThrow(id);
-        Transformer transformer = findTransformerOrThrow(request.getTransformerId());
+        Transformer transformer = findAssignmentTransformerOrThrow(request.getTransformerId());
         sensor.setDeviceId(request.getDeviceId());
         sensor.setDevEui(request.getDevEui());
         sensor.setName(request.getName());
         sensor.setType(request.getType());
         sensor.setTransformerId(request.getTransformerId());
-        sensor.setSupplierCode(transformer.getSupplierCode());
-        sensor.setSupplierName(transformer.getSupplierName());
+        sensor.setSupplierCode(resolveSupplierCode(transformer, sensor.getSupplierCode()));
+        sensor.setSupplierName(resolveSupplierName(transformer, sensor.getSupplierName()));
         Sensor saved = sensorRepository.save(sensor);
         return toResponse(saved);
     }
@@ -122,6 +122,31 @@ public class SensorServiceImpl implements SensorService {
                 ? transformerRepository.findByIdAndSupplierCode(transformerId, supplierCode)
                 : transformerRepository.findById(transformerId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found"));
+    }
+
+    private Transformer findAssignmentTransformerOrThrow(Long transformerId) {
+        return transformerRepository.findById(transformerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found"));
+    }
+
+    private String resolveSupplierCode(Transformer transformer, String existingSupplierCode) {
+        if (accessScopeService.isSupplierScoped()) {
+            return accessScopeService.getCurrentSupplierCode();
+        }
+        if (transformer != null && transformer.getSupplierCode() != null && !transformer.getSupplierCode().isBlank()) {
+            return transformer.getSupplierCode();
+        }
+        return existingSupplierCode;
+    }
+
+    private String resolveSupplierName(Transformer transformer, String existingSupplierName) {
+        if (accessScopeService.isSupplierScoped()) {
+            return accessScopeService.getCurrentSupplierName();
+        }
+        if (transformer != null && transformer.getSupplierName() != null && !transformer.getSupplierName().isBlank()) {
+            return transformer.getSupplierName();
+        }
+        return existingSupplierName;
     }
 
     private SensorResponse toResponse(Sensor sensor) {
