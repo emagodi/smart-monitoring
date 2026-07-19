@@ -32,6 +32,11 @@ public class AccessScopeService {
         return principal != null ? principal.getUserType() : null;
     }
 
+    public String getCurrentUserEmail() {
+        AuthenticatedUserPrincipal principal = getCurrentPrincipal();
+        return principal != null ? principal.getEmail() : null;
+    }
+
     private AuthenticatedUserPrincipal getCurrentPrincipal() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) {

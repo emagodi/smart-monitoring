@@ -300,17 +300,8 @@ export default function TransformersIndex() {
   const fetchControllers = useCallback(async (transformerId: number) => {
     try {
       setLoading(true);
-      let list: any[] = [];
-      try {
-        const res = await axios.get(`${API_BASE_URL}/api/v1/controllers/transformer/${transformerId}`, { headers });
-        list = normalizeList(res.data);
-      } catch (err) {
-        if (!(axios.isAxiosError(err) && err.response?.status === 404)) {
-          throw err;
-        }
-        const fallbackRes = await axios.get(`${API_BASE_URL}/api/v1/controllers`, { headers });
-        list = normalizeList(fallbackRes.data).filter((controller) => controller?.transformerId === transformerId);
-      }
+      const res = await axios.get(`${API_BASE_URL}/api/v1/controllers/transformer/${transformerId}`, { headers });
+      const list = normalizeList(res.data);
       setControllers(list);
       setTotalElements(list.length);
     } catch (err) {

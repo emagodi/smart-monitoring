@@ -26,6 +26,7 @@ import CreateTransformer from "./pages/Transformers/CreateTransformer";
 import EditTransformer from "./pages/Transformers/EditTransformer";
 import AlertsIndex from "./pages/Alerts";
 import SiteIndex from "./pages/Site";
+import OculusControlIndex from "./pages/OculusControl";
 
 const AppRoutes = () => {
   const { isAuthenticated, user } = useAuth();
@@ -144,6 +145,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute permission="sites.read">
               <SiteIndex />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="oculus-control"
+          element={
+            <ProtectedRoute permission="controllers.update" allowedSupplierCodes={["oculus"]}>
+              <OculusControlIndex />
             </ProtectedRoute>
           }
         />

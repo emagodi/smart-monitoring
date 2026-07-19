@@ -33,6 +33,7 @@ interface NavItem {
   subItems?: { name: string; path: string }[];
   permission?: string;
   hideForSupplier?: boolean;
+  supplierCodes?: string[];
 }
 
 interface NavGroup {
@@ -118,6 +119,13 @@ const navGroups: NavGroup[] = [
         path: "/new-controllers",
         permission: "controllers.read",
       },
+      {
+        icon: <Shield className="w-5 h-5" />,
+        name: "Oculus Control",
+        path: "/oculus-control",
+        permission: "controllers.update",
+        supplierCodes: ["oculus"],
+      },
     ],
   },
   {
@@ -181,11 +189,16 @@ const AppSidebar: React.FC = () => {
       .map((group) => ({
         ...group,
         items: group.items.filter(
-          (item) => (!item.permission || hasPermission(item.permission)) && !(isSupplierUser && item.hideForSupplier)
+          (item) =>
+            (!item.permission || hasPermission(item.permission)) &&
+            !(isSupplierUser && item.hideForSupplier) &&
+            (!isSupplierUser ||
+              !item.supplierCodes ||
+              item.supplierCodes.map((code) => code.toLowerCase()).includes((user?.supplierCode || "").toLowerCase()))
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [hasPermission, isSupplierUser]);
+  }, [hasPermission, isSupplierUser, user?.supplierCode]);
 
   return (
     <aside

@@ -85,6 +85,12 @@ services:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
       APP_IMAGE_STORAGE_DIR: /app/uploads
+      LORIOT_API_URL: ${LORIOT_API_URL:-}
+      LORIOT_APP_ID: ${LORIOT_APP_ID:-}
+      LORIOT_API_KEY: ${LORIOT_API_KEY:-}
+      LORIOT_DOWNLINK_PORT: ${LORIOT_DOWNLINK_PORT:-2}
+      LORIOT_DOWNLINK_CONFIRMED: ${LORIOT_DOWNLINK_CONFIRMED:-false}
+      LORIOT_INSECURE_SSL: ${LORIOT_INSECURE_SSL:-false}
     ports:
       - "8083:8083"
     volumes:
