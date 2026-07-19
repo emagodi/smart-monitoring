@@ -22,6 +22,12 @@ public class OculusTransformerControlResponse {
     private String availabilityReason;
     private String armState;
     private Boolean armed;
+    private String effectiveArmState;
+    private Boolean effectiveArmed;
+    private String effectiveStateSource;
+    private String confirmationStatus;
+    private String controllerStatus;
+    private Long minutesSinceLastTelemetry;
     private String lastTelemetryAt;
     private String lastCommandAction;
     private String lastCommandStatus;

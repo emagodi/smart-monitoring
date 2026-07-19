@@ -30,6 +30,20 @@ type OculusTransformerControl = {
   availabilityReason?: string | null;
   armState?: "ARMED" | "DISARMED" | "UNKNOWN" | null;
   armed?: boolean | null;
+  effectiveArmState?: "ARMED" | "DISARMED" | "UNKNOWN" | null;
+  effectiveArmed?: boolean | null;
+  effectiveStateSource?: "COMMAND" | "TELEMETRY" | null;
+  confirmationStatus?:
+    | "NO_COMMAND"
+    | "COMMAND_FAILED"
+    | "SENDING_COMMAND"
+    | "CONFIRMED"
+    | "TELEMETRY_MISMATCH"
+    | "PENDING_KEEPALIVE"
+    | "KEEPALIVE_OVERDUE"
+    | null;
+  controllerStatus?: "ONLINE" | "DELAYED" | "OFFLINE" | "NO_KEEPALIVE" | null;
+  minutesSinceLastTelemetry?: number | null;
   lastTelemetryAt?: string | null;
   lastCommandAction?: string | null;
   lastCommandStatus?: string | null;
@@ -60,6 +74,16 @@ type EnrichedControlRow = OculusTransformerControl & {
   regionName: string;
   districtName: string;
   depotName: string;
+};
+
+type OculusControlActionResponse = {
+  transformerId?: number;
+  targetState?: "ARMED" | "DISARMED" | null;
+  commandStatus?: "PENDING" | "SENT" | "FAILED" | null;
+  requestedAt?: string | null;
+  requestedBy?: string | null;
+  message?: string | null;
+  transformerName?: string | null;
 };
 
 const normalizeList = <T,>(payload: unknown): T[] => {
@@ -106,39 +130,59 @@ const getCommandTargetState = (row: OculusTransformerControl): "ARMED" | "DISARM
   return null;
 };
 
+const getEffectiveArmState = (row: OculusTransformerControl) => row.effectiveArmState || row.armState || "UNKNOWN";
+
 const isAwaitingTelemetryConfirmation = (row: OculusTransformerControl) => {
-  if (row.lastCommandStatus !== "SENT") return false;
-
-  const targetState = getCommandTargetState(row);
-  if (!targetState || row.armState === targetState) {
-    return false;
-  }
-
-  const commandAt = parseDateValue(row.lastCommandAt);
-  const telemetryAt = parseDateValue(row.lastTelemetryAt);
-
-  if (!commandAt) return false;
-  if (!telemetryAt) return true;
-
-  return commandAt.getTime() > telemetryAt.getTime();
+  return row.confirmationStatus === "PENDING_KEEPALIVE" || row.confirmationStatus === "KEEPALIVE_OVERDUE" || row.confirmationStatus === "SENDING_COMMAND";
 };
 
 const getConfirmationStatusLabel = (row: OculusTransformerControl) => {
-  if (row.lastCommandStatus === "FAILED") return "Command Failed";
-  if (row.lastCommandStatus === "PENDING") return "Sending Command";
-  if (isAwaitingTelemetryConfirmation(row)) return "Pending Telemetry";
-  if (row.lastCommandStatus === "SENT" && getCommandTargetState(row) && row.armState === getCommandTargetState(row)) {
-    return "Confirmed";
+  switch (row.confirmationStatus) {
+    case "COMMAND_FAILED":
+      return "Command Failed";
+    case "SENDING_COMMAND":
+      return "Sending Command";
+    case "PENDING_KEEPALIVE":
+      return "Pending Keepalive";
+    case "KEEPALIVE_OVERDUE":
+      return "Keepalive Overdue";
+    case "TELEMETRY_MISMATCH":
+      return "Telemetry Mismatch";
+    case "CONFIRMED":
+      return "Confirmed";
+    default:
+      return "No Pending Command";
   }
-  return "No Pending Command";
 };
 
 const confirmationTone = (row: OculusTransformerControl) => {
-  const label = getConfirmationStatusLabel(row);
-  if (label === "Confirmed") return "bg-emerald-100 text-emerald-700";
-  if (label === "Pending Telemetry" || label === "Sending Command") return "bg-blue-100 text-blue-700";
-  if (label === "Command Failed") return "bg-red-100 text-red-700";
+  switch (row.confirmationStatus) {
+    case "CONFIRMED":
+      return "bg-emerald-100 text-emerald-700";
+    case "PENDING_KEEPALIVE":
+    case "SENDING_COMMAND":
+      return "bg-blue-100 text-blue-700";
+    case "KEEPALIVE_OVERDUE":
+      return "bg-amber-100 text-amber-700";
+    case "COMMAND_FAILED":
+    case "TELEMETRY_MISMATCH":
+      return "bg-red-100 text-red-700";
+  }
   return "bg-slate-100 text-slate-700";
+};
+
+const controllerStatusTone = (status?: string | null) => {
+  if (status === "ONLINE") return "bg-emerald-100 text-emerald-700";
+  if (status === "DELAYED") return "bg-amber-100 text-amber-700";
+  if (status === "OFFLINE") return "bg-red-100 text-red-700";
+  return "bg-slate-100 text-slate-700";
+};
+
+const controllerStatusLabel = (status?: string | null) => {
+  if (status === "ONLINE") return "Online";
+  if (status === "DELAYED") return "Delayed";
+  if (status === "OFFLINE") return "Offline";
+  return "No Keepalive";
 };
 
 export default function OculusControlIndex() {
@@ -232,7 +276,7 @@ export default function OculusControlIndex() {
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return enrichedRows.filter((row) => {
-      const matchesArmState = armStateFilter === "all" ? true : (row.armState || "UNKNOWN") === armStateFilter;
+      const matchesArmState = armStateFilter === "all" ? true : getEffectiveArmState(row) === armStateFilter;
       const matchesQuery =
         !query ||
         `${row.transformerName || ""} ${row.regionName} ${row.districtName} ${row.depotName} ${row.controllerName || ""} ${row.controllerDevEui || ""}`
@@ -244,8 +288,8 @@ export default function OculusControlIndex() {
 
   const stats = useMemo(() => {
     const total = rows.length;
-    const armed = rows.filter((row) => row.armState === "ARMED").length;
-    const disarmed = rows.filter((row) => row.armState === "DISARMED").length;
+    const armed = rows.filter((row) => getEffectiveArmState(row) === "ARMED").length;
+    const disarmed = rows.filter((row) => getEffectiveArmState(row) === "DISARMED").length;
     const unknown = Math.max(total - armed - disarmed, 0);
     return { total, armed, disarmed, unknown };
   }, [rows]);
@@ -266,6 +310,35 @@ export default function OculusControlIndex() {
     }
   }, [page, totalPages]);
 
+  const applyOptimisticCommandState = useCallback(
+    (transformerId: number, action: "arm" | "disarm", data?: OculusControlActionResponse) => {
+      const targetState = data?.targetState || (action === "arm" ? "ARMED" : "DISARMED");
+      const commandStatus = data?.commandStatus || "SENT";
+      const requestedAt = data?.requestedAt || new Date().toISOString();
+
+      setRows((currentRows) =>
+        currentRows.map((row) => {
+          if (row.transformerId !== transformerId) {
+            return row;
+          }
+
+          return {
+            ...row,
+            effectiveArmState: targetState,
+            effectiveArmed: targetState === "ARMED",
+            effectiveStateSource: "COMMAND",
+            confirmationStatus: commandStatus === "FAILED" ? "COMMAND_FAILED" : commandStatus === "PENDING" ? "SENDING_COMMAND" : "PENDING_KEEPALIVE",
+            lastCommandAction: action === "arm" ? "ARM" : "DISARM",
+            lastCommandStatus: commandStatus,
+            lastCommandAt: requestedAt,
+            lastCommandRequestedBy: data?.requestedBy || row.lastCommandRequestedBy,
+          };
+        })
+      );
+    },
+    []
+  );
+
   const sendCommand = useCallback(
     async (transformerId: number, action: "arm" | "disarm") => {
       try {
@@ -277,10 +350,11 @@ export default function OculusControlIndex() {
           {},
           { headers }
         );
-        const data = response.data as { message?: string; transformerName?: string };
+        const data = response.data as OculusControlActionResponse;
+        applyOptimisticCommandState(transformerId, action, data);
         setSuccess(
           data?.message ||
-            `${action === "arm" ? "Arm" : "Disarm"} command queued successfully. Confirmed state updates after the next RO1 telemetry.`
+            `${action === "arm" ? "Arm" : "Disarm"} command sent. Operator state updates immediately while telemetry confirmation follows on the next keepalive.`
         );
         await fetchControlRows(false);
       } catch (commandError: any) {
@@ -290,7 +364,7 @@ export default function OculusControlIndex() {
         setActiveCommand(null);
       }
     },
-    [API_BASE_URL, fetchControlRows, headers]
+    [API_BASE_URL, applyOptimisticCommandState, fetchControlRows, headers]
   );
 
   if (!canAccess) {
@@ -309,7 +383,7 @@ export default function OculusControlIndex() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Oculus Arming Control</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Review Oculus-monitored transformers, see live arm state from controller `RO1`, and send Loriot arm or disarm commands.
+            Review Oculus-monitored transformers, see the effective operator state immediately, track confirmed `RO1` telemetry separately, and send Loriot arm or disarm commands.
           </p>
         </div>
         <Button onClick={fetchControlRows} icon={<RefreshCw className="h-4 w-4" />}>
@@ -372,6 +446,7 @@ export default function OculusControlIndex() {
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Transformer</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Location</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Controller</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Effective Control State</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Command Target State</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Confirmed Telemetry State</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Pending / Confirmed Status</th>
@@ -381,7 +456,7 @@ export default function OculusControlIndex() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {paginatedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
+                      <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">
                         No Oculus-monitored transformers found for the current filters.
                       </td>
                     </tr>
@@ -390,14 +465,15 @@ export default function OculusControlIndex() {
                       const awaitingConfirmation = isAwaitingTelemetryConfirmation(row);
                       const targetState = getCommandTargetState(row);
                       const confirmationStatusLabel = getConfirmationStatusLabel(row);
+                      const effectiveArmState = getEffectiveArmState(row);
                       const disableArm =
                         !row.controlAvailable ||
                         activeCommand === `${row.transformerId}:disarm` ||
-                        (row.armState === "ARMED" && !awaitingConfirmation);
+                        effectiveArmState === "ARMED";
                       const disableDisarm =
                         !row.controlAvailable ||
                         activeCommand === `${row.transformerId}:arm` ||
-                        (row.armState === "DISARMED" && !awaitingConfirmation);
+                        effectiveArmState === "DISARMED";
                       return (
                         <tr key={row.transformerId} className="hover:bg-gray-50">
                           <td className="px-6 py-4 text-sm text-gray-800">
@@ -413,6 +489,31 @@ export default function OculusControlIndex() {
                             <div className="font-medium text-gray-800">{row.controllerName || "No linked controller"}</div>
                             <div className="mt-1 font-mono text-xs text-gray-500">{row.controllerDevEui || "-"}</div>
                             <div className="mt-1 text-xs text-gray-500">{row.controllerType || "-"}</div>
+                            <div className="mt-2 flex flex-col gap-2">
+                              <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${controllerStatusTone(row.controllerStatus)}`}>
+                                {controllerStatusLabel(row.controllerStatus)}
+                              </span>
+                              <div className="text-xs text-gray-500">
+                                {row.minutesSinceLastTelemetry != null
+                                  ? `Last keepalive ${row.minutesSinceLastTelemetry} min ago`
+                                  : "No keepalive received yet"}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            <div className="flex flex-col gap-2">
+                              <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone(effectiveArmState)}`}>
+                                {effectiveArmState === "ARMED" ? "Armed Now" : effectiveArmState === "DISARMED" ? "Disarmed Now" : "Unknown"}
+                              </span>
+                              <div className="text-xs text-gray-500">
+                                Source: {row.effectiveStateSource === "COMMAND" ? "last successful command" : "confirmed telemetry"}
+                              </div>
+                              {row.effectiveStateSource === "COMMAND" ? (
+                                <div className="text-xs text-blue-600">
+                                  Operator state updates instantly after a successful command.
+                                </div>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
                             <div className="flex flex-col gap-2">
@@ -449,7 +550,17 @@ export default function OculusControlIndex() {
                               </div>
                               {awaitingConfirmation ? (
                                 <div className="text-xs text-blue-600">
-                                  Loriot accepted {row.lastCommandAction?.toLowerCase()} and the page is waiting for a new `RO1` update.
+                                  Loriot accepted {row.lastCommandAction?.toLowerCase()} and the page is waiting for the next 10-minute keepalive or any new `RO1` update.
+                                </div>
+                              ) : null}
+                              {row.confirmationStatus === "KEEPALIVE_OVERDUE" ? (
+                                <div className="text-xs text-amber-600">
+                                  The next keepalive confirmation is overdue. Check controller connectivity or device-side execution.
+                                </div>
+                              ) : null}
+                              {row.confirmationStatus === "TELEMETRY_MISMATCH" ? (
+                                <div className="text-xs text-red-600">
+                                  A newer telemetry update does not match the last command target state.
                                 </div>
                               ) : null}
                             </div>

@@ -49,6 +49,9 @@ public class OculusControlServiceImpl implements OculusControlService {
     private static final String LORIOT_PROVIDER = "LORIOT";
     private static final String ARM_HEX = "030100";
     private static final String DISARM_HEX = "030000";
+    private static final long KEEPALIVE_INTERVAL_MINUTES = 10;
+    private static final long CONTROLLER_ONLINE_MINUTES = 15;
+    private static final long CONTROLLER_DELAYED_MINUTES = 30;
 
     private final TransformerRepository transformerRepository;
     private final ControllerRepository controllerRepository;
@@ -127,6 +130,12 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         boolean controlAvailable = primaryController != null && isControllableController(primaryController);
         ArmState armState = latestReading.map(this::extractArmState).orElse(ArmState.UNKNOWN);
+        LocalDateTime latestTelemetryAt = latestReading.map(ControllerReading::getCreatedAt).orElse(null);
+        String controllerStatus = resolveControllerStatus(latestTelemetryAt);
+        Long minutesSinceLastTelemetry = calculateMinutesSince(latestTelemetryAt);
+        ArmState effectiveArmState = resolveEffectiveArmState(armState, latestCommand.orElse(null), latestTelemetryAt);
+        String effectiveStateSource = effectiveArmState == armState ? "TELEMETRY" : "COMMAND";
+        String confirmationStatus = resolveConfirmationStatus(armState, latestCommand.orElse(null), latestTelemetryAt);
 
         return OculusTransformerControlResponse.builder()
                 .transformerId(transformer.getId())
@@ -141,7 +150,13 @@ public class OculusControlServiceImpl implements OculusControlService {
                 .availabilityReason(resolveAvailabilityReason(primaryController))
                 .armState(armState.name())
                 .armed(armState == ArmState.UNKNOWN ? null : armState == ArmState.ARMED)
-                .lastTelemetryAt(latestReading.map(reading -> toIso(reading.getCreatedAt())).orElse(null))
+                .effectiveArmState(effectiveArmState.name())
+                .effectiveArmed(effectiveArmState == ArmState.UNKNOWN ? null : effectiveArmState == ArmState.ARMED)
+                .effectiveStateSource(effectiveStateSource)
+                .confirmationStatus(confirmationStatus)
+                .controllerStatus(controllerStatus)
+                .minutesSinceLastTelemetry(minutesSinceLastTelemetry)
+                .lastTelemetryAt(toIso(latestTelemetryAt))
                 .lastCommandAction(latestCommand.map(command -> command.getAction().name()).orElse(null))
                 .lastCommandStatus(latestCommand.map(command -> command.getCommandStatus().name()).orElse(null))
                 .lastCommandAt(latestCommand.map(command -> toIso(command.getCreatedAt())).orElse(null))
@@ -404,6 +419,81 @@ public class OculusControlServiceImpl implements OculusControlService {
             return ArmState.UNKNOWN;
         }
         return ArmState.UNKNOWN;
+    }
+
+    private ArmState resolveEffectiveArmState(
+            ArmState confirmedState,
+            ControllerCommand latestCommand,
+            LocalDateTime latestTelemetryAt
+    ) {
+        if (latestCommand == null || latestCommand.getCommandStatus() != ControllerCommandStatus.SENT || latestCommand.getTargetState() == null) {
+            return confirmedState;
+        }
+
+        LocalDateTime commandAt = latestCommand.getCreatedAt();
+        if (commandAt == null) {
+            return confirmedState;
+        }
+
+        if (latestTelemetryAt == null || commandAt.isAfter(latestTelemetryAt)) {
+            return latestCommand.getTargetState();
+        }
+
+        return confirmedState;
+    }
+
+    private String resolveConfirmationStatus(
+            ArmState confirmedState,
+            ControllerCommand latestCommand,
+            LocalDateTime latestTelemetryAt
+    ) {
+        if (latestCommand == null) {
+            return "NO_COMMAND";
+        }
+        if (latestCommand.getCommandStatus() == ControllerCommandStatus.FAILED) {
+            return "COMMAND_FAILED";
+        }
+        if (latestCommand.getCommandStatus() == ControllerCommandStatus.PENDING) {
+            return "SENDING_COMMAND";
+        }
+        if (latestCommand.getCommandStatus() != ControllerCommandStatus.SENT || latestCommand.getTargetState() == null) {
+            return "NO_COMMAND";
+        }
+
+        LocalDateTime commandAt = latestCommand.getCreatedAt();
+        if (commandAt == null) {
+            return "NO_COMMAND";
+        }
+
+        if (latestTelemetryAt != null && !commandAt.isAfter(latestTelemetryAt)) {
+            return confirmedState == latestCommand.getTargetState() ? "CONFIRMED" : "TELEMETRY_MISMATCH";
+        }
+
+        return commandAt.plusMinutes(KEEPALIVE_INTERVAL_MINUTES + 2).isBefore(LocalDateTime.now())
+                ? "KEEPALIVE_OVERDUE"
+                : "PENDING_KEEPALIVE";
+    }
+
+    private String resolveControllerStatus(LocalDateTime latestTelemetryAt) {
+        Long minutesSinceLastTelemetry = calculateMinutesSince(latestTelemetryAt);
+        if (minutesSinceLastTelemetry == null) {
+            return "NO_KEEPALIVE";
+        }
+        if (minutesSinceLastTelemetry <= CONTROLLER_ONLINE_MINUTES) {
+            return "ONLINE";
+        }
+        if (minutesSinceLastTelemetry <= CONTROLLER_DELAYED_MINUTES) {
+            return "DELAYED";
+        }
+        return "OFFLINE";
+    }
+
+    private Long calculateMinutesSince(LocalDateTime value) {
+        if (value == null) {
+            return null;
+        }
+        long minutes = java.time.Duration.between(value, LocalDateTime.now()).toMinutes();
+        return Math.max(minutes, 0);
     }
 
     private String writeJson(Object value) {
