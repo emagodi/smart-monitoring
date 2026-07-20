@@ -7,6 +7,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
+import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 import {
   Plus,
   MapPin,
@@ -27,6 +28,7 @@ import {
   ShieldCheck,
   RefreshCcw,
   Filter,
+  Save,
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -102,6 +104,7 @@ interface Controller {
 }
 
 type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'READINGS' | 'CONTROLLERS' | 'CONTROLLER_READINGS';
+type TransformerTypeOption = 'GROUND_MOUNTED' | 'POLE_MOUNTED';
 
 type OverviewCard = {
   label: string;
@@ -161,8 +164,20 @@ export default function TransformersIndex() {
   const [totalElements, setTotalElements] = useState(0);
 
   // Modal State
+  const [showCreate, setShowCreate] = useState(false);
   const [showView, setShowView] = useState(false);
   const [activeTransformer, setActiveTransformer] = useState<Transformer | null>(null);
+  const [createDepotOptions, setCreateDepotOptions] = useState<Depot[]>([]);
+  const [loadingCreateDepots, setLoadingCreateDepots] = useState(false);
+  const [savingCreate, setSavingCreate] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createNameInput, setCreateNameInput] = useState('');
+  const [createCapacityInput, setCreateCapacityInput] = useState<number | ''>('');
+  const [createTypeInput, setCreateTypeInput] = useState<TransformerTypeOption | ''>('');
+  const [createIsActiveInput, setCreateIsActiveInput] = useState(true);
+  const [createDepotInput, setCreateDepotInput] = useState<number | ''>('');
+  const [createLatInput, setCreateLatInput] = useState<number | ''>('');
+  const [createLngInput, setCreateLngInput] = useState<number | ''>('');
   
   const [notice, setNotice] = useState<{ variant: 'success' | 'error' | 'info' | 'warning'; title: string; message: string } | null>(null);
 
@@ -300,6 +315,26 @@ export default function TransformersIndex() {
     }
   }, [API_BASE_URL, headers]);
 
+  const fetchCreateDepotOptions = useCallback(async () => {
+    try {
+      setLoadingCreateDepots(true);
+      const res = await axios.get(`${API_BASE_URL}/api/v1/depots`, { headers });
+      const list = normalizeList(res.data) as Depot[];
+      setCreateDepotOptions(
+        list.map((depot) => ({
+          id: depot.id,
+          name: depot.name,
+          districtId: depot.districtId,
+        }))
+      );
+    } catch (err) {
+      console.error(err);
+      setCreateError('Failed to load depots.');
+    } finally {
+      setLoadingCreateDepots(false);
+    }
+  }, [API_BASE_URL, headers]);
+
   const fetchSensors = useCallback(async (transformerId: number) => {
     try {
       setLoading(true);
@@ -434,6 +469,11 @@ export default function TransformersIndex() {
     }
   }, [isSupplierUser]);
 
+  useEffect(() => {
+    if (!showCreate || !token || isSupplierUser || !hasPermission('depots.read')) return;
+    void fetchCreateDepotOptions();
+  }, [showCreate, token, isSupplierUser, hasPermission, fetchCreateDepotOptions]);
+
   // --- Event Handlers ---
 
   const handleRegionClick = (region: Region) => {
@@ -554,7 +594,15 @@ export default function TransformersIndex() {
   // --- CRUD Handlers (Transformers) ---
 
   const handleAddTransformer = () => {
-      navigate('/transformers/new');
+      setCreateNameInput('');
+      setCreateCapacityInput('');
+      setCreateTypeInput('');
+      setCreateIsActiveInput(true);
+      setCreateDepotInput(selectedDepot?.id ?? '');
+      setCreateLatInput('');
+      setCreateLngInput('');
+      setCreateError(null);
+      setShowCreate(true);
   };
 
   const handleEditTransformer = (t: Transformer) => {
@@ -564,6 +612,52 @@ export default function TransformersIndex() {
   const openViewModal = (t: Transformer) => {
       setActiveTransformer(t);
       setShowView(true);
+  };
+
+  const handleCreateTransformer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createNameInput.trim()) {
+      setCreateError('Name is required');
+      return;
+    }
+    if (!isSupplierUser && !createDepotInput) {
+      setCreateError('Depot is required');
+      return;
+    }
+
+    try {
+      setSavingCreate(true);
+      setCreateError(null);
+      await axios.post(
+        `${API_BASE_URL}/api/v1/transformers/create`,
+        {
+          name: createNameInput.trim(),
+          capacity: createCapacityInput === '' ? 0 : Number(createCapacityInput),
+          type: createTypeInput || null,
+          isActive: createIsActiveInput,
+          depotId: isSupplierUser ? null : Number(createDepotInput),
+          lat: createLatInput === '' ? 0 : Number(createLatInput),
+          lng: createLngInput === '' ? 0 : Number(createLngInput),
+        },
+        { headers }
+      );
+
+      setShowCreate(false);
+      setNotice({
+        variant: 'success',
+        title: 'Transformer created',
+        message: 'The transformer was created successfully.',
+      });
+
+      if (viewMode === 'TRANSFORMERS' && selectedDepot && Number(createDepotInput) === selectedDepot.id) {
+        await fetchTransformers(selectedDepot.id);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setCreateError(err.response?.data?.message || 'Failed to create transformer');
+    } finally {
+      setSavingCreate(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -1947,6 +2041,176 @@ export default function TransformersIndex() {
           )}
         </div>
       </section>
+
+      <Modal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        variant="center"
+        showCloseButton={false}
+        className="max-h-[90vh] max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/12 dark:text-blue-300">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                    Transformer
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Create transformer
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Add a transformer without leaving the hierarchy workspace.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateTransformer} className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+            {createError && <Alert variant="error" title="Error" message={createError} />}
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={createNameInput}
+                  onChange={(e) => setCreateNameInput(e.target.value)}
+                  placeholder="e.g. TF-1234"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              {!isSupplierUser && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    Depot
+                  </label>
+                  <div className="mt-2">
+                    {loadingCreateDepots ? (
+                      <div className="enterprise-chip flex items-center gap-2 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                        Loading depots...
+                      </div>
+                    ) : (
+                      <SearchableSelect
+                        options={createDepotOptions}
+                        value={createDepotInput}
+                        onChange={setCreateDepotInput}
+                        placeholder="Select depot..."
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Capacity (kVA)
+                </label>
+                <input
+                  type="number"
+                  value={createCapacityInput}
+                  onChange={(e) => setCreateCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 500"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Type
+                </label>
+                <select
+                  value={createTypeInput}
+                  onChange={(e) => setCreateTypeInput((e.target.value as TransformerTypeOption | '') || '')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="">Select type...</option>
+                  <option value="GROUND_MOUNTED">GMT</option>
+                  <option value="POLE_MOUNTED">PMT</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Latitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={createLatInput}
+                  onChange={(e) => setCreateLatInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. -1.2921"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Longitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={createLngInput}
+                  onChange={(e) => setCreateLngInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 36.8219"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Status
+                </label>
+                <select
+                  value={createIsActiveInput ? 'true' : 'false'}
+                  onChange={(e) => setCreateIsActiveInput(e.target.value === 'true')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingCreate}
+                className="inline-flex min-w-[170px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingCreate ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {savingCreate ? 'Creating...' : 'Create Transformer'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={showView}
