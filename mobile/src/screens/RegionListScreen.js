@@ -1,0 +1,28 @@
+import React from 'react';
+import CrudScreen from '../components/CrudScreen';
+import infrastructureService from '../services/infrastructure';
+
+const RegionListScreen = ({ navigation }) => {
+    const fields = [
+        { name: 'name', label: 'Region Name', placeholder: 'Enter region name', required: true }
+    ];
+
+    return (
+        <CrudScreen
+            title="Regions"
+            addButtonLabel="Add Region"
+            fetchData={infrastructureService.getAllRegions}
+            createItem={infrastructureService.createRegion}
+            updateItem={infrastructureService.updateRegion}
+            deleteItem={infrastructureService.deleteRegion}
+            fields={fields}
+            itemTitleKey="name"
+            entityName="Region"
+            showLogo={false}
+            onAddPress={() => navigation.navigate('RegionForm')}
+            onEditPress={(item) => navigation.navigate('RegionForm', { region: item })}
+        />
+    );
+};
+
+export default RegionListScreen;

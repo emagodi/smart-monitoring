@@ -8,10 +8,10 @@ services:
       MYSQL_DATABASE: tms
       TZ: Africa/Harare
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./db-init:/docker-entrypoint-initdb.d:ro
+      - ./backend/db-init:/docker-entrypoint-initdb.d:ro
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
@@ -23,40 +23,40 @@ services:
       PMA_USER: root
       PMA_PASSWORD: secret
     ports:
-      - "8081:80"
+      - "8086:80"
     depends_on:
       - mysql
 
   config-server:
-    build: ./config-server
+    build: ./backend/config-server
     container_name: config-server
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: native
       SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config
       TZ: Africa/Harare
-      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
     volumes:
-      - ./config:/config:ro
+      - ./backend/config:/config:ro
     ports:
       - "8888:8888"
     depends_on:
       - mysql
 
   eureka-server:
-    build: ./eureka-server
+    build: ./backend/eureka-server
     container_name: eureka-server
     restart: unless-stopped
     environment:
       TZ: Africa/Harare
-      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
     ports:
       - "8761:8761"
     depends_on:
       - config-server
 
   auth-service:
-    build: ./auth-service
+    build: ./backend/auth-service
     container_name: auth-service
     restart: unless-stopped
     environment:
@@ -66,35 +66,72 @@ services:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
     ports:
-      - "8084:8084"
+      - "8082:8082"
     volumes:
-      - ./uploads:/uploads/monitor
+      - "C:/Users/Edwin Magodi/Desktop/uploads:/uploads/monitor"
     depends_on:
       - mysql
       - eureka-server
       - config-server
 
   transformer-service:
-    build: ./transformer-service
+    build: ./backend/transformer-service
     container_name: transformer-service
     restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8888
       EUREKA_URI: http://eureka-server:8761/eureka
-      LORIOT_WS_URL: ${LORIOT_WS_URL}
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
       TZ: Africa/Harare
-      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
+      APP_IMAGE_STORAGE_DIR: /app/uploads
+      LORIOT_API_URL: ${LORIOT_API_URL:-}
+      LORIOT_APP_ID: ${LORIOT_APP_ID:-}
+      LORIOT_API_KEY: ${LORIOT_API_KEY:-}
+      LORIOT_DOWNLINK_PORT: ${LORIOT_DOWNLINK_PORT:-2}
+      LORIOT_DOWNLINK_CONFIRMED: ${LORIOT_DOWNLINK_CONFIRMED:-false}
+      LORIOT_INSECURE_SSL: ${LORIOT_INSECURE_SSL:-false}
     ports:
       - "8083:8083"
+    volumes:
+      - "C:/Users/Edwin Magodi/Desktop/uploads:/app/uploads"
     depends_on:
       - mysql
       - eureka-server
       - config-server
 
+  notification-service:
+    build: ./backend/notification-service
+    container_name: notification-service
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      SERVER_PORT: 8085
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888/
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+    depends_on:
+      - mysql
+      - eureka-server
+      - config-server
+    ports:
+      - "8085:8085"
+
+  transformer-frontend:
+    build: ./frontend
+    container_name: transformer-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - auth-service
+      - transformer-service
+      - notification-service
     
   gateway:
-    build: ./gateway
+    build: ./backend/gateway
     container_name: api-gateway
     restart: unless-stopped
     environment:
@@ -102,9 +139,9 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
       TZ: Africa/Harare
-      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
     ports:
-      - "8080:8080"
+      - "8087:8080"
     depends_on:
       - eureka-server
       - config-server
