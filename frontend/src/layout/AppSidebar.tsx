@@ -202,23 +202,24 @@ const AppSidebar: React.FC = () => {
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.94)_100%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.98)_0%,rgba(15,23,42,0.96)_100%)]" />
 
-      <div className={`relative flex h-16 items-center border-b border-slate-200/80 px-4 dark:border-slate-800 ${
+      <div className={`relative flex h-16 items-center border-b border-slate-200/80 bg-white px-3 dark:border-slate-800 dark:bg-slate-900 ${
         !isExpanded && !isMobileOpen ? "justify-center px-0" : ""
       }`}>
-        <Link to="/" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-lg shadow-blue-500/25">
-            TM
+        <Link
+          to="/"
+          className={`flex items-center ${isExpanded || isMobileOpen ? "w-full justify-center" : "justify-center"}`}
+        >
+          <div
+            className={`flex items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm ${
+              isExpanded || isMobileOpen ? "min-h-[42px] w-[108px] px-2 py-1" : "h-10 w-10 p-1"
+            }`}
+          >
+            <img
+              src="/images/powertel.png"
+              alt="Powertel"
+              className={`${isExpanded || isMobileOpen ? "h-8 w-auto object-contain" : "h-7 w-7 object-contain"}`}
+            />
           </div>
-          {(isExpanded || isMobileOpen) && (
-            <div>
-              <p className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-                Powertel TMS
-              </p>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
-                Utility Operations
-              </p>
-            </div>
-          )}
         </Link>
       </div>
 
