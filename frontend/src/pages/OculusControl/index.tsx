@@ -20,6 +20,7 @@ type ArmStateFilter = "all" | "ARMED" | "DISARMED" | "UNKNOWN";
 type OculusTransformerControl = {
   transformerId: number;
   transformerName: string;
+  transformerType?: "GMT" | "PMT" | string | null;
   depotId?: number | null;
   controllerCount?: number | null;
   controllerId?: number | null;
@@ -44,6 +45,12 @@ type OculusTransformerControl = {
     | null;
   controllerStatus?: "ONLINE" | "DELAYED" | "OFFLINE" | "NO_KEEPALIVE" | null;
   minutesSinceLastTelemetry?: number | null;
+  motionDetected?: boolean | null;
+  motionStatusLabel?: string | null;
+  secondaryAlertDetected?: boolean | null;
+  secondaryAlertLabel?: string | null;
+  secondaryAlertStatusLabel?: string | null;
+  activeAlertSummary?: string | null;
   lastTelemetryAt?: string | null;
   lastCommandAction?: string | null;
   lastCommandStatus?: string | null;
@@ -185,6 +192,29 @@ const controllerStatusLabel = (status?: string | null) => {
   return "No Keepalive";
 };
 
+const transformerTypeTone = (transformerType?: string | null) => {
+  if (transformerType === "GMT") return "bg-indigo-100 text-indigo-700";
+  if (transformerType === "PMT") return "bg-cyan-100 text-cyan-700";
+  return "bg-slate-100 text-slate-700";
+};
+
+const signalTone = (active?: boolean | null) => {
+  if (active == null) return "bg-slate-100 text-slate-700";
+  if (active) return "bg-red-100 text-red-700";
+  return "bg-emerald-100 text-emerald-700";
+};
+
+const activeAlertSummaryTone = (summary?: string | null) => {
+  if (!summary || summary === "No active intrusion alerts") return "bg-emerald-100 text-emerald-700";
+  return "bg-red-100 text-red-700";
+};
+
+const secondarySignalColumnLabel = (transformerType?: string | null) => {
+  if (transformerType === "GMT") return "Door Open";
+  if (transformerType === "PMT") return "Vibration";
+  return "Door / Vibration";
+};
+
 export default function OculusControlIndex() {
   const { token, user } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -279,7 +309,7 @@ export default function OculusControlIndex() {
       const matchesArmState = armStateFilter === "all" ? true : getEffectiveArmState(row) === armStateFilter;
       const matchesQuery =
         !query ||
-        `${row.transformerName || ""} ${row.regionName} ${row.districtName} ${row.depotName} ${row.controllerName || ""} ${row.controllerDevEui || ""}`
+        `${row.transformerName || ""} ${row.transformerType || ""} ${row.regionName} ${row.districtName} ${row.depotName} ${row.controllerName || ""} ${row.controllerDevEui || ""}`
           .toLowerCase()
           .includes(query);
       return matchesArmState && matchesQuery;
@@ -383,7 +413,7 @@ export default function OculusControlIndex() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Oculus Arming Control</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Review Oculus-monitored transformers, see the effective operator state immediately, track confirmed `RO1` telemetry separately, and send Loriot arm or disarm commands.
+            Review Oculus-monitored transformers, see `GMT` or `PMT` type, monitor motion plus door or vibration status, track confirmed `RO1` telemetry separately, and send Loriot arm or disarm commands.
           </p>
         </div>
         <Button onClick={fetchControlRows} icon={<RefreshCw className="h-4 w-4" />}>
@@ -446,6 +476,8 @@ export default function OculusControlIndex() {
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Transformer</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Location</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Controller</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Motion</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Door / Vibration</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Effective Control State</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Command Target State</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Confirmed Telemetry State</th>
@@ -456,7 +488,7 @@ export default function OculusControlIndex() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {paginatedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">
+                      <td colSpan={10} className="px-6 py-12 text-center text-sm text-gray-500">
                         No Oculus-monitored transformers found for the current filters.
                       </td>
                     </tr>
@@ -478,7 +510,15 @@ export default function OculusControlIndex() {
                         <tr key={row.transformerId} className="hover:bg-gray-50">
                           <td className="px-6 py-4 text-sm text-gray-800">
                             <div className="font-semibold">{row.transformerName}</div>
-                            <div className="mt-1 text-xs text-gray-500">{row.controllerCount || 0} Oculus controller(s)</div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${transformerTypeTone(row.transformerType)}`}>
+                                {row.transformerType || "Unspecified"}
+                              </span>
+                              <span className="text-xs text-gray-500">{row.controllerCount || 0} Oculus controller(s)</span>
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${activeAlertSummaryTone(row.activeAlertSummary)}`}>
+                                {row.activeAlertSummary || "No active intrusion alerts"}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
                             <div>{row.regionName}</div>
@@ -498,6 +538,22 @@ export default function OculusControlIndex() {
                                   ? `Last keepalive ${row.minutesSinceLastTelemetry} min ago`
                                   : "No keepalive received yet"}
                               </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${signalTone(row.motionDetected)}`}>
+                              {row.motionStatusLabel || "No motion telemetry"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            <div className="flex flex-col gap-2">
+                              <span className="text-xs text-gray-500">{secondarySignalColumnLabel(row.transformerType)}</span>
+                              <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${signalTone(row.secondaryAlertDetected)}`}>
+                                {row.secondaryAlertStatusLabel || "No secondary telemetry"}
+                              </span>
+                              {row.secondaryAlertLabel ? (
+                                <span className="text-xs text-gray-400">{row.secondaryAlertLabel}</span>
+                              ) : null}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">

@@ -35,6 +35,41 @@ const normalizeList = (payload: unknown): AlertItem[] => {
   return [];
 };
 
+const isControllerTrigger = (item: AlertItem) => (item.sensorType || "").toUpperCase() === "CONTROLLER_TRIGGER";
+
+const getControllerTriggerSignals = (item: AlertItem) => {
+  const signalText = `${item.value || ""} ${item.message || ""}`.toLowerCase();
+  const signals: Array<{ label: string; tone: string }> = [];
+
+  if (signalText.includes("motion detected")) {
+    signals.push({ label: "Motion", tone: "bg-red-100 text-red-700" });
+  }
+  if (signalText.includes("door open")) {
+    signals.push({ label: "Door Open", tone: "bg-orange-100 text-orange-700" });
+  }
+  if (signalText.includes("vibration detected")) {
+    signals.push({ label: "Vibration", tone: "bg-amber-100 text-amber-700" });
+  }
+  if (signals.length === 0 && signalText.includes("trigger cleared")) {
+    signals.push({ label: "Cleared", tone: "bg-emerald-100 text-emerald-700" });
+  }
+
+  return signals;
+};
+
+const getTransformerTypeLabel = (item: AlertItem) => {
+  const signalText = `${item.value || ""} ${item.message || ""}`.toLowerCase();
+  if (signalText.includes("gmt") || signalText.includes("door open")) return "GMT";
+  if (signalText.includes("pmt") || signalText.includes("vibration detected")) return "PMT";
+  return null;
+};
+
+const transformerTypeTone = (type?: string | null) => {
+  if (type === "GMT") return "bg-indigo-100 text-indigo-700";
+  if (type === "PMT") return "bg-cyan-100 text-cyan-700";
+  return "bg-slate-100 text-slate-700";
+};
+
 export default function AlertsIndex() {
   const { token, user } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -194,17 +229,47 @@ export default function AlertsIndex() {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-800">
                           <div className="font-medium">{item.message || "Monitoring event"}</div>
+                          {isControllerTrigger(item) && getControllerTriggerSignals(item).length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {getControllerTriggerSignals(item).map((signal) => (
+                                <span key={signal.label} className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${signal.tone}`}>
+                                  {signal.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                           {isSupplierUser ? null : item.supplierName ? (
                             <div className="mt-1 text-xs text-gray-500">{item.supplierName}</div>
                           ) : null}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{item.transformerName || "-"}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          <div>{item.transformerName || "-"}</div>
+                          {getTransformerTypeLabel(item) ? (
+                            <div className="mt-2">
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${transformerTypeTone(getTransformerTypeLabel(item))}`}>
+                                {getTransformerTypeLabel(item)}
+                              </span>
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           <div>{item.deviceName || "-"}</div>
                           <div className="mt-1 font-mono text-xs text-gray-400">{item.deviceId || "-"}</div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">{item.sensorType || "-"}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">{item.value || "-"}</td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          {isControllerTrigger(item) && getControllerTriggerSignals(item).length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {getControllerTriggerSignals(item).map((signal) => (
+                                <span key={`${item.id}-${signal.label}`} className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${signal.tone}`}>
+                                  {signal.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            item.value || "-"
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}

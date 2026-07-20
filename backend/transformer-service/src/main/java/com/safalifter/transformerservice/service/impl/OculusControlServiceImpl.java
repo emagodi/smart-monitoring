@@ -7,6 +7,7 @@ import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.ControllerCommand;
 import com.safalifter.transformerservice.entities.ControllerReading;
 import com.safalifter.transformerservice.entities.Transformer;
+import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.enums.ArmState;
 import com.safalifter.transformerservice.enums.ControllerCommandAction;
 import com.safalifter.transformerservice.enums.ControllerCommandStatus;
@@ -136,10 +137,16 @@ public class OculusControlServiceImpl implements OculusControlService {
         ArmState effectiveArmState = resolveEffectiveArmState(armState, latestCommand.orElse(null), latestTelemetryAt);
         String effectiveStateSource = effectiveArmState == armState ? "TELEMETRY" : "COMMAND";
         String confirmationStatus = resolveConfirmationStatus(armState, latestCommand.orElse(null), latestTelemetryAt);
+        String transformerType = resolveTransformerTypeLabel(transformer.getType());
+        Boolean motionDetected = latestReading.map(ControllerReading::getDi1).orElse(null);
+        Boolean secondaryAlertDetected = latestReading.map(ControllerReading::getDi2).orElse(null);
+        String secondaryAlertLabel = resolveSecondaryAlertLabel(transformer.getType());
+        String activeAlertSummary = buildActiveAlertSummary(transformer.getType(), motionDetected, secondaryAlertDetected);
 
         return OculusTransformerControlResponse.builder()
                 .transformerId(transformer.getId())
                 .transformerName(transformer.getName())
+                .transformerType(transformerType)
                 .depotId(transformer.getDepotId())
                 .controllerCount(controllers.size())
                 .controllerId(primaryController != null ? primaryController.getId() : null)
@@ -156,6 +163,12 @@ public class OculusControlServiceImpl implements OculusControlService {
                 .confirmationStatus(confirmationStatus)
                 .controllerStatus(controllerStatus)
                 .minutesSinceLastTelemetry(minutesSinceLastTelemetry)
+                .motionDetected(motionDetected)
+                .motionStatusLabel(resolveMotionStatusLabel(motionDetected))
+                .secondaryAlertDetected(secondaryAlertDetected)
+                .secondaryAlertLabel(secondaryAlertLabel)
+                .secondaryAlertStatusLabel(resolveSecondaryAlertStatusLabel(transformer.getType(), secondaryAlertDetected))
+                .activeAlertSummary(activeAlertSummary)
                 .lastTelemetryAt(toIso(latestTelemetryAt))
                 .lastCommandAction(latestCommand.map(command -> command.getAction().name()).orElse(null))
                 .lastCommandStatus(latestCommand.map(command -> command.getCommandStatus().name()).orElse(null))
@@ -486,6 +499,74 @@ public class OculusControlServiceImpl implements OculusControlService {
             return "DELAYED";
         }
         return "OFFLINE";
+    }
+
+    private String resolveTransformerTypeLabel(TransformerType transformerType) {
+        if (transformerType == TransformerType.GROUND_MOUNTED) {
+            return "GMT";
+        }
+        if (transformerType == TransformerType.POLE_MOUNTED) {
+            return "PMT";
+        }
+        return "Unspecified";
+    }
+
+    private String resolveMotionStatusLabel(Boolean motionDetected) {
+        if (motionDetected == null) {
+            return "No motion telemetry";
+        }
+        return motionDetected ? "Motion Detected" : "No Motion";
+    }
+
+    private String resolveSecondaryAlertLabel(TransformerType transformerType) {
+        if (transformerType == TransformerType.GROUND_MOUNTED) {
+            return "Door Sensor";
+        }
+        if (transformerType == TransformerType.POLE_MOUNTED) {
+            return "Vibration Sensor";
+        }
+        return "Secondary Sensor";
+    }
+
+    private String resolveSecondaryAlertStatusLabel(TransformerType transformerType, Boolean secondaryAlertDetected) {
+        if (secondaryAlertDetected == null) {
+            return transformerType == TransformerType.GROUND_MOUNTED
+                    ? "No door telemetry"
+                    : transformerType == TransformerType.POLE_MOUNTED
+                    ? "No vibration telemetry"
+                    : "No secondary telemetry";
+        }
+        if (transformerType == TransformerType.GROUND_MOUNTED) {
+            return secondaryAlertDetected ? "Door Open" : "Door Closed";
+        }
+        if (transformerType == TransformerType.POLE_MOUNTED) {
+            return secondaryAlertDetected ? "Vibration Detected" : "No Vibration";
+        }
+        return secondaryAlertDetected ? "Secondary Alert Detected" : "Secondary Alert Clear";
+    }
+
+    private String buildActiveAlertSummary(
+            TransformerType transformerType,
+            Boolean motionDetected,
+            Boolean secondaryAlertDetected
+    ) {
+        List<String> activeSignals = new ArrayList<>();
+        if (Boolean.TRUE.equals(motionDetected)) {
+            activeSignals.add("Motion Detected");
+        }
+        if (Boolean.TRUE.equals(secondaryAlertDetected)) {
+            if (transformerType == TransformerType.GROUND_MOUNTED) {
+                activeSignals.add("Door Open");
+            } else if (transformerType == TransformerType.POLE_MOUNTED) {
+                activeSignals.add("Vibration Detected");
+            } else {
+                activeSignals.add("Secondary Alert Detected");
+            }
+        }
+        if (activeSignals.isEmpty()) {
+            return "No active intrusion alerts";
+        }
+        return String.join(", ", activeSignals);
     }
 
     private Long calculateMinutesSince(LocalDateTime value) {

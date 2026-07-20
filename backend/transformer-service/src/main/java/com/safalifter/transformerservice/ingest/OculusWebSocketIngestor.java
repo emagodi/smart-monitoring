@@ -19,9 +19,15 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -47,6 +53,9 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
     @Value("${oculus.ws.log:false}")
     private boolean logWs;
 
+    @Value("${oculus.ws.insecure-ssl:false}")
+    private boolean insecureSsl;
+
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     @Override
@@ -63,8 +72,7 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
     private void connect() {
 
         try {
-
-            HttpClient client = HttpClient.newHttpClient();
+            HttpClient client = buildHttpClient();
 
             client.newWebSocketBuilder()
                     .buildAsync(URI.create(oculusWsUrlProp), new Listener())
@@ -86,7 +94,6 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
     private void reconnect() {
 
         scheduler.schedule(() -> {
-
             log.info("Reconnecting WebSocket...");
             connect();
 
@@ -118,7 +125,6 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-
             log.error("WebSocket error", error);
             reconnect();
 
@@ -132,6 +138,44 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
 
             return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
         }
+    }
+
+    private HttpClient buildHttpClient() throws Exception {
+        if (!insecureSsl) {
+            return HttpClient.newHttpClient();
+        }
+
+        SSLContext sslContext = buildTrustAllSslContext();
+        SSLParameters sslParameters = new SSLParameters();
+        sslParameters.setEndpointIdentificationAlgorithm("");
+
+        return HttpClient.newBuilder()
+                .sslContext(sslContext)
+                .sslParameters(sslParameters)
+                .build();
+    }
+
+    private SSLContext buildTrustAllSslContext() throws Exception {
+        TrustManager[] trustAllManagers = new TrustManager[]{
+                new X509TrustManager() {
+                    @Override
+                    public void checkClientTrusted(X509Certificate[] chain, String authType) {
+                    }
+
+                    @Override
+                    public void checkServerTrusted(X509Certificate[] chain, String authType) {
+                    }
+
+                    @Override
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return new X509Certificate[0];
+                    }
+                }
+        };
+
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(null, trustAllManagers, new SecureRandom());
+        return sslContext;
     }
 
     private void processMessage(String payload) {

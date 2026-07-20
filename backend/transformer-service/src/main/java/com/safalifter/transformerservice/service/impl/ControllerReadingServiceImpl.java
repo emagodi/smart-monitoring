@@ -3,6 +3,7 @@ package com.safalifter.transformerservice.service.impl;
 import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.ControllerReading;
 import com.safalifter.transformerservice.entities.Transformer;
+import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.payload.response.ControllerReadingDetailResponse;
 import com.safalifter.transformerservice.repository.ControllerReadingRepository;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ArrayList;
 
 @Service
 @Transactional
@@ -54,7 +56,7 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     }
 
     private void createAlert(Transformer transformer, Controller controller, ControllerReading reading) {
-        String triggerSummary = String.format("DI1=%s, DI2=%s", reading.getDi1(), reading.getDi2());
+        String triggerSummary = buildTriggerSummary(transformer.getType(), reading);
         AlertRequest alert = AlertRequest.builder()
                 .transformerId(transformer.getId())
                 .transformerName(transformer.getName())
@@ -69,10 +71,37 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                 .supplierName(transformer.getSupplierName() != null ? transformer.getSupplierName() : controller.getSupplierName())
                 .isAlert(true)
                 .value(triggerSummary)
-                .message("Controller trigger detected on " + transformer.getName() + " (" + triggerSummary + ")")
+                .message("Controller trigger detected on " + transformer.getName() + " (" + resolveTransformerTypeLabel(transformer.getType()) + ": " + triggerSummary + ")")
                 .build();
         log.info("Creating controller trigger alert for transformer {} from controller {}", transformer.getId(), controller.getId());
         alertService.create(alert);
+    }
+
+    private String buildTriggerSummary(TransformerType transformerType, ControllerReading reading) {
+        List<String> activeSignals = new ArrayList<>();
+        if (Boolean.TRUE.equals(reading.getDi1())) {
+            activeSignals.add("Motion Detected");
+        }
+        if (Boolean.TRUE.equals(reading.getDi2())) {
+            if (transformerType == TransformerType.GROUND_MOUNTED) {
+                activeSignals.add("Door Open");
+            } else if (transformerType == TransformerType.POLE_MOUNTED) {
+                activeSignals.add("Vibration Detected");
+            } else {
+                activeSignals.add("Secondary Trigger Detected");
+            }
+        }
+        return activeSignals.isEmpty() ? "Trigger Cleared" : String.join(", ", activeSignals);
+    }
+
+    private String resolveTransformerTypeLabel(TransformerType transformerType) {
+        if (transformerType == TransformerType.GROUND_MOUNTED) {
+            return "GMT";
+        }
+        if (transformerType == TransformerType.POLE_MOUNTED) {
+            return "PMT";
+        }
+        return "Unspecified";
     }
 
     @Override

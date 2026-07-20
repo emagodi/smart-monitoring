@@ -33,6 +33,7 @@ interface Depot {
 interface Transformer {
   id: number;
   name: string;
+  type?: string;
   capacity?: number;
   isActive?: boolean;
   depotId?: number;
@@ -157,6 +158,12 @@ export default function TransformersIndex() {
       if (typeof obj?.totalElements === 'number') return obj.totalElements;
       if (typeof obj?.total === 'number') return obj.total;
       return listLength; // fallback
+  };
+
+  const formatTransformerType = (type?: string | null) => {
+    if (type === 'GROUND_MOUNTED') return 'GMT';
+    if (type === 'POLE_MOUNTED') return 'PMT';
+    return 'Unspecified';
   };
 
   // --- Data Fetching ---
@@ -634,9 +641,9 @@ export default function TransformersIndex() {
             {isSupplierUser ? 'Browse the same region, district, and depot hierarchy as admin, filtered to transformers linked to your organisation devices.' : 'Manage electrical infrastructure hierarchy'}
           </p>
         </div>
-        {viewMode === 'TRANSFORMERS' && canCreateTransformers && (
+        {canCreateTransformers && (
             <Button onClick={handleAddTransformer} icon={<Plus className="h-4 w-4" />}>
-                Add Transformer
+                Create Transformer
             </Button>
         )}
       </div>
@@ -764,6 +771,7 @@ export default function TransformersIndex() {
                           <tr>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transformer</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Sensors</th>
                               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Controllers</th>
@@ -788,6 +796,17 @@ export default function TransformersIndex() {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                       {t.capacity ? `${t.capacity} kVA` : '—'}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        formatTransformerType(t.type) === 'GMT'
+                                          ? 'bg-indigo-100 text-indigo-800'
+                                          : formatTransformerType(t.type) === 'PMT'
+                                          ? 'bg-cyan-100 text-cyan-800'
+                                          : 'bg-slate-100 text-slate-700'
+                                      }`}>
+                                          {formatTransformerType(t.type)}
+                                      </span>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${t.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -833,7 +852,7 @@ export default function TransformersIndex() {
                               </tr>
                           ))}
                           {transformers.length === 0 && (
-                              <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500">{isSupplierUser ? 'No transformers found for your organisation.' : `No transformers found in ${selectedDepot?.name}.`}</td></tr>
+                              <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">{isSupplierUser ? 'No transformers found for your organisation.' : `No transformers found in ${selectedDepot?.name}.`}</td></tr>
                           )}
                       </tbody>
                   </table>
@@ -1214,6 +1233,10 @@ export default function TransformersIndex() {
                       <div>
                           <label className="block text-xs font-medium text-gray-500 uppercase">Capacity</label>
                           <p className="mt-1 text-sm text-gray-900">{activeTransformer.capacity ? `${activeTransformer.capacity} kVA` : '—'}</p>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-medium text-gray-500 uppercase">Transformer Type</label>
+                          <p className="mt-1 text-sm text-gray-900">{formatTransformerType(activeTransformer.type)}</p>
                       </div>
                       <div>
                           <label className="block text-xs font-medium text-gray-500 uppercase">{isSupplierUser ? 'Visible Through' : 'Organisation'}</label>

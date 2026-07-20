@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft, Save } from 'lucide-react';
 import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 
 interface DepotOption { id: number; name: string }
+type TransformerTypeOption = 'GROUND_MOUNTED' | 'POLE_MOUNTED';
 
 export default function CreateTransformer() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function CreateTransformer() {
   // Form State
   const [nameInput, setNameInput] = useState('');
   const [capacityInput, setCapacityInput] = useState<number | ''>('');
+  const [typeInput, setTypeInput] = useState<TransformerTypeOption | ''>('');
   const [isActiveInput, setIsActiveInput] = useState<boolean>(true);
   const [depotInput, setDepotInput] = useState<number | ''>('');
   const [latInput, setLatInput] = useState<number | ''>('');
@@ -72,6 +74,7 @@ export default function CreateTransformer() {
       const payload = {
         name: nameInput,
         capacity: capacityInput ? Number(capacityInput) : 0,
+        type: typeInput || null,
         isActive: isActiveInput, // Reverted to isActive to match backend DTO
         depotId: isSupplierUser ? null : Number(depotInput),
         lat: latInput ? Number(latInput) : 0.0, // Reverted to lat
@@ -157,6 +160,21 @@ export default function CreateTransformer() {
                   onChange={(e) => setCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="e.g. 500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Transformer Type
+                </label>
+                <select
+                  value={typeInput}
+                  onChange={(e) => setTypeInput((e.target.value as TransformerTypeOption | '') || '')}
+                  className="block w-full rounded-lg border-gray-300 bg-white focus:bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm py-2.5 transition-all"
+                >
+                  <option value="">Select type...</option>
+                  <option value="GROUND_MOUNTED">GMT</option>
+                  <option value="POLE_MOUNTED">PMT</option>
+                </select>
               </div>
 
               {/* Coordinates */}
