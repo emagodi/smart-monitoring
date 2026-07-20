@@ -921,7 +921,7 @@ export default function TransformersIndex() {
 
   const tableDescription = useMemo(() => {
     if (viewMode === 'REGIONS') {
-      return 'Step through the same hierarchy used in Regions, with enterprise table styling and contextual actions.';
+      return 'Step through the same hierarchy used in Regions,  table styling and contextual actions.';
     }
     if (viewMode === 'TRANSFORMERS') {
       return 'Review status, capacity, and downstream device access without leaving the current hierarchy context.';
@@ -1202,7 +1202,7 @@ export default function TransformersIndex() {
                 Transformer Shell
               </p>
               <h1 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-xl">
-                Enterprise transformer workspace
+                Transformer workspace
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 {isSupplierUser

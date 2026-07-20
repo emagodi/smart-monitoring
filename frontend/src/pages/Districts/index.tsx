@@ -449,7 +449,7 @@ export default function DistrictsIndex() {
                   District Table
                 </p>
                 <h3 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-lg">
-                  Enterprise district registry
+                   District registry
                 </h3>
               </div>
               <div className="flex flex-wrap items-center gap-2">

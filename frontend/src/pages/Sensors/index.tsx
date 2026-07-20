@@ -1,11 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import axios from 'axios';
-import { Modal } from '../../components/ui/modal';
+import {
+  Activity,
+  Cpu,
+  Filter,
+  Link2,
+  Loader2,
+  Plus,
+  Radio,
+  RefreshCcw,
+  Router,
+  Save,
+  Search,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
 import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
-import Button from '../../components/ui/button/Button';
-import { Plus, X, Search, Filter, Loader2, Activity, Cpu, Radio, Router, Link2, Save } from 'lucide-react';
+import { Modal } from '../../components/ui/modal';
+import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
+import { useAuth } from '../../context/AuthContext';
 
 interface Sensor {
   id: number;
@@ -27,11 +41,159 @@ interface TransformerOption {
   searchText?: string;
   badge?: string;
 }
+
+type Notice = {
+  variant: 'success' | 'error' | 'info' | 'warning';
+  title: string;
+  message: string;
+};
+
+type SensorType = (typeof SENSOR_TYPES)[number];
+
+type SensorFormModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  deviceId: string;
+  setDeviceId: (value: string) => void;
+  devEui: string;
+  setDevEui: (value: string) => void;
+  name: string;
+  setName: (value: string) => void;
+  type: string;
+  setType: (value: string) => void;
+  transformerId: number | '';
+  setTransformerId: (value: number | '') => void;
+  transformers: TransformerOption[];
+  saving?: boolean;
+  error?: string | null;
+  mode: 'create' | 'edit';
+};
+
 const SENSOR_TYPES = ['temperature', 'contact', 'suspicious_tilt', 'motion', 'video', 'controller'] as const;
+const ALL_TRANSFORMERS_OPTION = '__all_transformers__';
+
+const normalizeList = (payload: unknown): any[] => {
+  if (Array.isArray(payload)) return payload;
+  const obj = payload as Record<string, unknown> | null;
+  if (!obj) return [];
+
+  for (const key of ['data', 'content', 'items', 'records']) {
+    const value = obj[key];
+    if (Array.isArray(value)) return value;
+  }
+
+  return [];
+};
+
+const normalizeSensor = (payload: any): Sensor => ({
+  id: payload?.id,
+  deviceId: payload?.deviceId ?? payload?.deviceid ?? '',
+  devEui: payload?.devEui ?? payload?.dev_eui ?? '',
+  name: payload?.name ?? '',
+  type: payload?.type ?? '',
+  transformerId: payload?.transformerId ?? payload?.transformer_id,
+  transformer: payload?.transformer,
+  sensor_reading: Array.isArray(payload?.sensor_reading) ? payload.sensor_reading : [],
+  createdAt: payload?.createdAt ?? payload?.created_at,
+  updatedAt: payload?.updatedAt ?? payload?.updated_at,
+});
+
+const formatSensorType = (value?: string | null) =>
+  (value || 'Unknown')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return 'No recent update';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'No recent update';
+  return date.toLocaleString();
+};
+
+const getTypeTone = (type?: string) => {
+  switch (type) {
+    case 'temperature':
+      return 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300';
+    case 'contact':
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300';
+    case 'suspicious_tilt':
+      return 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300';
+    case 'motion':
+      return 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300';
+    case 'video':
+      return 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300';
+    case 'controller':
+      return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300';
+    default:
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+  }
+};
+
+const getReadingSummary = (sensorType: string | undefined, reading: Record<string, any>) => {
+  const type = sensorType || '';
+  let display: string | number | boolean | undefined;
+
+  if (type === 'temperature') display = reading.temperature ?? reading.value ?? reading.temp;
+  else if (type === 'oil_level') display = reading.oil_level ?? reading.level ?? reading.value;
+  else if (type === 'pressure') display = reading.pressure ?? reading.value;
+  else if (type === 'current') display = reading.current ?? reading.value;
+  else if (type === 'voltage') display = reading.voltage ?? reading.value;
+  else if (type === 'humidity') display = reading.humidity ?? reading.value;
+  else if (type === 'contact') display = reading.contact ?? reading.value;
+  else if (type === 'motion') display = reading.motion ?? reading.value;
+  else if (type === 'video') display = reading.active ?? reading.value;
+  else display = reading.value;
+
+  const unit =
+    type === 'temperature'
+      ? '°C'
+      : type === 'oil_level'
+        ? '%'
+        : type === 'pressure'
+          ? 'PSI'
+          : type === 'current'
+            ? 'A'
+            : type === 'voltage'
+              ? 'V'
+              : type === 'humidity'
+                ? '%'
+                : '';
+
+  if (typeof display === 'boolean') return display ? 'ACTIVE' : 'INACTIVE';
+  if (display === null || display === undefined || display === '') return 'No value';
+  return `${String(display)}${unit ? ` ${unit}` : ''}`;
+};
+
+function buildTransformerDescription(item: any) {
+  const parts = [
+    item.type ? item.type.replaceAll('_', ' ') : null,
+    item.capacity ? `${item.capacity} kVA` : null,
+    item.supplierName || null,
+    item.locationLabel || (item.lat != null && item.lng != null ? `${item.lat}, ${item.lng}` : null),
+  ].filter(Boolean);
+  return parts.join(' | ');
+}
+
+function buildTransformerSearchText(item: any) {
+  return [
+    item.name,
+    item.type,
+    item.capacity,
+    item.supplierName,
+    item.supplierCode,
+    item.depotId,
+    item.lat,
+    item.lng,
+  ]
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .join(' ');
+}
 
 export default function SensorsIndex() {
   const { token, hasPermission, user } = useAuth();
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
+
   const [items, setItems] = useState<Sensor[]>([]);
   const [transformers, setTransformers] = useState<TransformerOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +201,6 @@ export default function SensorsIndex() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showView, setShowView] = useState(false);
@@ -52,7 +213,7 @@ export default function SensorsIndex() {
   const [savingCreate, setSavingCreate] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ variant: 'success' | 'error' | 'info' | 'warning'; title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -60,7 +221,6 @@ export default function SensorsIndex() {
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<Sensor | null>(null);
-
   const [transformerFilter, setTransformerFilter] = useState<number | ''>('');
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -69,29 +229,21 @@ export default function SensorsIndex() {
   const canUpdate = hasPermission('sensors.update');
   const canDelete = hasPermission('sensors.delete');
 
-  const normalizeList = (payload: unknown): Sensor[] => {
-    if (Array.isArray(payload)) return payload as Sensor[];
-    const obj = payload as Record<string, unknown>;
-    const candidates = ['data', 'content', 'items', 'records'];
-    for (const key of candidates) {
-      const v = obj?.[key] as unknown;
-      if (Array.isArray(v)) return v as Sensor[];
-    }
-    return [];
-  };
-
   const fetchTransformerOptions = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/v1/transformers/assignment-options`, { headers });
-      const arr = Array.isArray(res.data) ? (res.data as TransformerOption[]) : ((res.data?.data as TransformerOption[]) ?? []);
+      const arr = Array.isArray(res.data)
+        ? (res.data as TransformerOption[])
+        : ((res.data?.data as TransformerOption[]) ?? []);
+
       setTransformers(
         arr
-          .map((t: any) => ({
-            id: t.id,
-            name: t.name,
-            description: buildTransformerDescription(t),
-            searchText: buildTransformerSearchText(t),
-            badge: t.supplierName || t.type || undefined,
+          .map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            description: buildTransformerDescription(item),
+            searchText: buildTransformerSearchText(item),
+            badge: item.supplierName || item.type || undefined,
           }))
           .sort((a, b) => a.name.localeCompare(b.name))
       );
@@ -104,23 +256,13 @@ export default function SensorsIndex() {
     try {
       setLoading(true);
       setError(null);
-      const url = typeof transformerFilter === 'number'
-        ? `${API_BASE_URL}/api/v1/sensors/transformer/${transformerFilter}`
-        : `${API_BASE_URL}/api/v1/sensors`;
+      const url =
+        typeof transformerFilter === 'number'
+          ? `${API_BASE_URL}/api/v1/sensors/transformer/${transformerFilter}`
+          : `${API_BASE_URL}/api/v1/sensors`;
       const res = await axios.get(url, { headers });
       const list = normalizeList(res.data);
-      setItems(list.map((s: any) => ({
-        id: s.id,
-        deviceId: s.deviceId ?? s.deviceid ?? '',
-        devEui: s.devEui ?? s.devEui ?? '',
-        name: s.name ?? '',
-        type: s.type ?? '',
-        transformerId: s.transformerId ?? s.transformer_id,
-        transformer: s.transformer,
-        sensor_reading: Array.isArray(s.sensor_reading) ? s.sensor_reading : [],
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      })) as Sensor[]);
+      setItems(list.map((sensor) => normalizeSensor(sensor)));
     } catch {
       setError('Failed to fetch sensors');
     } finally {
@@ -129,11 +271,103 @@ export default function SensorsIndex() {
   }, [API_BASE_URL, headers, transformerFilter]);
 
   useEffect(() => {
-    if (token) {
-      fetchTransformerOptions();
-      fetchSensors();
-    }
+    if (!token) return;
+    void fetchTransformerOptions();
+    void fetchSensors();
   }, [token, fetchTransformerOptions, fetchSensors]);
+
+  const transformerLookup = useMemo(
+    () => new Map(transformers.map((transformer) => [transformer.id, transformer.name])),
+    [transformers]
+  );
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return items;
+
+    return items.filter((sensor) => {
+      const transformerName =
+        transformerLookup.get(sensor.transformer?.id ?? sensor.transformerId ?? -1) ??
+        sensor.transformer?.name ??
+        '';
+
+      return (
+        sensor.name.toLowerCase().includes(query) ||
+        sensor.type.toLowerCase().includes(query) ||
+        sensor.deviceId.toLowerCase().includes(query) ||
+        sensor.devEui.toLowerCase().includes(query) ||
+        transformerName.toLowerCase().includes(query)
+      );
+    });
+  }, [items, search, transformerLookup]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  const totals = useMemo(() => {
+    const totalSensors = items.length;
+    const assignedSensors = items.filter((sensor) => Boolean(sensor.transformerId ?? sensor.transformer?.id)).length;
+    const telemetrySensors = items.filter((sensor) => (sensor.sensor_reading?.length ?? 0) > 0).length;
+    const distinctTypes = new Set(items.map((sensor) => sensor.type).filter(Boolean)).size;
+
+    return {
+      totalSensors,
+      assignedSensors,
+      unassignedSensors: totalSensors - assignedSensors,
+      telemetrySensors,
+      distinctTypes,
+    };
+  }, [items]);
+
+  const typeDistribution = useMemo(() => {
+    const grouped = new Map<string, number>();
+    items.forEach((sensor) => {
+      const key = sensor.type || 'unknown';
+      grouped.set(key, (grouped.get(key) || 0) + 1);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [items]);
+
+  const transformerDistribution = useMemo(() => {
+    const grouped = new Map<string, number>();
+    items.forEach((sensor) => {
+      const name =
+        transformerLookup.get(sensor.transformer?.id ?? sensor.transformerId ?? -1) ??
+        sensor.transformer?.name ??
+        'Unassigned';
+      grouped.set(name, (grouped.get(name) || 0) + 1);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [items, transformerLookup]);
+
+  const transformerFilterOptions = useMemo(
+    () => [
+      { id: ALL_TRANSFORMERS_OPTION, name: 'All transformers', description: 'Show the full sensor inventory' },
+      ...transformers,
+    ],
+    [transformers]
+  );
+
+  const activeFilterName =
+    typeof transformerFilter === 'number'
+      ? transformerLookup.get(transformerFilter) ?? 'Selected transformer'
+      : 'All transformers';
+
+  const showNotice = (nextNotice: Notice, duration = 4000) => {
+    setNotice(nextNotice);
+    window.setTimeout(() => setNotice(null), duration);
+  };
 
   const openCreate = () => {
     setDeviceIdInput('');
@@ -149,13 +383,13 @@ export default function SensorsIndex() {
   const openEdit = async (row: Sensor) => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/v1/sensors/${row.id}`, { headers });
-      const s = (res.data as Sensor) || row;
-      setActive(s);
-      setDeviceIdInput(s.deviceId);
-      setDevEuiInput(s.devEui);
-      setNameInput(s.name);
-      setTypeInput(s.type);
-      setTransformerInput(s.transformer?.id ?? s.transformerId ?? '');
+      const sensor = normalizeSensor(res.data || row);
+      setActive(sensor);
+      setDeviceIdInput(sensor.deviceId);
+      setDevEuiInput(sensor.devEui);
+      setNameInput(sensor.name);
+      setTypeInput(sensor.type);
+      setTransformerInput(sensor.transformer?.id ?? sensor.transformerId ?? '');
     } catch {
       setActive(row);
       setDeviceIdInput(row.deviceId);
@@ -171,71 +405,11 @@ export default function SensorsIndex() {
   const openView = async (row: Sensor) => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/v1/sensors/${row.id}`, { headers });
-      setActive(res.data as Sensor);
+      setActive(normalizeSensor(res.data));
     } catch {
       setActive(row);
     }
     setShowView(true);
-  };
-
-  const submitCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (!deviceIdInput.trim()) { setFormError('Enter deviceId'); return; }
-      if (!devEuiInput.trim()) { setFormError('Enter devEui'); return; }
-      if (!nameInput.trim()) { setFormError('Enter name'); return; }
-      if (!SENSOR_TYPES.includes(typeInput as typeof SENSOR_TYPES[number])) { setFormError('Select a valid type'); return; }
-      if (!transformerInput || typeof transformerInput !== 'number') { setFormError('Select a transformer'); return; }
-      setSavingCreate(true);
-      setFormError(null);
-      await axios.post(`${API_BASE_URL}/api/v1/sensors/create`, { deviceId: deviceIdInput.trim(), devEui: devEuiInput.trim(), name: nameInput.trim(), type: typeInput.trim(), transformerId: transformerInput }, { headers });
-      setShowCreate(false);
-      setDeviceIdInput('');
-      setDevEuiInput('');
-      setNameInput('');
-      setTypeInput('');
-      setTransformerInput('');
-      await fetchSensors();
-      setNotice({ variant: 'success', title: 'Sensor created', message: 'The sensor was created successfully.' });
-      setTimeout(() => setNotice(null), 4000);
-    } catch {
-      setFormError('Failed to create sensor');
-      setNotice({ variant: 'error', title: 'Create failed', message: 'Could not create the sensor.' });
-      setTimeout(() => setNotice(null), 5000);
-    } finally {
-      setSavingCreate(false);
-    }
-  };
-
-  const submitEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (!active) return;
-      if (!deviceIdInput.trim()) { setFormError('Enter deviceId'); return; }
-      if (!devEuiInput.trim()) { setFormError('Enter devEui'); return; }
-      if (!nameInput.trim()) { setFormError('Enter name'); return; }
-      if (!SENSOR_TYPES.includes(typeInput as typeof SENSOR_TYPES[number])) { setFormError('Select a valid type'); return; }
-      if (!transformerInput || typeof transformerInput !== 'number') { setFormError('Select a transformer'); return; }
-      setSavingEdit(true);
-      setFormError(null);
-      await axios.put(`${API_BASE_URL}/api/v1/sensors/${active.id}`, { deviceId: deviceIdInput.trim(), devEui: devEuiInput.trim(), name: nameInput.trim(), type: typeInput.trim(), transformerId: transformerInput }, { headers });
-      setShowEdit(false);
-      setActive(null);
-      setDeviceIdInput('');
-      setDevEuiInput('');
-      setNameInput('');
-      setTypeInput('');
-      setTransformerInput('');
-      await fetchSensors();
-      setNotice({ variant: 'success', title: 'Sensor updated', message: 'Changes were saved successfully.' });
-      setTimeout(() => setNotice(null), 4000);
-    } catch {
-      setFormError('Failed to update sensor');
-      setNotice({ variant: 'error', title: 'Update failed', message: 'Could not update the sensor.' });
-      setTimeout(() => setNotice(null), 5000);
-    } finally {
-      setSavingEdit(false);
-    }
   };
 
   const openDelete = (row: Sensor) => {
@@ -251,14 +425,126 @@ export default function SensorsIndex() {
     setShowAssign(true);
   };
 
-  const submitAssign = async (e: React.FormEvent) => {
+  const submitCreate = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      if (!deviceIdInput.trim()) {
+        setFormError('Enter deviceId');
+        return;
+      }
+      if (!devEuiInput.trim()) {
+        setFormError('Enter devEui');
+        return;
+      }
+      if (!nameInput.trim()) {
+        setFormError('Enter name');
+        return;
+      }
+      if (!SENSOR_TYPES.includes(typeInput as SensorType)) {
+        setFormError('Select a valid type');
+        return;
+      }
+      if (!transformerInput || typeof transformerInput !== 'number') {
+        setFormError('Select a transformer');
+        return;
+      }
+
+      setSavingCreate(true);
+      setFormError(null);
+      await axios.post(
+        `${API_BASE_URL}/api/v1/sensors/create`,
+        {
+          deviceId: deviceIdInput.trim(),
+          devEui: devEuiInput.trim(),
+          name: nameInput.trim(),
+          type: typeInput.trim(),
+          transformerId: transformerInput,
+        },
+        { headers }
+      );
+
+      setShowCreate(false);
+      setDeviceIdInput('');
+      setDevEuiInput('');
+      setNameInput('');
+      setTypeInput('');
+      setTransformerInput('');
+      await fetchSensors();
+      showNotice({ variant: 'success', title: 'Sensor created', message: 'The sensor was created successfully.' });
+    } catch {
+      setFormError('Failed to create sensor');
+      showNotice({ variant: 'error', title: 'Create failed', message: 'Could not create the sensor.' }, 5000);
+    } finally {
+      setSavingCreate(false);
+    }
+  };
+
+  const submitEdit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      if (!active) return;
+      if (!deviceIdInput.trim()) {
+        setFormError('Enter deviceId');
+        return;
+      }
+      if (!devEuiInput.trim()) {
+        setFormError('Enter devEui');
+        return;
+      }
+      if (!nameInput.trim()) {
+        setFormError('Enter name');
+        return;
+      }
+      if (!SENSOR_TYPES.includes(typeInput as SensorType)) {
+        setFormError('Select a valid type');
+        return;
+      }
+      if (!transformerInput || typeof transformerInput !== 'number') {
+        setFormError('Select a transformer');
+        return;
+      }
+
+      setSavingEdit(true);
+      setFormError(null);
+      await axios.put(
+        `${API_BASE_URL}/api/v1/sensors/${active.id}`,
+        {
+          deviceId: deviceIdInput.trim(),
+          devEui: devEuiInput.trim(),
+          name: nameInput.trim(),
+          type: typeInput.trim(),
+          transformerId: transformerInput,
+        },
+        { headers }
+      );
+
+      setShowEdit(false);
+      setActive(null);
+      setDeviceIdInput('');
+      setDevEuiInput('');
+      setNameInput('');
+      setTypeInput('');
+      setTransformerInput('');
+      await fetchSensors();
+      showNotice({ variant: 'success', title: 'Sensor updated', message: 'Changes were saved successfully.' });
+    } catch {
+      setFormError('Failed to update sensor');
+      showNotice({ variant: 'error', title: 'Update failed', message: 'Could not update the sensor.' }, 5000);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const submitAssign = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!assignTarget) return;
+
     try {
       if (!transformerInput || typeof transformerInput !== 'number') {
         setAssignError('Select a transformer for this sensor.');
         return;
       }
+
       setAssigning(true);
       setAssignError(null);
       await axios.put(
@@ -272,16 +558,19 @@ export default function SensorsIndex() {
         },
         { headers }
       );
+
       setShowAssign(false);
       setAssignTarget(null);
       setTransformerInput('');
       await fetchSensors();
       await fetchTransformerOptions();
-      setNotice({ variant: 'success', title: 'Sensor assigned', message: 'The sensor assignment was updated successfully.' });
-      setTimeout(() => setNotice(null), 4000);
+      showNotice({
+        variant: 'success',
+        title: 'Sensor assigned',
+        message: 'The sensor assignment was updated successfully.',
+      });
     } catch (err: any) {
-      console.error(err);
-      setAssignError(err.response?.data?.message || 'Failed to assign sensor.');
+      setAssignError(err?.response?.data?.message || 'Failed to assign sensor.');
     } finally {
       setAssigning(false);
     }
@@ -296,8 +585,7 @@ export default function SensorsIndex() {
       setShowDelete(false);
       setActive(null);
       await fetchSensors();
-      setNotice({ variant: 'success', title: 'Sensor deleted', message: 'The sensor was deleted successfully.' });
-      setTimeout(() => setNotice(null), 4000);
+      showNotice({ variant: 'success', title: 'Sensor deleted', message: 'The sensor was deleted successfully.' });
     } catch {
       setDeleteError('Failed to delete sensor');
     } finally {
@@ -305,61 +593,136 @@ export default function SensorsIndex() {
     }
   };
 
-  const filtered = items.filter((s) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    const tName = transformers.find(x => x.id === (s.transformer?.id ?? s.transformerId))?.name ?? '';
+  if (loading) {
     return (
-      s.name.toLowerCase().includes(q) ||
-      s.type.toLowerCase().includes(q) ||
-      s.deviceId.toLowerCase().includes(q) ||
-      s.devEui.toLowerCase().includes(q) ||
-      tName.toLowerCase().includes(q)
+      <div className="enterprise-card flex h-96 items-center justify-center gap-3 text-slate-500 dark:text-slate-300">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <span>Loading sensors...</span>
+      </div>
     );
-  });
-  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  }
 
-  const toggleSelectAll = (checked: boolean) => {
-    if (checked) setSelectedIds(paginated.map((s) => s.id));
-    else setSelectedIds([]);
-  };
-  const toggleSelectOne = (id: number, checked: boolean) => {
-    setSelectedIds((prev) => (checked ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id)));
-  };
-
-  if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /><span className="ml-2 text-gray-500">Loading sensors...</span></div>;
-  if (error) return <div className="p-4 text-red-500">{error}</div>;
+  if (error) {
+    return (
+      <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+        {error}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {notice && (
-        <Alert variant={notice.variant} title={notice.title} message={notice.message} />
-      )}
-      <div className="flex justify-between items-center">
-        <div>
-           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sensors</h2>
-           <p className="mt-1 text-sm text-gray-500">
-             {isSupplierUser ? 'Manage sensors and assign them to any transformer visible to your organisation.' : 'Manage and monitor your IoT sensors.'}
-           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canCreate ? <Button size="sm" onClick={openCreate} startIcon={<Plus className="w-4 h-4" />}>Add Sensor</Button> : null}
-        </div>
-      </div>
+    <div className="space-y-4">
+      {notice && <Alert variant={notice.variant} title={notice.title} message={notice.message} />}
 
-      <div className="rounded-xl bg-white shadow-sm dark:bg-gray-900 border border-gray-100">
-        <div className="p-4 border-b border-gray-100 space-y-4">
-          {/* Top Filter Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4 flex-1">
-              {/* Show [N] */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-brand-500 bg-brand-50 px-2 py-1 rounded">Show</span>
-                <select 
-                  value={pageSize} 
-                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} 
-                  className="text-sm border-none bg-transparent font-medium focus:ring-0 cursor-pointer"
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            label: 'Sensors',
+            value: totals.totalSensors,
+            subtitle: 'Monitored devices across the fleet',
+            icon: <Cpu className="h-6 w-6" />,
+            tone: 'bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300',
+          },
+          {
+            label: 'Assigned',
+            value: totals.assignedSensors,
+            subtitle: 'Linked to a transformer',
+            icon: <Link2 className="h-6 w-6" />,
+            tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300',
+          },
+          {
+            label: 'Telemetry',
+            value: totals.telemetrySensors,
+            subtitle: 'Sensors with recent readings',
+            icon: <Activity className="h-6 w-6" />,
+            tone: 'bg-violet-50 text-violet-600 dark:bg-violet-500/14 dark:text-violet-300',
+          },
+          {
+            label: 'Types',
+            value: totals.distinctTypes,
+            subtitle: 'Unique sensor categories in use',
+            icon: <Radio className="h-6 w-6" />,
+            tone: 'bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300',
+          },
+        ].map((card) => (
+          <div key={card.label} className="enterprise-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{card.label}</p>
+                <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                  {card.value.toLocaleString()}
+                </p>
+                <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{card.subtitle}</p>
+              </div>
+              <div className={`rounded-xl p-2.5 ${card.tone}`}>{card.icon}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr_0.75fr]">
+        <div className="enterprise-card overflow-hidden">
+          <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Sensor Table</p>
+                <h3 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-lg">
+                  Connected sensor inventory
+                </h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {isSupplierUser
+                    ? 'Manage sensors and assignments for transformers visible to your organisation.'
+                    : 'Manage device metadata, transformer links, and telemetry visibility.'}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void fetchTransformerOptions();
+                    void fetchSensors();
+                  }}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setTransformerFilter('');
+                    setPage(1);
+                  }}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
+                >
+                  <Filter className="h-4 w-4" />
+                  Reset
+                </button>
+                {canCreate && (
+                  <button
+                    type="button"
+                    onClick={openCreate}
+                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Sensor
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+              <div className="enterprise-chip inline-flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Show</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="bg-transparent text-sm outline-none"
                 >
                   <option value={10}>10</option>
                   <option value={20}>20</option>
@@ -367,139 +730,244 @@ export default function SensorsIndex() {
                 </select>
               </div>
 
-               {/* Transformer Filter */}
-              <div className="flex items-center gap-2">
-                 <span className="text-sm font-bold text-brand-500 bg-brand-50 px-2 py-1 rounded">Transformer</span>
-                 <div className="w-[200px]">
-                    <SearchableSelect 
-                        options={transformers} 
-                        value={transformerFilter} 
-                        onChange={(v) => { setTransformerFilter(v); setPage(1); }} 
-                        placeholder="All Transformers" 
-                        compact
-                    />
-                 </div>
+              <div className="enterprise-chip min-w-[240px] max-w-[320px] flex-1 px-2 py-1.5">
+                <SearchableSelect
+                  options={transformerFilterOptions}
+                  value={typeof transformerFilter === 'number' ? transformerFilter : ALL_TRANSFORMERS_OPTION}
+                  onChange={(value: number | string) => {
+                    setTransformerFilter(value === ALL_TRANSFORMERS_OPTION ? '' : Number(value));
+                    setPage(1);
+                  }}
+                  placeholder="Filter by transformer"
+                  compact
+                />
               </div>
 
-              {/* Search Bar */}
-              <div className="flex-1 max-w-md relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
-                </div>
-                <input 
-                  type="text" 
-                  placeholder="Search sensors..." 
-                  value={search} 
-                  onChange={(e) => { setSearch(e.target.value); setPage(1); }} 
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-md leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 sm:text-sm" 
+              <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2.5">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search sensors, IDs, or transformers..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
                 />
               </div>
             </div>
+          </div>
 
-            {/* Buttons */}
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => fetchSensors()} 
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 shadow-sm"
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Search
-              </button>
-              <button 
-                onClick={() => { setSearch(''); setTransformerFilter(''); setPage(1); }} 
-                className="inline-flex items-center px-4 py-2 border border-yellow-500 text-sm font-medium rounded-md text-yellow-600 bg-white hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Reset
-              </button>
+          <div className="overflow-x-auto p-4 pt-0">
+            <table className="min-w-full border-separate border-spacing-y-2.5">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                  <th className="px-3 py-2.5">Sensor</th>
+                  <th className="px-3 py-2.5">Type</th>
+                  <th className="px-3 py-2.5">Device ID</th>
+                  <th className="px-3 py-2.5">DevEUI</th>
+                  <th className="px-3 py-2.5">Transformer</th>
+                  <th className="px-3 py-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12">
+                      <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                        No sensors found for the current filter.
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginated.map((sensor) => {
+                    const transformerName =
+                      transformerLookup.get(sensor.transformer?.id ?? sensor.transformerId ?? -1) ??
+                      sensor.transformer?.name ??
+                      'Unassigned';
+                    const readingCount = sensor.sensor_reading?.length ?? 0;
+
+                    return (
+                      <tr key={sensor.id} className="enterprise-subtle-card">
+                        <td className="rounded-l-[22px] px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                              <Cpu className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{sensor.name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                                {readingCount > 0
+                                  ? `${readingCount} reading${readingCount === 1 ? '' : 's'} available`
+                                  : 'No telemetry recorded yet'}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${getTypeTone(sensor.type)}`}>
+                            <span className="h-2 w-2 rounded-full bg-current opacity-70" />
+                            {formatSensorType(sensor.type)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{sensor.deviceId || 'N/A'}</div>
+                          <div className="mt-1 text-[12px] text-slate-400 dark:text-slate-500">Updated {formatDateTime(sensor.updatedAt)}</div>
+                        </td>
+                        <td className="px-3 py-3 font-mono text-sm text-slate-500 dark:text-slate-300">{sensor.devEui || 'N/A'}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                              <span className={`h-2 w-2 rounded-full ${transformerName === 'Unassigned' ? 'bg-slate-400 dark:bg-slate-500' : 'bg-emerald-500'}`} />
+                              {transformerName}
+                            </span>
+                            <span className="text-[12px] text-slate-400 dark:text-slate-500">
+                              {transformerName === 'Unassigned' ? 'Needs assignment' : 'Assignment active'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 text-right">
+                          <ActionMenu
+                            placement="bottom-end"
+                            onView={() => openView(sensor)}
+                            onEdit={canUpdate ? () => openEdit(sensor) : undefined}
+                            onDelete={canDelete ? () => openDelete(sensor) : undefined}
+                            extras={
+                              canUpdate
+                                ? [{ label: 'Assign Transformer', onClick: () => openAssign(sensor), icon: <Link2 className="h-4 w-4" /> }]
+                                : undefined
+                            }
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Showing {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1} to {Math.min(page * pageSize, filtered.length)} of {filtered.length} sensors
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
+                >
+                  Previous
+                </button>
+                <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">{page}</div>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page === totalPages}
+                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-white border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Device ID</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">DevEUI</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Transformer</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
-                    No sensors found.
-                    <div className="mt-4 flex items-center justify-center gap-2">
-                      <button onClick={fetchSensors} className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300">Refresh</button>
-                      {canCreate ? <button onClick={openCreate} className="rounded bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Add Sensor</button> : null}
-                    </div>
-                  </td>
-                </tr>
+        <div className="space-y-4">
+          <div className="enterprise-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Sensor Summary</p>
+                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">Operational overview</h3>
+              </div>
+              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2.5">
+              {[
+                ['Assigned sensors', totals.assignedSensors],
+                ['Unassigned sensors', totals.unassignedSensors],
+                ['Telemetry coverage', `${totals.totalSensors ? Math.round((totals.telemetrySensors / totals.totalSensors) * 100) : 0}%`],
+                ['Current scope', activeFilterName],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
+                  <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="enterprise-card p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Type Mix</p>
+              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">Active categories</h3>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {typeDistribution.length === 0 ? (
+                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  No sensor type data available yet.
+                </div>
               ) : (
-                paginated.map((s) => {
-                  const tName = transformers.find(x => x.id === (s.transformer?.id ?? s.transformerId))?.name ?? s.transformer?.name ?? '—';
+                typeDistribution.slice(0, 5).map((item) => {
+                  const width = totals.totalSensors ? (item.count / totals.totalSensors) * 100 : 0;
                   return (
-                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                      
-                      <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-700">{s.name}</div></td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                         <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-blue-100 text-blue-800">
-                           {s.type}
-                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{s.deviceId}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{s.devEui}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                        <ActionMenu
-                          placement="bottom-end"
-                          onView={() => openView(s)}
-                          onEdit={canUpdate ? () => openEdit(s) : undefined}
-                          onDelete={canDelete ? () => openDelete(s) : undefined}
-                          extras={canUpdate ? [{
-                            label: 'Assign To Transformer',
-                            onClick: () => openAssign(s),
-                            icon: <Link2 className="w-4 h-4" />
-                          }] : undefined}
-                        />
-                      </td>
-                    </tr>
+                    <div key={item.type}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{formatSensorType(item.type)}</span>
+                        <span className={item.count === 0 ? 'text-slate-400 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400'}>
+                          {item.count.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600" style={{ width: `${Math.max(width, item.count ? 8 : 0)}%` }} />
+                      </div>
+                    </div>
                   );
                 })
               )}
-            </tbody>
-          </table>
-        </div>
-        {totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Showing <span className="font-medium text-gray-900">{(page - 1) * pageSize + 1}</span> to <span className="font-medium text-gray-900">{Math.min(page * pageSize, filtered.length)}</span> of <span className="font-medium text-gray-900">{filtered.length}</span> results</p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button onClick={() => setPage(1)} disabled={page === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">«</button>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) pageNum = i + 1;
-                    else if (page <= 3) pageNum = i + 1;
-                    else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
-                    else pageNum = page - 2 + i;
-                    return (
-                      <button key={pageNum} onClick={() => setPage(pageNum)} className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${page === pageNum ? 'z-10 bg-blue-900 border-blue-900 text-white' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>{pageNum}</button>
-                    );
-                  })}
-                  <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">»</button>
-                </nav>
-              </div>
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="enterprise-card p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Transformer Load</p>
+              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">Highest sensor density</h3>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {transformerDistribution.length === 0 ? (
+                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  No transformer allocation data available.
+                </div>
+              ) : (
+                transformerDistribution.slice(0, 4).map((item) => {
+                  const width = totals.totalSensors ? (item.count / totals.totalSensors) * 100 : 0;
+                  return (
+                    <div key={item.name}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{item.name}</span>
+                        <span className={item.name === 'Unassigned' ? 'text-slate-400 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400'}>
+                          {item.count} sensors
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-blue-600" style={{ width: `${Math.max(width, item.count ? 8 : 0)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <SensorCreateModal
         open={showCreate}
@@ -538,586 +1006,507 @@ export default function SensorsIndex() {
         error={formError}
       />
       <SensorViewModal open={showView} onClose={() => setShowView(false)} sensor={active} transformers={transformers} />
-      <SensorDeleteModal 
-        open={showDelete} 
-        onClose={() => setShowDelete(false)} 
-        onConfirm={confirmDelete} 
-        sensor={active} 
-        deleting={deleting} 
-        error={deleteError} 
+      <SensorDeleteModal open={showDelete} onClose={() => setShowDelete(false)} onConfirm={confirmDelete} sensor={active} deleting={deleting} error={deleteError} />
+      <SensorAssignModal
+        open={showAssign}
+        onClose={() => setShowAssign(false)}
+        onSubmit={submitAssign}
+        sensor={assignTarget}
+        transformers={transformers}
+        transformerId={transformerInput}
+        setTransformerId={setTransformerInput}
+        assigning={assigning}
+        error={assignError}
+        isSupplierUser={isSupplierUser}
       />
-      <Modal isOpen={showAssign} onClose={() => setShowAssign(false)} className="max-w-xl w-full p-0 overflow-hidden rounded-2xl bg-white shadow-xl transition-all" backdropBlur={true}>
-        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-6">
-          <h3 className="text-xl font-bold text-white">Assign To Transformer</h3>
-          <p className="mt-1 text-sm text-blue-100">Link this sensor to a transformer visible to your organisation.</p>
-        </div>
-        <form onSubmit={submitAssign} className="space-y-6 p-6">
-          {assignError ? <Alert variant="error" title="Assignment" message={assignError} /> : null}
-          <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
-            <AssignmentInfo label="Sensor" value={assignTarget?.name || '—'} />
-            <AssignmentInfo label="Device ID" value={assignTarget?.deviceId || '—'} />
-            <AssignmentInfo
-              label="Current Assignment"
-              value={
-                transformers.find((item) => item.id === (assignTarget?.transformer?.id ?? assignTarget?.transformerId))?.name ||
-                assignTarget?.transformer?.name ||
-                'Unassigned'
-              }
-            />
-            <AssignmentInfo label="Last Updated" value={assignTarget?.updatedAt ? new Date(assignTarget.updatedAt).toLocaleString() : 'Not yet updated'} />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-700">Transformer</label>
-            <SearchableSelect options={transformers} value={transformerInput} onChange={setTransformerInput} placeholder="Select organisation transformer" />
-            <p className="mt-2 text-xs text-gray-500">
-              {isSupplierUser ? 'Only transformers visible to your organisation are listed here.' : 'Select the transformer that should own this sensor.'}
-            </p>
-          </div>
-          <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setShowAssign(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={assigning}>
-              {!assigning ? <Save className="w-4 h-4 mr-1" /> : null}
-              Save Assignment
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }
 
-function AssignmentInfo({ label, value }: { label: string; value: string }) {
+function ModalErrorNotice({ error }: { error?: string | null }) {
+  if (!error) return null;
+
   return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-gray-900">{value}</p>
+    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+      {error}
     </div>
   );
 }
 
-export function SensorDeleteModal({ open, onClose, onConfirm, sensor, deleting, error }: { open: boolean; onClose: () => void; onConfirm: () => void; sensor: Sensor | null; deleting: boolean; error?: string | null }) {
+function InfoStatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <Modal isOpen={open} onClose={onClose} className="max-w-md w-full p-0 overflow-hidden rounded-2xl" backdropBlur={true}>
-      <div className="bg-gradient-to-r from-red-600 to-red-800 px-6 py-6">
-        <div className="flex items-center justify-between">
-           <h3 className="text-xl font-bold text-white">Delete Sensor</h3>
-           <button 
-             type="button"
-             onClick={onClose}
-             className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
-           >
-             <X className="h-5 w-5" />
-           </button>
-        </div>
-        <p className="mt-2 text-sm text-red-100">This action cannot be undone.</p>
-      </div>
-      
-      <div className="p-6 space-y-4">
-        {error && (
-            <div className="rounded-md bg-red-50 p-4 border border-red-200">
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800">Error</h3>
-                        <div className="mt-2 text-sm text-red-700">{error}</div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        <p className="text-gray-600">
-            Are you sure you want to delete the sensor <span className="font-bold text-gray-900">{sensor?.name}</span>?
-            <br />
-            All data associated with this sensor will be permanently removed.
-        </p>
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">Cancel</button>
-          <button 
-            onClick={onConfirm} 
-            disabled={deleting} 
-            className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
-          >
-            {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {deleting ? 'Deleting...' : 'Delete Sensor'}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function SearchableSelect({ options, value, onChange, placeholder, compact }: { options: TransformerOption[]; value: number | ''; onChange: (v: number | '') => void; placeholder?: string; compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const selected = typeof value === 'number' ? options.find(o => o.id === value) : undefined;
-  const filtered = options.filter(o =>
-    `${o.name} ${o.description || ''} ${o.searchText || ''}`.toLowerCase().includes(query.trim().toLowerCase())
-  );
-
-  return (
-    <div className="relative">
-      <div className="relative group">
-        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-          <Search className={`h-4 w-4 ${compact ? 'text-gray-400' : 'text-gray-400 group-focus-within:text-blue-500'}`} />
-        </span>
-        <input
-          type="text"
-          value={open ? query : (query || selected?.name || '')}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => {
-            if (!open && query === selected?.name) {
-              setQuery('');
-            }
-            setOpen(true);
-          }}
-          placeholder={placeholder || 'Search…'}
-          className={compact 
-            ? "block w-full pl-9 pr-8 py-1.5 border-none bg-transparent text-sm font-medium focus:ring-0 placeholder-gray-400"
-            : "mt-1 block w-full rounded-md border border-gray-300 bg-white pl-10 pr-8 py-2 shadow-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:text-sm hover:border-gray-400"
-          }
-        />
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(v => {
-              const next = !v;
-              if (next && query === selected?.name) {
-                setQuery('');
-              }
-              return next;
-            });
-          }}
-          className="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-gray-600"
-        >
-           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.25 8.27a.75.75 0 01-.02-1.06z"/></svg>
-        </button>
-      </div>
-      {open && (
-        <div className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg focus:outline-none py-1">
-          <ul className="max-h-56 overflow-auto">
-            {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-gray-500">No matches</li>
-            ) : (
-              filtered.map(opt => (
-                <li key={opt.id}>
-                  <button
-                    type="button"
-                    onClick={() => { onChange(opt.id); setQuery(opt.name); setOpen(false); }}
-                    className={`flex w-full px-3 py-2 text-left text-sm ${value === opt.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
-                  >
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate">{opt.name}</span>
-                        {opt.badge ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">{opt.badge}</span> : null}
-                      </span>
-                      {opt.description ? <span className="mt-0.5 block truncate text-xs text-gray-500">{opt.description}</span> : null}
-                    </span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   );
 }
 
-function buildTransformerDescription(item: any) {
-  const parts = [
-    item.type ? item.type.replaceAll('_', ' ') : null,
-    item.capacity ? `${item.capacity} kVA` : null,
-    item.supplierName || null,
-    item.locationLabel || (item.lat != null && item.lng != null ? `${item.lat}, ${item.lng}` : null),
-  ].filter(Boolean);
-  return parts.join(' | ');
-}
+function SensorFormModal({
+  open,
+  onClose,
+  onSubmit,
+  deviceId,
+  setDeviceId,
+  devEui,
+  setDevEui,
+  name,
+  setName,
+  type,
+  setType,
+  transformerId,
+  setTransformerId,
+  transformers,
+  saving,
+  error,
+  mode,
+}: SensorFormModalProps) {
+  const isEdit = mode === 'edit';
 
-function buildTransformerSearchText(item: any) {
-  return [
-    item.name,
-    item.type,
-    item.capacity,
-    item.supplierName,
-    item.supplierCode,
-    item.depotId,
-    item.lat,
-    item.lng,
-  ]
-    .filter((value) => value !== null && value !== undefined && value !== '')
-    .join(' ');
-}
-
-export function SensorCreateModal({ open, onClose, onSubmit, deviceId, setDeviceId, devEui, setDevEui, name, setName, type, setType, transformerId, setTransformerId, transformers, saving, error }: { open: boolean; onClose: () => void; onSubmit: (e: React.FormEvent) => void; deviceId: string; setDeviceId: (v: string) => void; devEui: string; setDevEui: (v: string) => void; name: string; setName: (v: string) => void; type: string; setType: (v: string) => void; transformerId: number | ''; setTransformerId: (v: number | '') => void; transformers: TransformerOption[]; saving?: boolean; error?: string | null; }) {
   return (
-    <Modal isOpen={open} onClose={onClose} className="max-w-2xl w-full p-0 overflow-hidden rounded-2xl bg-white shadow-xl transition-all" backdropBlur={true}>
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-6">
-        <div className="flex items-center justify-between">
-           <h3 className="text-sm font-medium text-blue-100">Sensors</h3>
-           <button 
-             type="button"
-             onClick={onClose}
-             className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
-           >
-             <X className="h-5 w-5" />
-           </button>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm">
-                <Plus className="h-6 w-6" />
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      variant="center"
+      showCloseButton={false}
+      className="max-h-[90vh] max-w-[720px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+      backdropBlur={true}
+    >
+      <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+        <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                {isEdit ? <Activity className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">{isEdit ? 'Edit Sensor' : 'Create Sensor'}</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{isEdit ? 'Update device metadata' : 'Add a new monitored sensor'}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {isEdit ? 'Keep the assignment and identifier records current without leaving the page.' : 'Register the device, classify the type, and attach it to a transformer.'}
+                </p>
+              </div>
             </div>
-            <div>
-                <p className="text-xl font-bold text-white">Add New Sensor</p>
-                <p className="text-sm text-blue-100">Enter the details below</p>
-            </div>
-        </div>
-      </div>
-      
-      <form onSubmit={onSubmit} className="p-6 space-y-6">
-        {error && (
-            <div className="rounded-md bg-red-50 p-4 border border-red-200">
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800">Error</h3>
-                        <div className="mt-2 text-sm text-red-700">{error}</div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Name *</label>
-                    <div className="relative rounded-md">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Activity className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sensor Name" className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all" />
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Type *</label>
-                    <div className="relative rounded-md">
-                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Radio className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <select value={type} onChange={(e) => setType(e.target.value)} className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all">
-                        <option value="">Select type</option>
-                        {SENSOR_TYPES.map(t => (
-                            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                        ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
-             <div className="space-y-4">
-                <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Device ID *</label>
-                    <div className="relative rounded-md">
-                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Cpu className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <input type="text" value={deviceId} onChange={(e) => setDeviceId(e.target.value)} placeholder="Device ID" className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all" />
-                    </div>
-                </div>
-                 <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">DevEUI *</label>
-                    <div className="relative rounded-md">
-                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Router className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <input type="text" value={devEui} onChange={(e) => setDevEui(e.target.value)} placeholder="DevEUI" className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all" />
-                    </div>
-                </div>
-             </div>
-        </div>
-
-        <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Transformer *</label>
-            <SearchableSelect options={transformers} value={transformerId} onChange={setTransformerId} placeholder="Select associated transformer" />
-            <p className="mt-1 text-xs text-gray-500">The transformer this sensor is attached to.</p>
-        </div>
-
-        <div className="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-6">
-          <button type="button" onClick={onClose} className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Cancel</button>
-          <button 
-            type="submit" 
-            disabled={saving} 
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {saving ? 'Creating...' : 'Create Sensor'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-export function SensorEditModal({ open, onClose, onSubmit, deviceId, setDeviceId, devEui, setDevEui, name, setName, type, setType, transformerId, setTransformerId, transformers, saving, error }: { open: boolean; onClose: () => void; onSubmit: (e: React.FormEvent) => void; deviceId: string; setDeviceId: (v: string) => void; devEui: string; setDevEui: (v: string) => void; name: string; setName: (v: string) => void; type: string; setType: (v: string) => void; transformerId: number | ''; setTransformerId: (v: number | '') => void; transformers: TransformerOption[]; saving?: boolean; error?: string | null; }) {
-  return (
-    <Modal isOpen={open} onClose={onClose} className="max-w-2xl w-full p-0 overflow-hidden rounded-2xl bg-white shadow-xl transition-all" backdropBlur={true}>
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-6">
-        <div className="flex items-center justify-between">
-           <h3 className="text-sm font-medium text-blue-100">Sensors</h3>
-           <button 
-             type="button"
-             onClick={onClose}
-             className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
-           >
-             <X className="h-5 w-5" />
-           </button>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm">
-                <Activity className="h-6 w-6" />
-            </div>
-            <div>
-                <p className="text-xl font-bold text-white">Edit Sensor</p>
-                <p className="text-sm text-blue-100">Update sensor details</p>
-            </div>
-        </div>
-      </div>
-      
-      <form onSubmit={onSubmit} className="p-6 space-y-6">
-        {error && (
-            <div className="rounded-md bg-red-50 p-4 border border-red-200">
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800">Error</h3>
-                        <div className="mt-2 text-sm text-red-700">{error}</div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Name *</label>
-                    <div className="relative rounded-md">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Activity className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sensor Name" className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all" />
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Type *</label>
-                    <div className="relative rounded-md">
-                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Radio className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <select value={type} onChange={(e) => setType(e.target.value)} className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all">
-                        <option value="">Select type</option>
-                        {SENSOR_TYPES.map(t => (
-                            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                        ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
-             <div className="space-y-4">
-                <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Device ID *</label>
-                    <div className="relative rounded-md">
-                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Cpu className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <input type="text" value={deviceId} onChange={(e) => setDeviceId(e.target.value)} placeholder="Device ID" className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all" />
-                    </div>
-                </div>
-                 <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">DevEUI *</label>
-                    <div className="relative rounded-md">
-                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Router className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <input type="text" value={devEui} onChange={(e) => setDevEui(e.target.value)} placeholder="DevEUI" className="block w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all" />
-                    </div>
-                </div>
-             </div>
-        </div>
-
-        <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Transformer *</label>
-            <SearchableSelect options={transformers} value={transformerId} onChange={setTransformerId} placeholder="Select associated transformer" />
-        </div>
-
-        <div className="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-6">
-          <button type="button" onClick={onClose} className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Cancel</button>
-          <button 
-            type="submit" 
-            disabled={saving} 
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-export function SensorViewModal({ open, onClose, sensor, transformers }: { open: boolean; onClose: () => void; sensor: Sensor | null; transformers: TransformerOption[] }) {
-  const tName = sensor ? (transformers.find(x => x.id === (sensor.transformer?.id ?? sensor.transformerId))?.name ?? sensor.transformer?.name ?? '—') : '—';
-  
-  return (
-    <Modal isOpen={open} onClose={onClose} className="max-w-lg w-full overflow-hidden rounded-2xl bg-white shadow-xl transition-all" backdropBlur={true}>
-      <div className="relative">
-        {/* Header Background */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-white">Sensor Details</h3>
-            <button 
+            <button
+              type="button"
               onClick={onClose}
-              className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm">
-              <Activity className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-blue-100">Sensor Name</p>
-              <p className="text-lg font-bold text-white">{sensor?.name ?? '—'}</p>
-            </div>
-          </div>
         </div>
 
-        {/* Content Body */}
-        <div className="px-6 py-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            
-            {/* Type */}
-            <div className="flex items-start gap-3">
-              <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                <Radio className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Sensor Type</p>
-                <p className="text-sm font-semibold text-gray-900 capitalize">{sensor?.type ?? '—'}</p>
-              </div>
+        <form onSubmit={onSubmit} className="flex flex-1 flex-col">
+          <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+            <div className="grid grid-cols-2 gap-3">
+              <InfoStatCard label="Workflow" value={isEdit ? 'Edit in modal' : 'Create in modal'} />
+              <InfoStatCard label="Visible Transformers" value={transformers.length.toLocaleString()} />
             </div>
 
-            {/* Transformer */}
-            <div className="flex items-start gap-3">
-              <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                <Activity className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Associated Transformer</p>
-                <p className="text-sm font-semibold text-gray-900">{tName}</p>
-              </div>
-            </div>
+            <ModalErrorNotice error={error} />
 
-            {/* Device ID & DevEUI */}
-            <div className="col-span-full border-t border-gray-100 pt-4">
-              <div className="flex items-start gap-3">
-                <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                  <Cpu className="h-4 w-4" />
+            <div className="space-y-5 rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">Sensor Information</p>
+                <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">Primary details</h4>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">Sensor name *</label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <Activity className="h-4.5 w-4.5 text-blue-500" />
+                    </div>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Enter sensor name"
+                      className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-900"
+                    />
+                  </div>
                 </div>
-                <div className="w-full">
-                  <p className="text-xs font-medium text-gray-500 mb-1">Device Information</p>
-                  <div className="grid grid-cols-2 gap-4 rounded-md bg-gray-50 p-3 text-sm">
-                    <div>
-                      <span className="block text-xs text-gray-400">Device ID</span>
-                      <span className="font-mono font-medium text-gray-700 break-all">{sensor?.deviceId ?? '—'}</span>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">Sensor type *</label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3">
+                      <Radio className="h-4.5 w-4.5 text-blue-500" />
                     </div>
-                    <div>
-                      <span className="block text-xs text-gray-400">DevEUI</span>
-                      <span className="font-mono font-medium text-gray-700 break-all">{sensor?.devEui ?? '—'}</span>
+                    <select
+                      value={type}
+                      onChange={(e) => setType(e.target.value)}
+                      className="block w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-medium text-slate-900 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                    >
+                      <option value="">Select type</option>
+                      {SENSOR_TYPES.map((sensorType) => (
+                        <option key={sensorType} value={sensorType}>
+                          {formatSensorType(sensorType)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">Device ID *</label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <Cpu className="h-4.5 w-4.5 text-blue-500" />
                     </div>
+                    <input
+                      type="text"
+                      value={deviceId}
+                      onChange={(e) => setDeviceId(e.target.value)}
+                      placeholder="Enter device ID"
+                      className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">DevEUI *</label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <Router className="h-4.5 w-4.5 text-blue-500" />
+                    </div>
+                    <input
+                      type="text"
+                      value={devEui}
+                      onChange={(e) => setDevEui(e.target.value)}
+                      placeholder="Enter DevEUI"
+                      className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-900"
+                    />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Readings Table */}
-            {sensor?.sensor_reading && sensor.sensor_reading.length > 0 && (
-              <div className="col-span-full border-t border-gray-100 pt-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Recent Readings</h4>
-                <div className="max-h-48 overflow-auto rounded-lg border border-gray-200">
+            <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">Assignment</p>
+              <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">Linked transformer</h4>
+              <div className="mt-4">
+                <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">Transformer *</label>
+                <SearchableSelect
+                  options={transformers}
+                  value={transformerId}
+                  onChange={(value: number | string) => setTransformerId(typeof value === 'number' ? value : Number(value))}
+                  placeholder="Select associated transformer"
+                />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Use the shared searchable selector to attach the sensor to the correct transformer record.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? (isEdit ? 'Saving...' : 'Creating...') : isEdit ? 'Save Changes' : 'Create Sensor'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+}
+
+function SensorAssignModal({
+  open,
+  onClose,
+  onSubmit,
+  sensor,
+  transformers,
+  transformerId,
+  setTransformerId,
+  assigning,
+  error,
+  isSupplierUser,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  sensor: Sensor | null;
+  transformers: TransformerOption[];
+  transformerId: number | '';
+  setTransformerId: (value: number | '') => void;
+  assigning: boolean;
+  error?: string | null;
+  isSupplierUser: boolean;
+}) {
+  const currentAssignment =
+    transformers.find((item) => item.id === (sensor?.transformer?.id ?? sensor?.transformerId))?.name ||
+    sensor?.transformer?.name ||
+    'Unassigned';
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      variant="center"
+      showCloseButton={false}
+      className="max-h-[88vh] max-w-[620px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+      backdropBlur={true}
+    >
+      <div className="flex max-h-[88vh] flex-col bg-white dark:bg-slate-950">
+        <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                <Link2 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Assign Sensor</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">Move sensor to a transformer</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Reassign the device without leaving the operations view.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="flex flex-1 flex-col">
+          <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+            <div className="grid grid-cols-2 gap-3">
+              <InfoStatCard label="Sensor" value={sensor?.name || 'N/A'} />
+              <InfoStatCard label="Current Assignment" value={currentAssignment} />
+            </div>
+
+            <ModalErrorNotice error={error} />
+
+            <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">Assignment Target</p>
+              <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">Choose transformer</h4>
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">Transformer *</label>
+                  <SearchableSelect
+                    options={transformers}
+                    value={transformerId}
+                    onChange={(value: number | string) => setTransformerId(typeof value === 'number' ? value : Number(value))}
+                    placeholder="Select organisation transformer"
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <InfoStatCard label="Device ID" value={sensor?.deviceId || 'N/A'} />
+                  <InfoStatCard label="Last Updated" value={formatDateTime(sensor?.updatedAt)} />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {isSupplierUser
+                    ? 'Only transformers visible to your organisation are listed here.'
+                    : 'Select the transformer that should own this sensor.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={assigning}
+                className="inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+              >
+                {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {assigning ? 'Saving...' : 'Save Assignment'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+}
+
+function SensorViewModal({
+  open,
+  onClose,
+  sensor,
+  transformers,
+}: {
+  open: boolean;
+  onClose: () => void;
+  sensor: Sensor | null;
+  transformers: TransformerOption[];
+}) {
+  if (!sensor) return null;
+
+  const transformerName =
+    transformers.find((item) => item.id === (sensor.transformer?.id ?? sensor.transformerId))?.name ||
+    sensor.transformer?.name ||
+    'Unassigned';
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      variant="center"
+      showCloseButton={false}
+      className="max-h-[88vh] max-w-[720px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+      backdropBlur={true}
+    >
+      <div className="flex max-h-[88vh] flex-col bg-white dark:bg-slate-950">
+        <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                <Cpu className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Sensor Details</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{sensor.name}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Centered modal view for fast operational context.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <div className="grid grid-cols-2 gap-3">
+              <InfoStatCard label="Type" value={formatSensorType(sensor.type)} />
+              <InfoStatCard label="Transformer" value={transformerName} />
+              <InfoStatCard label="Device ID" value={sensor.deviceId || 'N/A'} />
+              <InfoStatCard label="DevEUI" value={sensor.devEui || 'N/A'} />
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <InfoStatCard label="Created" value={formatDateTime(sensor.createdAt)} />
+              <InfoStatCard label="Updated" value={formatDateTime(sensor.updatedAt)} />
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">Recent Readings</p>
+            <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">Telemetry stream</h4>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+              {sensor.sensor_reading && sensor.sensor_reading.length > 0 ? (
+                <div className="max-h-72 overflow-auto">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Time</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Value</th>
+                    <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900">
+                      <tr className="text-left text-xs uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                        <th className="px-4 py-3">Timestamp</th>
+                        <th className="px-4 py-3">Value</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {sensor.sensor_reading.map((r, idx) => {
-                        const ts = r.updated_at || r.created_at;
-                        const t = sensor?.type;
-                        let display: string | number | undefined = undefined;
-                        if (t === 'temperature') display = r.temperature ?? r.value ?? r.temp;
-                        else if (t === 'oil_level') display = r.oil_level ?? r.level ?? r.value;
-                        else if (t === 'pressure') display = r.pressure ?? r.value;
-                        else if (t === 'current') display = r.current ?? r.value;
-                        else if (t === 'voltage') display = r.voltage ?? r.value;
-                        else if (t === 'humidity') display = r.humidity ?? r.value;
-                        else if (t === 'contact') display = r.contact ?? r.value;
-                        else if (t === 'motion') display = r.motion ?? r.value;
-                        else if (t === 'video') display = r.active ?? r.value;
-                        else display = r.value;
-                        const unit = t === 'temperature' ? '°C'
-                          : t === 'oil_level' ? '%'
-                          : t === 'pressure' ? 'PSI'
-                          : t === 'current' ? 'A'
-                          : t === 'voltage' ? 'V'
-                          : t === 'humidity' ? '%'
-                          : t === 'contact' ? ''
-                          : t === 'motion' ? ''
-                          : t === 'video' ? ''
-                          : '';
+                    <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-950">
+                      {sensor.sensor_reading.map((reading, index) => {
+                        const timestamp = reading.updated_at || reading.created_at || reading.updatedAt || reading.createdAt;
                         return (
-                          <tr key={idx}>
-                            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{ts ? new Date(ts).toLocaleString() : '—'}</td>
-                            <td className="px-3 py-2 text-gray-900 font-medium">
-                              {typeof display === 'boolean' ? (display ? 'ACTIVE' : 'INACTIVE') : String(display)} {unit}
-                            </td>
+                          <tr key={index}>
+                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{formatDateTime(timestamp)}</td>
+                            <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{getReadingSummary(sensor.type, reading)}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
-
-          </div>
-
-          <div className="mt-8 flex justify-end">
-            <button 
-              onClick={onClose} 
-              className="rounded-lg bg-gray-100 px-5 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-            >
-              Close
-            </button>
+              ) : (
+                <div className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">No readings have been captured for this sensor yet.</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
     </Modal>
   );
+}
+
+function SensorDeleteModal({
+  open,
+  onClose,
+  onConfirm,
+  sensor,
+  deleting,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  sensor: Sensor | null;
+  deleting: boolean;
+  error?: string | null;
+}) {
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      variant="center"
+      showCloseButton={false}
+      className="w-full max-w-md overflow-hidden rounded-[28px] border border-red-200 bg-white p-0 shadow-2xl dark:border-red-500/20 dark:bg-slate-900"
+      backdropBlur={true}
+    >
+      <div className="px-6 py-6 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-2xl font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">!</div>
+        <h3 className="mt-4 text-xl font-semibold text-slate-950 dark:text-slate-50">Delete Sensor?</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+          Are you sure you want to delete <span className="font-semibold text-slate-950 dark:text-slate-50">{sensor?.name || 'this sensor'}</span>? This action cannot be undone.
+        </p>
+        <div className="mt-5">
+          <ModalErrorNotice error={error} />
+        </div>
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="inline-flex min-w-[132px] items-center justify-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+          >
+            {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+            {deleting ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function SensorCreateModal(props: Omit<SensorFormModalProps, 'mode'>) {
+  return <SensorFormModal {...props} mode="create" />;
+}
+
+function SensorEditModal(props: Omit<SensorFormModalProps, 'mode'>) {
+  return <SensorFormModal {...props} mode="edit" />;
 }
