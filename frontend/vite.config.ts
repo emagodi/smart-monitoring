@@ -25,6 +25,19 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       watch: {
         usePolling: true,
+        interval: 1000,
+        awaitWriteFinish: {
+          stabilityThreshold: 500,
+          pollInterval: 100,
+        },
+        ignored: [
+          "**/.git/**",
+          "**/.idea/**",
+          "**/.vscode/**",
+          "**/dist/**",
+          "**/coverage/**",
+          "**/node_modules/**",
+        ],
       },
       hmr: {
         host: "localhost",

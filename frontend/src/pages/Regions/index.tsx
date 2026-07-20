@@ -265,6 +265,8 @@ export default function RegionsIndex() {
     message: string;
   } | null>(null);
   const [showDelete, setShowDelete] = useState(false);
+  const [showAlertCenter, setShowAlertCenter] = useState(false);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -564,6 +566,16 @@ export default function RegionsIndex() {
 
   const regionWithMostAlerts = useMemo(
     () => regionRollups.slice().sort((a, b) => b.alerts - a.alerts)[0],
+    [regionRollups]
+  );
+
+  const activeRegionRollup = useMemo(
+    () => regionRollups.find((region) => region.id === activeRegion?.id) ?? null,
+    [activeRegion?.id, regionRollups]
+  );
+
+  const alertHeavyRegions = useMemo(
+    () => regionRollups.filter((region) => region.alerts > 0).slice(0, 5),
     [regionRollups]
   );
 
@@ -868,6 +880,14 @@ export default function RegionsIndex() {
                 </div>
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={() => setShowAlertCenter(true)}
+              className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+            >
+              Open Alert Center
+            </button>
           </div>
 
           <div className="enterprise-card p-4">
@@ -912,6 +932,24 @@ export default function RegionsIndex() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+            Analytics Workspace
+          </p>
+          <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
+            Regional performance and fault intelligence
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAnalyticsModal(true)}
+          className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+        >
+          Open Full Screen Analytics
+        </button>
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1100,7 +1138,29 @@ export default function RegionsIndex() {
         saving={savingEdit}
         error={formError}
       />
-      <RegionsViewModal open={showView} onClose={() => setShowView(false)} region={activeRegion} />
+      <RegionsViewModal
+        open={showView}
+        onClose={() => setShowView(false)}
+        region={activeRegion}
+        rollup={activeRegionRollup}
+      />
+      <RegionsAlertModal
+        open={showAlertCenter}
+        onClose={() => setShowAlertCenter(false)}
+        totalAlerts={totals.totalAlerts}
+        monitoringRegions={regionRollups.filter((region) => region.status === "Monitoring").length}
+        topAlertRegions={alertHeavyRegions}
+        highlightedRegion={regionWithMostAlerts ?? null}
+      />
+      <RegionsAnalyticsModal
+        open={showAnalyticsModal}
+        onClose={() => setShowAnalyticsModal(false)}
+        theme={theme}
+        topRegions={topRegions}
+        monthlyFaults={monthlyFaults}
+        totals={totals}
+        regionWithMostAlerts={regionWithMostAlerts ?? null}
+      />
       <RegionsDeleteModal
         open={showDelete}
         onClose={() => setShowDelete(false)}
@@ -1113,194 +1173,283 @@ export default function RegionsIndex() {
   );
 }
 
-export function RegionsCreateModal({ open, onClose, onSubmit, name, setName, saving, error }: { open: boolean; onClose: () => void; onSubmit: (e: React.FormEvent) => void; name: string; setName: (v: string) => void; saving?: boolean; error?: string | null; }) {
-  return (
-    <Modal isOpen={open} onClose={onClose} className="w-full max-w-xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-900" backdropBlur={true}>
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-6">
-        <div className="flex items-center justify-between">
-           <h3 className="text-sm font-medium text-blue-100">Regions</h3>
-           <button 
-             type="button"
-             onClick={onClose}
-             className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
-           >
-             <X className="h-5 w-5" />
-           </button>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm">
-                <Plus className="h-6 w-6" />
-            </div>
-            <div>
-                <p className="text-xl font-bold text-white">Add New Region</p>
-                <p className="text-sm text-blue-100">Enter region details below</p>
-            </div>
-        </div>
-      </div>
-      
-      <form onSubmit={onSubmit} className="space-y-6 p-6 dark:bg-slate-900">
-        {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-500/20 dark:bg-red-500/10">
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
-                        <div className="mt-2 text-sm text-red-700 dark:text-red-200">{error}</div>
-                    </div>
-                </div>
-            </div>
-        )}
+type RegionFormModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+  name: string;
+  setName: (v: string) => void;
+  saving?: boolean;
+  error?: string | null;
+  mode: "create" | "edit";
+};
 
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Name *</label>
-            <div className="relative rounded-md">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <MapIcon className="h-5 w-5 text-blue-500" />
+function ModalErrorNotice({ error }: { error?: string | null }) {
+  if (!error) return null;
+
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+      {error}
+    </div>
+  );
+}
+
+function RegionsFormModal({
+  open,
+  onClose,
+  onSubmit,
+  name,
+  setName,
+  saving,
+  error,
+  mode,
+}: RegionFormModalProps) {
+  const isEdit = mode === "edit";
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      variant="center"
+      showCloseButton={false}
+      className="max-h-[90vh] max-w-[560px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+      backdropBlur={true}
+    >
+      <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+        <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                {isEdit ? <MapIcon className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
               </div>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Region Name" className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-900" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                  {isEdit ? "Edit Region" : "Create Region"}
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                  {isEdit ? "Update region information" : "Add a new operating region"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {isEdit
+                    ? "Update the region in a centered modal without leaving the page."
+                    : "Create a region in a centered modal without interrupting the operator workflow."}
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        <div className="mt-8 flex justify-end gap-3 border-t border-slate-100 pt-6 dark:border-slate-800">
-          <button type="button" onClick={onClose} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Cancel</button>
-          <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? 'Creating...' : 'Create Region'}
-          </button>
-        </div>
-      </form>
+        <form onSubmit={onSubmit} className="flex flex-1 flex-col">
+          <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Workflow</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {isEdit ? "Edit in modal" : "Create in modal"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Module</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Regions</p>
+              </div>
+            </div>
+
+            <ModalErrorNotice error={error} />
+
+            <div className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                  Region Information
+                </p>
+                <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                  Primary details
+                </h4>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  Region name *
+                </label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <MapIcon className="h-4.5 w-4.5 text-blue-500" />
+                  </div>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter region name"
+                    className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-900"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Use a clear operational name such as `Harare`, `West`, or `Mashonaland East`.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving
+                  ? isEdit
+                    ? "Saving..."
+                    : "Creating..."
+                  : isEdit
+                    ? "Save Changes"
+                    : "Create Region"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </Modal>
   );
 }
 
-export function RegionsEditModal({ open, onClose, onSubmit, name, setName, saving, error }: { open: boolean; onClose: () => void; onSubmit: (e: React.FormEvent) => void; name: string; setName: (v: string) => void; saving?: boolean; error?: string | null; }) {
-  return (
-    <Modal isOpen={open} onClose={onClose} className="w-full max-w-xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-900" backdropBlur={true}>
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-6">
-        <div className="flex items-center justify-between">
-           <h3 className="text-sm font-medium text-blue-100">Regions</h3>
-           <button 
-             type="button"
-             onClick={onClose}
-             className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
-           >
-             <X className="h-5 w-5" />
-           </button>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm">
-                <MapIcon className="h-6 w-6" />
-            </div>
-            <div>
-                <p className="text-xl font-bold text-white">Edit Region</p>
-                <p className="text-sm text-blue-100">Update region details</p>
-            </div>
-        </div>
-      </div>
-
-      <form onSubmit={onSubmit} className="space-y-6 p-6 dark:bg-slate-900">
-        {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-500/20 dark:bg-red-500/10">
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
-                        <div className="mt-2 text-sm text-red-700 dark:text-red-200">{error}</div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Name *</label>
-            <div className="relative rounded-md">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <MapIcon className="h-5 w-5 text-blue-500" />
-              </div>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Region Name" className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:bg-slate-900" />
-            </div>
-          </div>
-        </div>
-        <div className="mt-8 flex justify-end gap-3 border-t border-slate-100 pt-6 dark:border-slate-800">
-          <button type="button" onClick={onClose} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Cancel</button>
-          <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
+export function RegionsCreateModal(props: Omit<RegionFormModalProps, "mode">) {
+  return <RegionsFormModal {...props} mode="create" />;
 }
 
-export function RegionsViewModal({ open, onClose, region }: { open: boolean; onClose: () => void; region: Region | null; }) {
+export function RegionsEditModal(props: Omit<RegionFormModalProps, "mode">) {
+  return <RegionsFormModal {...props} mode="edit" />;
+}
+
+export function RegionsViewModal({
+  open,
+  onClose,
+  region,
+  rollup,
+}: {
+  open: boolean;
+  onClose: () => void;
+  region: Region | null;
+  rollup?: RegionRollup | null;
+}) {
   if (!region) return null;
 
+  const metrics = [
+    { label: "Districts", value: rollup?.districts ?? (Array.isArray(region.districts) ? region.districts.length : 0) },
+    { label: "Depots", value: rollup?.depots ?? 0 },
+    { label: "Transformers", value: rollup?.transformers ?? 0 },
+    { label: "Alerts", value: rollup?.alerts ?? 0 },
+  ];
+
   return (
-    <Modal isOpen={open} onClose={onClose} className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900" backdropBlur={true}>
-      <div className="relative">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-white">Region Details</h3>
-            <button 
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      variant="center"
+      showCloseButton={false}
+      className="max-h-[88vh] max-w-[560px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+      backdropBlur={true}
+    >
+      <div className="flex max-h-[88vh] flex-col bg-white dark:bg-slate-950">
+        <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                <MapIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                  Region Details
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{region.name}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Centered modal view for quick operational context.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
               onClick={onClose}
-              className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
-          </div>
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm">
-              <MapIcon className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-blue-100">Region Name</p>
-              <p className="text-lg font-bold text-white">{region.name}</p>
-            </div>
           </div>
         </div>
 
-        <div className="bg-white px-6 py-6 dark:bg-slate-900">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div className="flex items-start gap-3">
-              <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                <Globe className="h-4 w-4" />
-              </div>
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Districts</p>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{Array.isArray(region.districts) ? region.districts.length : 0}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Overview</p>
+                <p className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                  Region health snapshot
+                </p>
               </div>
+              <span
+                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                  (rollup?.status ?? "Idle") === "Active"
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                    : (rollup?.status ?? "Idle") === "Monitoring"
+                      ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                      : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                }`}
+              >
+                {rollup?.status ?? "Idle"}
+              </span>
             </div>
 
-            <div className="flex items-start gap-3">
-              <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                <Hash className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Region ID</p>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">#{region.id}</p>
-              </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {metrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950"
+                >
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{metric.label}</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-950 dark:text-slate-50">{metric.value}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="mt-8 flex justify-end">
-            <button
-              onClick={onClose}
-              className="rounded-full bg-slate-100 px-5 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              Close
-            </button>
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Identifiers</p>
+            <div className="mt-4 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                  <Hash className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Region ID</p>
+                  <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">#{region.id}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                  <Globe className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Coverage note</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                    This centered modal keeps the operator in context while viewing details.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1308,53 +1457,347 @@ export function RegionsViewModal({ open, onClose, region }: { open: boolean; onC
   );
 }
 
-export function RegionsDeleteModal({ open, onClose, onConfirm, region, deleting, error }: { open: boolean; onClose: () => void; onConfirm: () => void; region: Region | null; deleting: boolean; error?: string | null }) {
+export function RegionsAlertModal({
+  open,
+  onClose,
+  totalAlerts,
+  monitoringRegions,
+  topAlertRegions,
+  highlightedRegion,
+}: {
+  open: boolean;
+  onClose: () => void;
+  totalAlerts: number;
+  monitoringRegions: number;
+  topAlertRegions: RegionRollup[];
+  highlightedRegion: RegionRollup | null;
+}) {
   return (
-    <Modal isOpen={open} onClose={onClose} className="w-full max-w-md overflow-hidden rounded-[28px] border border-red-200 p-0 shadow-2xl dark:border-red-500/20" backdropBlur={true}>
-      <div className="bg-gradient-to-r from-red-600 to-red-800 px-6 py-6">
-        <div className="flex items-center justify-between">
-           <h3 className="text-xl font-bold text-white">Delete Region</h3>
-           <button 
-             type="button"
-             onClick={onClose}
-             className="rounded-full bg-white/20 p-1 text-white hover:bg-white/30 transition-colors focus:outline-none"
-           >
-             <X className="h-5 w-5" />
-           </button>
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+      showCloseButton={false}
+      backdropBlur={true}
+    >
+      <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">Alert Center</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+              Regional alert and notification summary
+            </h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Center modal for operator notifications and risk visibility.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <p className="mt-2 text-sm text-red-100">This action cannot be undone.</p>
       </div>
-      
-      <div className="space-y-4 bg-white p-6 dark:bg-slate-900">
-        {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-500/20 dark:bg-red-500/10">
-                <div className="flex">
-                    <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
-                        <div className="mt-2 text-sm text-red-700 dark:text-red-200">{error}</div>
-                    </div>
-                </div>
-            </div>
-        )}
 
-        <p className="text-slate-600 dark:text-slate-300">
-            Are you sure you want to delete the region <span className="font-bold text-slate-900 dark:text-slate-100">{region?.name}</span>?
+      <div className="space-y-5 px-6 py-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+            <p className="text-xs text-slate-500 dark:text-slate-400">Active alerts</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{totalAlerts}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+            <p className="text-xs text-slate-500 dark:text-slate-400">Monitoring regions</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{monitoringRegions}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+            <p className="text-xs text-slate-500 dark:text-slate-400">Highest pressure</p>
+            <p className="mt-2 text-base font-semibold text-slate-950 dark:text-slate-50">
+              {highlightedRegion?.name || "No active alert region"}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Attention Queue</p>
+          <div className="mt-4 space-y-3">
+            {topAlertRegions.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                No active alerts are mapped to regions right now.
+              </div>
+            ) : (
+              topAlertRegions.map((region) => (
+                <div
+                  key={region.id}
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">{region.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {region.alerts} alert{region.alerts === 1 ? "" : "s"} across {region.transformers} transformers
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                    {region.status}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function RegionsAnalyticsModal({
+  open,
+  onClose,
+  theme,
+  topRegions,
+  monthlyFaults,
+  totals,
+  regionWithMostAlerts,
+}: {
+  open: boolean;
+  onClose: () => void;
+  theme: "light" | "dark";
+  topRegions: RegionRollup[];
+  monthlyFaults: { labels: string[]; data: number[] };
+  totals: {
+    totalRegions: number;
+    totalDistricts: number;
+    totalDepots: number;
+    totalTransformers: number;
+    totalAlerts: number;
+    healthScore: number;
+  };
+  regionWithMostAlerts: RegionRollup | null;
+}) {
+  const emptyState = (
+    <div className="flex h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+      No analytics available yet.
+    </div>
+  );
+
+  return (
+    <Modal isOpen={open} onClose={onClose} variant="fullscreen" showCloseButton={false}>
+      <div className="flex h-full flex-col bg-slate-100 dark:bg-slate-950">
+        <div className="border-b border-slate-200 bg-white/95 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/95">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Analytics Modal
+              </p>
+              <h3 className="mt-1 text-xl font-semibold text-slate-950 dark:text-slate-50">
+                Transformer network performance board
+              </h3>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Full screen modal for charts, summaries, and operational insight.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 md:block">
+                Health score {totals.healthScore}%
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+            {[
+              { label: "Total Regions", value: totals.totalRegions },
+              { label: "Districts", value: totals.totalDistricts },
+              { label: "Transformers", value: totals.totalTransformers },
+              { label: "Alerts", value: totals.totalAlerts },
+            ].map((card) => (
+              <div key={card.label} className="enterprise-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{card.label}</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950 dark:text-slate-50">
+                  {card.value.toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div className="enterprise-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Transformers by Region
+              </p>
+              <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                Full screen performance comparison
+              </h4>
+              <div className="mt-4">
+                {topRegions.length === 0 ? (
+                  emptyState
+                ) : (
+                  <Chart
+                    type="bar"
+                    height={300}
+                    options={buildBarOptions(theme, topRegions.map((region) => region.name))}
+                    series={[{ name: "Transformers", data: topRegions.map((region) => region.transformers) }]}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="enterprise-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Fault Trend
+              </p>
+              <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                Alert volume over time
+              </h4>
+              <div className="mt-4">
+                {monthlyFaults.data.length === 0 ? (
+                  emptyState
+                ) : (
+                  <Chart
+                    type="area"
+                    height={300}
+                    options={buildAreaOptions(theme, monthlyFaults.labels)}
+                    series={[{ name: "Faults", data: monthlyFaults.data }]}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr_0.8fr]">
+            <div className="enterprise-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Distribution
+              </p>
+              <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                Transformer footprint by region
+              </h4>
+              <div className="mt-4">
+                {topRegions.length === 0 ? (
+                  emptyState
+                ) : (
+                  <Chart
+                    type="donut"
+                    height={300}
+                    options={buildDonutOptions(theme, topRegions.map((region) => region.name))}
+                    series={topRegions.map((region) => region.transformers)}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="enterprise-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Health Score
+              </p>
+              <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                Full network health gauge
+              </h4>
+              <div className="mt-4">
+                <Chart
+                  type="radialBar"
+                  height={300}
+                  options={buildGaugeOptions(theme)}
+                  series={[totals.healthScore]}
+                />
+              </div>
+            </div>
+
+            <div className="enterprise-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Highlights
+              </p>
+              <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                Operator briefing
+              </h4>
+              <div className="mt-4 space-y-3">
+                <div className="enterprise-subtle-card p-4">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Highest alert pressure</p>
+                  <p className="mt-2 text-base font-semibold text-slate-950 dark:text-slate-50">
+                    {regionWithMostAlerts?.name || "N/A"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {regionWithMostAlerts?.alerts || 0} alerts
+                  </p>
+                </div>
+                <div className="enterprise-subtle-card p-4">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Monitoring coverage</p>
+                  <p className="mt-2 text-base font-semibold text-slate-950 dark:text-slate-50">
+                    {totals.totalRegions ? Math.round((totals.totalAlerts / Math.max(totals.totalRegions, 1)) * 10) / 10 : 0}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Average alerts per region
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function RegionsDeleteModal({
+  open,
+  onClose,
+  onConfirm,
+  region,
+  deleting,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  region: Region | null;
+  deleting: boolean;
+  error?: string | null;
+}) {
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      className="w-full max-w-md overflow-hidden rounded-[28px] border border-red-200 bg-white p-0 shadow-2xl dark:border-red-500/20 dark:bg-slate-900"
+      showCloseButton={false}
+      backdropBlur={true}
+    >
+      <div className="px-6 py-6 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-2xl font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">
+          !
+        </div>
+        <h3 className="mt-4 text-xl font-semibold text-slate-950 dark:text-slate-50">Delete Region?</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+          Are you sure you want to delete <span className="font-semibold text-slate-950 dark:text-slate-50">{region?.name || "this region"}</span>? This action cannot be undone.
         </p>
 
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Cancel</button>
+        <div className="mt-5">
+          <ModalErrorNotice error={error} />
+        </div>
+
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
           <button
             onClick={onConfirm}
             disabled={deleting}
-            className="inline-flex min-w-[100px] items-center justify-center rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-w-[132px] items-center justify-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
           >
-            {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {deleting ? 'Deleting...' : 'Delete Region'}
+            {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+            {deleting ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>

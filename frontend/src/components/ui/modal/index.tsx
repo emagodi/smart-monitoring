@@ -10,6 +10,8 @@ interface ModalProps {
   overlayClassName?: string;
   backdropBlur?: boolean;
   title?: string;
+  variant?: "center" | "drawer" | "side-panel" | "fullscreen";
+  closeOnOverlayClick?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -22,8 +24,11 @@ export const Modal: React.FC<ModalProps> = ({
   overlayClassName,
   backdropBlur = true,
   title,
+  variant = "center",
+  closeOnOverlayClick = true,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const resolvedVariant = isFullscreen ? "fullscreen" : variant;
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -55,27 +60,46 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
-  const contentClasses = isFullscreen
-    ? "w-full h-full"
-    : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
+  const wrapperClasses =
+    resolvedVariant === "fullscreen"
+      ? "fixed inset-0 z-99999 flex items-stretch justify-stretch"
+      : resolvedVariant === "drawer" || resolvedVariant === "side-panel"
+        ? "fixed inset-0 z-99999 flex items-stretch justify-end"
+        : "fixed inset-0 z-99999 flex items-center justify-center overflow-y-auto p-4 sm:p-6";
+
+  const overlayClasses =
+    resolvedVariant === "fullscreen"
+      ? ""
+      : `fixed inset-0 h-full w-full bg-slate-950/45 ${
+          backdropBlur ? "backdrop-blur-sm" : ""
+        } ${overlayClassName || ""}`;
+
+  const contentClasses =
+    resolvedVariant === "fullscreen"
+      ? "relative h-full w-full overflow-hidden bg-white dark:bg-gray-950"
+      : resolvedVariant === "drawer"
+        ? "relative ml-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-none border-l border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-gray-900 sm:rounded-l-[32px]"
+        : resolvedVariant === "side-panel"
+          ? "relative ml-auto flex h-full w-full max-w-xl flex-col overflow-hidden rounded-none border-l border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-gray-900 sm:rounded-l-[28px]"
+          : "relative w-full rounded-3xl bg-white dark:bg-gray-900";
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
-      {!isFullscreen && (
+    <div className={wrapperClasses}>
+      {resolvedVariant !== "fullscreen" && (
         <div
-          className={`fixed inset-0 h-full w-full ${backdropBlur ? 'bg-black/0 backdrop-blur-sm' : 'bg-black/0'} ${overlayClassName || ''}`}
-          onClick={onClose}
-        ></div>
+          className={overlayClasses}
+          onClick={closeOnOverlayClick ? onClose : undefined}
+        />
       )}
       <div
         ref={modalRef}
-        className={`${contentClasses}  ${className}`}
+        className={`${contentClasses} ${className || ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         {showCloseButton && (
           <button
             onClick={onClose}
-            className="absolute right-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-6 sm:top-6 sm:h-11 sm:w-11"
+            className="absolute right-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-5 sm:top-5 sm:h-10 sm:w-10"
           >
             <svg
               width="24"
@@ -93,7 +117,7 @@ export const Modal: React.FC<ModalProps> = ({
             </svg>
           </button>
         )}
-        <div>
+        <div className={resolvedVariant === "fullscreen" ? "h-full" : ""}>
           <div className={title ? "p-4" : ""}>
             {children}
           </div>
