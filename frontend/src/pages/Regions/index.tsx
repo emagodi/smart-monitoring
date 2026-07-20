@@ -1602,8 +1602,8 @@ export function RegionsAnalyticsModal({
 
   return (
     <Modal isOpen={open} onClose={onClose} variant="fullscreen" showCloseButton={false}>
-      <div className="flex h-full flex-col bg-slate-100 dark:bg-slate-950">
-        <div className="border-b border-slate-200 bg-white/95 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/95">
+      <div className="flex min-h-full min-w-0 flex-col bg-slate-100 dark:bg-slate-950">
+        <div className="shrink-0 border-b border-slate-200 bg-white/95 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/95">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
@@ -1631,7 +1631,7 @@ export function RegionsAnalyticsModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
             {[
               { label: "Total Regions", value: totals.totalRegions },

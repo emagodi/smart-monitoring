@@ -62,7 +62,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   const wrapperClasses =
     resolvedVariant === "fullscreen"
-      ? "fixed inset-0 z-99999 flex items-stretch justify-stretch"
+      ? "fixed inset-0 z-99999 flex items-stretch justify-stretch overflow-y-auto"
       : resolvedVariant === "drawer" || resolvedVariant === "side-panel"
         ? "fixed inset-0 z-99999 flex items-stretch justify-end"
         : "fixed inset-0 z-99999 flex items-center justify-center overflow-y-auto p-4 sm:p-6";
@@ -76,7 +76,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   const contentClasses =
     resolvedVariant === "fullscreen"
-      ? "relative h-full w-full overflow-hidden bg-white dark:bg-gray-950"
+      ? "relative min-h-full w-full bg-white dark:bg-gray-950"
       : resolvedVariant === "drawer"
         ? "relative ml-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-none border-l border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-gray-900 sm:rounded-l-[32px]"
         : resolvedVariant === "side-panel"
