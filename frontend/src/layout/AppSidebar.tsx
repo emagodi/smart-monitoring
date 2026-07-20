@@ -195,14 +195,14 @@ const AppSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`fixed left-0 top-0 flex flex-col bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200
+      className={`fixed left-0 top-0 flex flex-col border-r border-blue-950/80 bg-[#071a4a] text-slate-100 h-screen transition-all duration-300 ease-in-out z-50
         ${isExpanded || isMobileOpen ? "w-[220px]" : "w-[72px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0 font-outfit`}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.94)_100%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.98)_0%,rgba(15,23,42,0.96)_100%)]" />
+      <div className="absolute inset-0 bg-[#071a4a]" />
 
-      <div className={`relative flex h-16 items-center border-b border-slate-200/80 bg-white px-3 dark:border-slate-800 dark:bg-slate-900 ${
+      <div className={`relative flex h-16 items-center border-b border-blue-900/70 bg-[#0b225d] px-3 ${
         !isExpanded && !isMobileOpen ? "justify-center px-0" : ""
       }`}>
         <Link
@@ -228,7 +228,7 @@ const AppSidebar: React.FC = () => {
           {filteredNavGroups.map((group, groupIndex) => (
             <div key={groupIndex}>
               {(isExpanded || isMobileOpen) && group.items.length > 0 && (
-                <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-200/45">
                   {group.name}
                 </h3>
               )}
@@ -245,10 +245,10 @@ const AppSidebar: React.FC = () => {
                           } ${
                             isActive(item.path || "") 
                               ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20" 
-                              : "text-slate-600 hover:bg-[rgba(37,99,235,.1)] hover:text-blue-700 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-slate-50"
+                              : "text-blue-50/88 hover:bg-white/8 hover:text-white"
                           }`}
                         >
-                          <span className={`${isActive(item.path || "") ? "text-white" : "text-slate-400 group-hover:text-blue-600 dark:text-slate-500 dark:group-hover:text-blue-300"}`}>
+                          <span className={`${isActive(item.path || "") ? "text-white" : "text-blue-200/55 group-hover:text-blue-200"}`}>
                             {item.icon}
                           </span>
                           {(isExpanded || isMobileOpen) && (
@@ -271,8 +271,8 @@ const AppSidebar: React.FC = () => {
                                   to={subItem.path}
                                   className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${
                                     isActive(subItem.path)
-                                      ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"
-                                      : "text-slate-500 hover:bg-white/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"
+                                      ? "bg-blue-500/10 text-blue-300"
+                                      : "text-blue-100/60 hover:bg-white/8 hover:text-white"
                                   }`}
                                 >
                                   {subItem.name}
@@ -290,10 +290,10 @@ const AppSidebar: React.FC = () => {
                         } ${
                           isActive(item.path || "")
                             ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
-                            : "text-slate-600 hover:bg-[rgba(37,99,235,.1)] hover:text-blue-700 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-slate-50"
+                            : "text-blue-50/88 hover:bg-white/8 hover:text-white"
                         }`}
                       >
-                        <span className={`${isActive(item.path || "") ? "text-white" : "text-slate-400 group-hover:text-blue-600 dark:text-slate-500 dark:group-hover:text-blue-300"}`}>
+                        <span className={`${isActive(item.path || "") ? "text-white" : "text-blue-200/55 group-hover:text-blue-200"}`}>
                           {item.icon}
                         </span>
                         {(isExpanded || isMobileOpen) && (
@@ -309,16 +309,16 @@ const AppSidebar: React.FC = () => {
         </nav>
 
         <div className="relative mt-auto px-3 pb-3 pt-5">
-          <div className={`enterprise-subtle-card overflow-hidden p-3 ${!isExpanded && !isMobileOpen ? "items-center justify-center px-2 py-3" : ""}`}>
+          <div className={`overflow-hidden rounded-[24px] border border-blue-900/60 bg-[#0b225d]/90 p-3 ${!isExpanded && !isMobileOpen ? "items-center justify-center px-2 py-3" : ""}`}>
             {isExpanded || isMobileOpen ? (
               <>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-200/45">
                   Grid Status
                 </p>
-                <p className="mt-1.5 text-sm font-medium text-slate-900 dark:text-slate-100">
+                <p className="mt-1.5 text-sm font-medium text-white">
                   Utility platform online
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-[11px] text-blue-100/68">
                   Real-time telemetry and alert services are ready.
                 </p>
               </>
