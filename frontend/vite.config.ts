@@ -19,8 +19,17 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
-  server: {
+    server: {
+      host: "0.0.0.0",
       port: 3000,
+      strictPort: true,
+      watch: {
+        usePolling: true,
+      },
+      hmr: {
+        host: "localhost",
+        port: 3000,
+      },
       proxy: {
         '/api': {
           target: target,
@@ -30,6 +39,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
+      host: "0.0.0.0",
       port: 3000,
       proxy: {
         '/api': {

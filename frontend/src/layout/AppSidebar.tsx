@@ -43,7 +43,7 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    name: "main",
+    name: "Dashboard",
     items: [
       {
         icon: <Grid className="w-5 h-5" />,
@@ -54,19 +54,7 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    name: "FAULTS",
-    items: [
-       // Placeholder for faults if needed, using existing items for now or strictly what is available
-       // Since I don't have specific fault routes in the original list, I will keep the original items but group them logically
-       // based on the "Transformer" context.
-       // However, the user said "look like the one shown in the picture".
-       // If the picture shows "FAULTS", "Log", "My Faults", etc., I should probably add them?
-       // But I don't have the backend/pages.
-       // I will stick to the AVAILABLE pages but grouped.
-    ]
-  },
-  {
-    name: "assets",
+    name: "Assets",
     items: [
       {
         icon: <MapPinned className="w-5 h-5" />,
@@ -102,16 +90,21 @@ const navGroups: NavGroup[] = [
         permission: "transformers.read",
       },
       {
-        icon: <AlertTriangle className="w-5 h-5" />,
-        name: "Alerts",
-        path: "/alerts",
-        permission: "alerts.read",
-      },
-      {
         icon: <Activity className="w-5 h-5" />,
         name: "Sensors",
         path: "/sensors",
         permission: "sensors.read",
+      },
+    ],
+  },
+  {
+    name: "Operations",
+    items: [
+      {
+        icon: <AlertTriangle className="w-5 h-5" />,
+        name: "Alerts",
+        path: "/alerts",
+        permission: "alerts.read",
       },
       {
         icon: <Cpu className="w-5 h-5" />,
@@ -129,7 +122,7 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    name: "administration",
+    name: "Administration",
     items: [
       {
         icon: <Users className="w-5 h-5" />,
@@ -203,25 +196,38 @@ const AppSidebar: React.FC = () => {
   return (
     <aside
       className={`fixed left-0 top-0 flex flex-col bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200
-        ${isExpanded || isMobileOpen ? "w-[200px]" : "w-[90px]"}
+        ${isExpanded || isMobileOpen ? "w-[220px]" : "w-[72px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0 font-outfit`}
     >
-      {/* Logo Section */}
-      <div className={`h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-800 ${
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.94)_100%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.98)_0%,rgba(15,23,42,0.96)_100%)]" />
+
+      <div className={`relative flex h-16 items-center border-b border-slate-200/80 px-4 dark:border-slate-800 ${
         !isExpanded && !isMobileOpen ? "justify-center px-0" : ""
       }`}>
         <Link to="/" className="flex items-center gap-3">
-            <img src="/images/powertel.png" alt="Logo" className="h-12 w-auto" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-lg shadow-blue-500/25">
+            TM
+          </div>
+          {(isExpanded || isMobileOpen) && (
+            <div>
+              <p className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                Powertel TMS
+              </p>
+              <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                Utility Operations
+              </p>
+            </div>
+          )}
         </Link>
       </div>
 
-      <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear no-scrollbar py-4">
-        <nav className="px-4 space-y-6">
+      <div className="relative flex flex-1 flex-col overflow-y-auto py-4 no-scrollbar">
+        <nav className="space-y-5 px-3">
           {filteredNavGroups.map((group, groupIndex) => (
             <div key={groupIndex}>
               {(isExpanded || isMobileOpen) && group.items.length > 0 && (
-                <h3 className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider px-2">
+                <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
                   {group.name}
                 </h3>
               )}
@@ -233,20 +239,20 @@ const AppSidebar: React.FC = () => {
                       <div className="space-y-1">
                         <button
                           onClick={() => toggleSubmenu(`${groupIndex}-${index}`)}
-                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${
+                          className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-300 ${
                             !isExpanded && !isMobileOpen ? "justify-center px-2" : ""
                           } ${
                             isActive(item.path || "") 
-                              ? "bg-blue-600 text-white" 
-                              : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20" 
+                              : "text-slate-600 hover:bg-[rgba(37,99,235,.1)] hover:text-blue-700 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-slate-50"
                           }`}
                         >
-                          <span className={`${isActive(item.path || "") ? "text-white" : "text-gray-500"}`}>
+                          <span className={`${isActive(item.path || "") ? "text-white" : "text-slate-400 group-hover:text-blue-600 dark:text-slate-500 dark:group-hover:text-blue-300"}`}>
                             {item.icon}
                           </span>
                           {(isExpanded || isMobileOpen) && (
                             <>
-                              <span className="flex-1 text-sm font-medium text-left">{item.name}</span>
+                              <span className="flex-1 text-left text-sm font-medium">{item.name}</span>
                               <ChevronDown
                                 className={`w-4 h-4 transition-transform duration-200 ${
                                   openSubmenus[`${groupIndex}-${index}`] ? "rotate-180" : ""
@@ -257,15 +263,15 @@ const AppSidebar: React.FC = () => {
                         </button>
                         
                         {(isExpanded || isMobileOpen) && openSubmenus[`${groupIndex}-${index}`] && (
-                          <ul className="pl-9 space-y-1">
+                          <ul className="space-y-1 pl-9">
                             {item.subItems.map((subItem, subIndex) => (
                               <li key={subIndex}>
                                 <Link
                                   to={subItem.path}
-                                  className={`block px-3 py-2 text-sm rounded-lg transition-colors ${
+                                  className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${
                                     isActive(subItem.path)
-                                      ? "text-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                                      : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                                      ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"
+                                      : "text-slate-500 hover:bg-white/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"
                                   }`}
                                 >
                                   {subItem.name}
@@ -278,15 +284,15 @@ const AppSidebar: React.FC = () => {
                     ) : (
                       <Link
                         to={item.path || "#"}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${
+                        className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-300 ${
                           !isExpanded && !isMobileOpen ? "justify-center px-2" : ""
                         } ${
                           isActive(item.path || "")
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
+                            : "text-slate-600 hover:bg-[rgba(37,99,235,.1)] hover:text-blue-700 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-slate-50"
                         }`}
                       >
-                        <span className={`${isActive(item.path || "") ? "text-white" : "text-gray-500"}`}>
+                        <span className={`${isActive(item.path || "") ? "text-white" : "text-slate-400 group-hover:text-blue-600 dark:text-slate-500 dark:group-hover:text-blue-300"}`}>
                           {item.icon}
                         </span>
                         {(isExpanded || isMobileOpen) && (
@@ -300,6 +306,28 @@ const AppSidebar: React.FC = () => {
             </div>
           ))}
         </nav>
+
+        <div className="relative mt-auto px-3 pb-3 pt-5">
+          <div className={`enterprise-subtle-card overflow-hidden p-3 ${!isExpanded && !isMobileOpen ? "items-center justify-center px-2 py-3" : ""}`}>
+            {isExpanded || isMobileOpen ? (
+              <>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Grid Status
+                </p>
+                <p className="mt-1.5 text-sm font-medium text-slate-900 dark:text-slate-100">
+                  Utility platform online
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  Real-time telemetry and alert services are ready.
+                </p>
+              </>
+            ) : (
+              <div className="flex justify-center">
+                <div className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_18px_rgba(16,185,129,0.65)]" />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </aside>
   );
