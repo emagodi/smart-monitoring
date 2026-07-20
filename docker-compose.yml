@@ -68,7 +68,7 @@ services:
     ports:
       - "8082:8082"
     volumes:
-      - "C:/Users/Edwin Magodi/Desktop/uploads:/uploads/monitor"
+      - "./uploads:/uploads/monitor"
     depends_on:
       - mysql
       - eureka-server
@@ -94,7 +94,7 @@ services:
     ports:
       - "8083:8083"
     volumes:
-      - "C:/Users/Edwin Magodi/Desktop/uploads:/app/uploads"
+      - "./uploads:/app/uploads"
     depends_on:
       - mysql
       - eureka-server
