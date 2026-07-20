@@ -127,16 +127,18 @@ const MetricCard = ({
   icon: React.ReactNode;
   tone: string;
 }) => (
-  <div className="enterprise-card p-5">
-    <div className="flex items-start justify-between gap-4">
+  <div className="enterprise-card p-4">
+    <div className="flex items-start justify-between gap-3">
       <div>
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
-        <p className="mt-3 text-4xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+          {title}
+        </p>
+        <p className="mt-2 text-[30px] font-semibold tracking-tight text-slate-950 dark:text-slate-50">
           {value.toLocaleString()}
         </p>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+        <p className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
       </div>
-      <div className={`rounded-2xl p-3 ${tone}`}>{icon}</div>
+      <div className={`rounded-xl p-2.5 ${tone}`}>{icon}</div>
     </div>
   </div>
 );
@@ -148,7 +150,7 @@ const buildTrendOptions = (
 ): ApexOptions => ({
   chart: {
     type: "area",
-    height: 240,
+    height: 220,
     toolbar: { show: false },
     fontFamily: "Inter, Poppins, sans-serif",
     sparkline: { enabled: false },
@@ -444,44 +446,62 @@ export default function DashboardHome() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="enterprise-card overflow-hidden bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 px-6 py-6 text-white md:px-8">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+    <div className="space-y-5">
+      <section className="enterprise-card overflow-hidden px-5 py-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_420px] xl:items-start">
           <div className="max-w-3xl">
-            <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/90">
+            <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
               <ShieldCheck className="h-4 w-4" />
               Utility Monitoring Platform
             </div>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
-              Enterprise-grade transformer monitoring for ZESA, Powertel, and field operators.
+            <h2 className="mt-3 text-[28px] font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-[32px]">
+              Grid operations overview
             </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-50/90">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
               Welcome {user?.first_name || user?.firstname || user?.username || "Operator"}.
               Your current access scope is{" "}
-              <span className="font-semibold text-white">{accessLabel}</span>, with live telemetry,
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{accessLabel}</span>, with live telemetry,
               alerts, and asset visibility across the grid estate.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2.5">
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Regions: {stats.totalRegions}</span>
+              </div>
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Depots: {stats.totalDepots}</span>
+              </div>
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
+                <span className="h-2 w-2 rounded-full bg-violet-500" />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Sensors: {stats.totalSensors}</span>
+              </div>
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live alerts: {liveAlertCount}</span>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 xl:w-[340px]">
-            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur-md">
-              <p className="text-xs uppercase tracking-[0.24em] text-blue-100">Regions</p>
-              <p className="mt-2 text-3xl font-semibold">{stats.totalRegions}</p>
-              <p className="mt-1 text-xs text-blue-100">Operational coverage</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="enterprise-subtle-card px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Regions</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{stats.totalRegions}</p>
+              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Operational coverage</p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur-md">
-              <p className="text-xs uppercase tracking-[0.24em] text-blue-100">Depots</p>
-              <p className="mt-2 text-3xl font-semibold">{stats.totalDepots}</p>
-              <p className="mt-1 text-xs text-blue-100">Field service hubs</p>
+            <div className="enterprise-subtle-card px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Depots</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{stats.totalDepots}</p>
+              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Field service hubs</p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur-md">
-              <p className="text-xs uppercase tracking-[0.24em] text-blue-100">Sensors</p>
-              <p className="mt-2 text-3xl font-semibold">{stats.totalSensors}</p>
-              <p className="mt-1 text-xs text-blue-100">Connected devices</p>
+            <div className="enterprise-subtle-card px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sensors</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{stats.totalSensors}</p>
+              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Connected devices</p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur-md">
-              <p className="text-xs uppercase tracking-[0.24em] text-blue-100">Live Alerts</p>
-              <p className="mt-2 text-3xl font-semibold">{liveAlertCount}</p>
-              <p className="mt-1 text-xs text-blue-100">Current event stream</p>
+            <div className="enterprise-subtle-card px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Live Alerts</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{liveAlertCount}</p>
+              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Current event stream</p>
             </div>
           </div>
         </div>
@@ -492,57 +512,57 @@ export default function DashboardHome() {
           title="Total Transformers"
           value={stats.totalTransformers}
           subtitle="Monitored utility assets across the network."
-          icon={<Zap className="h-6 w-6 text-white" />}
-          tone="bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
+          icon={<Zap className="h-5 w-5 text-blue-600 dark:text-blue-300" />}
+          tone="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"
         />
         <MetricCard
           title="Online"
           value={stats.activeTransformers}
           subtitle="Active transformer nodes reporting as healthy."
-          icon={<Activity className="h-6 w-6 text-white" />}
-          tone="bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-500/25"
+          icon={<Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />}
+          tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300"
         />
         <MetricCard
           title="Offline"
           value={stats.offlineTransformers}
           subtitle="Assets requiring communication or field attention."
-          icon={<Waves className="h-6 w-6 text-white" />}
-          tone="bg-gradient-to-br from-slate-600 to-slate-800 text-white shadow-lg shadow-slate-900/25"
+          icon={<Waves className="h-5 w-5 text-slate-700 dark:text-slate-300" />}
+          tone="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
         />
         <MetricCard
           title="Critical Alerts"
           value={Math.max(stats.totalAlerts, liveAlertCount)}
           subtitle="Alarm activity requiring operator awareness."
-          icon={<AlertTriangle className="h-6 w-6 text-white" />}
-          tone="bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-lg shadow-red-500/25"
+          icon={<AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-300" />}
+          tone="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300"
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <div className="enterprise-card overflow-hidden p-5">
-          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <div className="enterprise-card overflow-hidden p-4">
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
                 Network Map
               </p>
-              <h3 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+              <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50">
                 Interactive transformer footprint
               </h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
                 Visualize monitored sites and transform grid coverage into a field operations view.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
                 to="/sites"
-                className="enterprise-chip inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+                className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
               >
                 <MapPinned className="h-4 w-4" />
                 Open Sites
               </Link>
               <Link
                 to="/transformers"
-                className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                className="rounded-full bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
               >
                 View Assets
               </Link>
@@ -550,7 +570,7 @@ export default function DashboardHome() {
           </div>
 
           <div className="overflow-hidden rounded-[22px] border border-slate-200/80 dark:border-slate-800">
-            <div className="h-[420px]">
+            <div className="h-[380px]">
               <MapContainer
                 center={[-19.0154, 29.1549]}
                 zoom={6}
@@ -587,23 +607,23 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="enterprise-card p-5">
+        <div className="space-y-4">
+          <div className="enterprise-card p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
                   Regional Snapshot
                 </p>
-                <h3 className="mt-1 text-xl font-semibold text-slate-950 dark:text-slate-50">
+                <h3 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50">
                   Transformers by region
                 </h3>
               </div>
-              <div className="rounded-2xl bg-blue-50 p-3 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <Warehouse className="h-5 w-5" />
+              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                <Warehouse className="h-4.5 w-4.5" />
               </div>
             </div>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-4 space-y-3">
               {regionalSummary.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
                   Region analytics become available after asset and district data loads.
@@ -616,11 +636,11 @@ export default function DashboardHome() {
                   );
 
                   return (
-                    <div key={region.id} className="enterprise-subtle-card p-4">
+                    <div key={region.id} className="enterprise-subtle-card p-3.5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">{region.name}</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{region.name}</p>
+                          <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
                             {region.districts} districts, {region.depots} depots
                           </p>
                         </div>
@@ -628,15 +648,15 @@ export default function DashboardHome() {
                           {region.alerts} alerts
                         </div>
                       </div>
-                      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                      <div className="mt-3.5 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
                           style={{ width: `${width}%` }}
                         />
                       </div>
-                      <div className="mt-3 flex items-center justify-between text-sm">
-                        <span className="text-slate-500 dark:text-slate-400">Transformers</span>
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      <div className="mt-2.5 flex items-center justify-between text-sm">
+                        <span className="text-[12px] text-slate-500 dark:text-slate-400">Transformers</span>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                           {region.transformers}
                         </span>
                       </div>
@@ -647,13 +667,13 @@ export default function DashboardHome() {
             </div>
           </div>
 
-          <div className="enterprise-card p-5">
+          <div className="enterprise-card p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
                   Incident Feed
                 </p>
-                <h3 className="mt-1 text-xl font-semibold text-slate-950 dark:text-slate-50">
+                <h3 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50">
                   Latest alerts
                 </h3>
               </div>
@@ -664,20 +684,20 @@ export default function DashboardHome() {
               )}
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-3">
               {recentAlerts.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
                   No alerts recorded yet.
                 </div>
               ) : (
                 recentAlerts.map((alert) => (
-                  <div key={alert.id} className="enterprise-subtle-card p-4">
+                  <div key={alert.id} className="enterprise-subtle-card p-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                           {alert.message || "Monitoring alert"}
                         </p>
-                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
                           {alert.transformerName || "Transformer event"}
                         </p>
                       </div>
@@ -685,7 +705,7 @@ export default function DashboardHome() {
                         {alert.severity || "Alert"}
                       </span>
                     </div>
-                    <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+                    <p className="mt-2.5 text-xs text-slate-400 dark:text-slate-500">
                       {formatTime(alert.createdAt || alert.timestamp)}
                     </p>
                   </div>
@@ -696,27 +716,27 @@ export default function DashboardHome() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-4">
         {trendCards.map((trend) => (
-          <div key={trend.title} className="enterprise-card p-5">
+          <div key={trend.title} className="enterprise-card p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
                   Telemetry Trend
                 </p>
-                <h3 className="mt-1 text-xl font-semibold text-slate-950 dark:text-slate-50">
+                <h3 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50">
                   {trend.title}
                 </h3>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
                   {trend.subtitle}
                 </p>
               </div>
-              <div className="rounded-2xl p-3" style={{ backgroundColor: `${trend.color}18`, color: trend.color }}>
-                <Gauge className="h-5 w-5" />
+              <div className="rounded-xl p-2.5" style={{ backgroundColor: `${trend.color}18`, color: trend.color }}>
+                <Gauge className="h-4.5 w-4.5" />
               </div>
             </div>
 
-            <div className="mt-5">
+            <div className="mt-4">
               {trend.data.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
                   No live telemetry for this metric yet.
@@ -724,7 +744,7 @@ export default function DashboardHome() {
               ) : (
                 <Chart
                   type="area"
-                  height={240}
+                  height={220}
                   options={buildTrendOptions(theme, trend.categories, trend.color)}
                   series={[{ name: trend.title, data: trend.data }]}
                 />
@@ -734,34 +754,34 @@ export default function DashboardHome() {
         ))}
       </section>
 
-      <section className="enterprise-card p-5">
+      <section className="enterprise-card p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
               Live Telemetry
             </p>
-            <h3 className="mt-1 text-2xl font-semibold text-slate-950 dark:text-slate-50">
+            <h3 className="mt-0.5 text-lg font-semibold text-slate-950 dark:text-slate-50">
               Recent sensor stream
             </h3>
           </div>
-          <div className="enterprise-chip inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-600 dark:text-slate-300">
+          <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
             <Activity className="h-4 w-4 text-emerald-500" />
             {latestRealtime.length} recent events captured
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
           {latestRealtime.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 xl:col-span-3">
               Waiting for live telemetry from connected field devices.
             </div>
           ) : (
             latestRealtime.map((item, index) => (
-              <div key={`${item.transformer_id}-${item.sensor_name}-${index}`} className="enterprise-subtle-card p-4">
+              <div key={`${item.transformer_id}-${item.sensor_name}-${index}`} className="enterprise-subtle-card p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">{item.transformer_name}</p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.transformer_name}</p>
+                    <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
                       {item.sensor_name} · {item.sensor_type}
                     </p>
                   </div>
@@ -775,7 +795,7 @@ export default function DashboardHome() {
                     {item.is_alert ? "Alert" : "Normal"}
                   </span>
                 </div>
-                <div className="mt-4 flex items-center justify-between text-sm">
+                <div className="mt-3 flex items-center justify-between text-sm">
                   <span className="font-semibold text-blue-600 dark:text-blue-300">
                     {String(item.value)}
                   </span>
