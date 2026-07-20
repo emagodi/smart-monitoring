@@ -447,10 +447,11 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-5">
-      <section className="enterprise-card overflow-hidden px-5 py-5">
+      <section className="enterprise-card relative overflow-hidden border border-slate-200/80 bg-white/90 px-5 py-5 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/90">
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.12),transparent_58%)]" />
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_420px] xl:items-start">
-          <div className="max-w-3xl">
-            <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
+          <div className="relative max-w-3xl">
+            <div className="enterprise-chip inline-flex items-center gap-2 border border-blue-100/80 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300">
               <ShieldCheck className="h-4 w-4" />
               Utility Monitoring Platform
             </div>
@@ -464,43 +465,43 @@ export default function DashboardHome() {
               alerts, and asset visibility across the grid estate.
             </p>
             <div className="mt-4 flex flex-wrap gap-2.5">
-              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 border border-slate-200/80 bg-white/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
                 <span className="h-2 w-2 rounded-full bg-blue-500" />
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Regions: {stats.totalRegions}</span>
               </div>
-              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 border border-slate-200/80 bg-white/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                <span className="h-2 w-2 rounded-full bg-blue-400" />
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Depots: {stats.totalDepots}</span>
               </div>
-              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
-                <span className="h-2 w-2 rounded-full bg-violet-500" />
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 border border-slate-200/80 bg-white/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                <span className="h-2 w-2 rounded-full bg-slate-400" />
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Sensors: {stats.totalSensors}</span>
               </div>
-              <div className="enterprise-subtle-card inline-flex items-center gap-2 px-3 py-2">
-                <span className="h-2 w-2 rounded-full bg-rose-500" />
+              <div className="enterprise-subtle-card inline-flex items-center gap-2 border border-slate-200/80 bg-white/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                <span className="h-2 w-2 rounded-full bg-slate-500" />
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live alerts: {liveAlertCount}</span>
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="enterprise-subtle-card px-4 py-3">
+          <div className="relative grid grid-cols-2 gap-3">
+            <div className="enterprise-subtle-card border border-slate-200/80 bg-white/75 px-4 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/60">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Regions</p>
-              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{stats.totalRegions}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-blue-700 dark:text-blue-300">{stats.totalRegions}</p>
               <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Operational coverage</p>
             </div>
-            <div className="enterprise-subtle-card px-4 py-3">
+            <div className="enterprise-subtle-card border border-slate-200/80 bg-white/75 px-4 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/60">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Depots</p>
-              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{stats.totalDepots}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-blue-700 dark:text-blue-300">{stats.totalDepots}</p>
               <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Field service hubs</p>
             </div>
-            <div className="enterprise-subtle-card px-4 py-3">
+            <div className="enterprise-subtle-card border border-slate-200/80 bg-white/75 px-4 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/60">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sensors</p>
-              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{stats.totalSensors}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-blue-700 dark:text-blue-300">{stats.totalSensors}</p>
               <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Connected devices</p>
             </div>
-            <div className="enterprise-subtle-card px-4 py-3">
+            <div className="enterprise-subtle-card border border-slate-200/80 bg-white/75 px-4 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/60">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Live Alerts</p>
-              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{liveAlertCount}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-blue-700 dark:text-blue-300">{liveAlertCount}</p>
               <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Current event stream</p>
             </div>
           </div>
@@ -513,28 +514,28 @@ export default function DashboardHome() {
           value={stats.totalTransformers}
           subtitle="Monitored utility assets across the network."
           icon={<Zap className="h-5 w-5 text-blue-600 dark:text-blue-300" />}
-          tone="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"
+          tone="border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300"
         />
         <MetricCard
           title="Online"
           value={stats.activeTransformers}
           subtitle="Active transformer nodes reporting as healthy."
-          icon={<Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />}
-          tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300"
+          icon={<Activity className="h-5 w-5 text-blue-600 dark:text-blue-300" />}
+          tone="border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300"
         />
         <MetricCard
           title="Offline"
           value={stats.offlineTransformers}
           subtitle="Assets requiring communication or field attention."
-          icon={<Waves className="h-5 w-5 text-slate-700 dark:text-slate-300" />}
-          tone="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          icon={<Waves className="h-5 w-5 text-slate-600 dark:text-slate-300" />}
+          tone="border border-slate-200 bg-slate-50/90 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
         />
         <MetricCard
           title="Critical Alerts"
           value={Math.max(stats.totalAlerts, liveAlertCount)}
           subtitle="Alarm activity requiring operator awareness."
-          icon={<AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-300" />}
-          tone="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300"
+          icon={<AlertTriangle className="h-5 w-5 text-slate-600 dark:text-slate-300" />}
+          tone="border border-slate-200 bg-slate-50/90 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
         />
       </section>
 
