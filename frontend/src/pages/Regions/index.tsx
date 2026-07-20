@@ -613,28 +613,28 @@ export default function RegionsIndex() {
             value: totals.totalRegions,
             subtitle: "Total operating regions",
             icon: <MapPinned className="h-6 w-6" />,
-            tone: "bg-blue-600",
+            tone: "bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300",
           },
           {
             label: "Districts",
             value: totals.totalDistricts,
             subtitle: "Coverage across all regions",
             icon: <Globe className="h-6 w-6" />,
-            tone: "bg-indigo-600",
+            tone: "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/14 dark:text-indigo-300",
           },
           {
             label: "Depots",
             value: totals.totalDepots,
             subtitle: "Maintenance and service hubs",
             icon: <Warehouse className="h-6 w-6" />,
-            tone: "bg-emerald-600",
+            tone: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300",
           },
           {
             label: "Transformers",
             value: totals.totalTransformers,
             subtitle: "Installed monitoring footprint",
             icon: <Zap className="h-6 w-6" />,
-            tone: "bg-amber-500",
+            tone: "bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300",
           },
         ].map((card) => (
           <div key={card.label} className="enterprise-card p-4">
@@ -646,7 +646,7 @@ export default function RegionsIndex() {
                 </p>
                 <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{card.subtitle}</p>
               </div>
-              <div className={`rounded-xl p-2.5 text-white shadow-lg ${card.tone}`}>{card.icon}</div>
+              <div className={`rounded-xl p-2.5 ${card.tone}`}>{card.icon}</div>
             </div>
           </div>
         ))}
@@ -732,7 +732,7 @@ export default function RegionsIndex() {
           <div className="overflow-x-auto p-4 pt-0">
             <table className="min-w-full border-separate border-spacing-y-2.5">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
                   <th className="px-3 py-2.5">Region</th>
                   <th className="px-3 py-2.5">Districts</th>
                   <th className="px-3 py-2.5">Depots</th>
@@ -759,8 +759,8 @@ export default function RegionsIndex() {
                             <MapPinned className="h-4.5 w-4.5" />
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-900 dark:text-slate-100">{region.name}</p>
-                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                            <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{region.name}</p>
+                            <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
                               {region.alerts > 0
                                 ? `${region.alerts} active alert${region.alerts === 1 ? "" : "s"}`
                                 : "No active regional alerts"}
@@ -769,19 +769,37 @@ export default function RegionsIndex() {
                         </div>
                       </td>
                       <td className="px-3 py-3">
-                        <div className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                        <div
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            region.districts > 0
+                              ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                              : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                          }`}
+                        >
                           {region.districts}
                         </div>
                       </td>
                       <td className="px-3 py-3">
-                        <div className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                        <div
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            region.depots > 0
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                              : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                          }`}
+                        >
                           {region.depots}
                         </div>
                       </td>
                       <td className="px-3 py-3">
                         <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                            <Zap className="h-4 w-4 text-amber-500" />
+                          <div
+                            className={`flex items-center gap-2 text-sm font-semibold ${
+                              region.transformers > 0
+                                ? "text-slate-900 dark:text-slate-100"
+                                : "text-slate-500 dark:text-slate-400"
+                            }`}
+                          >
+                            <Zap className={`h-4 w-4 ${region.transformers > 0 ? "text-amber-500" : "text-slate-400 dark:text-slate-500"}`} />
                             {region.transformers.toLocaleString()}
                           </div>
                           <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
@@ -794,18 +812,19 @@ export default function RegionsIndex() {
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-col gap-1.5">
-                          <span
-                            className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              region.status === "Active"
-                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                                : region.status === "Monitoring"
-                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                                  : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                            }`}
-                          >
+                          <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                region.status === "Active"
+                                  ? "bg-emerald-500"
+                                  : region.status === "Monitoring"
+                                    ? "bg-amber-500"
+                                    : "bg-slate-400 dark:bg-slate-500"
+                              }`}
+                            />
                             {region.status}
                           </span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                          <span className="text-[12px] text-slate-400 dark:text-slate-500">
                             Health score {region.healthScore}%
                           </span>
                         </div>

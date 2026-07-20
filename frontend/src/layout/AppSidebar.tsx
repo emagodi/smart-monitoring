@@ -202,7 +202,7 @@ const AppSidebar: React.FC = () => {
     >
       <div className="absolute inset-0 bg-[#071a4a]" />
 
-      <div className={`relative flex h-16 items-center border-b border-blue-900/70 bg-[#0b225d] px-3 ${
+      <div className={`relative flex h-16 items-center border-b border-blue-900/70 bg-[#071a4a] px-3 ${
         !isExpanded && !isMobileOpen ? "justify-center px-0" : ""
       }`}>
         <Link
@@ -210,7 +210,7 @@ const AppSidebar: React.FC = () => {
           className={`flex items-center ${isExpanded || isMobileOpen ? "w-full justify-center" : "justify-center"}`}
         >
           <div
-            className={`flex items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm ${
+            className={`flex items-center justify-center rounded-lg border border-blue-100 bg-white ${
               isExpanded || isMobileOpen ? "min-h-[42px] w-[108px] px-2 py-1" : "h-10 w-10 p-1"
             }`}
           >
@@ -228,7 +228,7 @@ const AppSidebar: React.FC = () => {
           {filteredNavGroups.map((group, groupIndex) => (
             <div key={groupIndex}>
               {(isExpanded || isMobileOpen) && group.items.length > 0 && (
-                <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-200/45">
+                <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-100/40">
                   {group.name}
                 </h3>
               )}
@@ -244,11 +244,11 @@ const AppSidebar: React.FC = () => {
                             !isExpanded && !isMobileOpen ? "justify-center px-2" : ""
                           } ${
                             isActive(item.path || "") 
-                              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20" 
-                              : "text-blue-50/88 hover:bg-white/8 hover:text-white"
+                              ? "rounded-lg bg-blue-500/18 text-white" 
+                              : "text-blue-50/92 hover:bg-white/8 hover:text-white"
                           }`}
                         >
-                          <span className={`${isActive(item.path || "") ? "text-white" : "text-blue-200/55 group-hover:text-blue-200"}`}>
+                          <span className={`${isActive(item.path || "") ? "text-white" : "text-blue-100/72 group-hover:text-blue-50"}`}>
                             {item.icon}
                           </span>
                           {(isExpanded || isMobileOpen) && (
@@ -272,7 +272,7 @@ const AppSidebar: React.FC = () => {
                                   className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${
                                     isActive(subItem.path)
                                       ? "bg-blue-500/10 text-blue-300"
-                                      : "text-blue-100/60 hover:bg-white/8 hover:text-white"
+                                      : "text-blue-50/72 hover:bg-white/8 hover:text-white"
                                   }`}
                                 >
                                   {subItem.name}
@@ -289,11 +289,11 @@ const AppSidebar: React.FC = () => {
                           !isExpanded && !isMobileOpen ? "justify-center px-2" : ""
                         } ${
                           isActive(item.path || "")
-                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
-                            : "text-blue-50/88 hover:bg-white/8 hover:text-white"
+                            ? "rounded-lg bg-blue-500/18 text-white"
+                            : "text-blue-50/92 hover:bg-white/8 hover:text-white"
                         }`}
                       >
-                        <span className={`${isActive(item.path || "") ? "text-white" : "text-blue-200/55 group-hover:text-blue-200"}`}>
+                        <span className={`${isActive(item.path || "") ? "text-white" : "text-blue-100/72 group-hover:text-blue-50"}`}>
                           {item.icon}
                         </span>
                         {(isExpanded || isMobileOpen) && (
@@ -309,7 +309,7 @@ const AppSidebar: React.FC = () => {
         </nav>
 
         <div className="relative mt-auto px-3 pb-3 pt-5">
-          <div className={`overflow-hidden rounded-[24px] border border-blue-900/60 bg-[#0b225d]/90 p-3 ${!isExpanded && !isMobileOpen ? "items-center justify-center px-2 py-3" : ""}`}>
+          <div className={`overflow-hidden rounded-[24px] border border-blue-900/70 bg-[#071a4a] p-3 ${!isExpanded && !isMobileOpen ? "items-center justify-center px-2 py-3" : ""}`}>
             {isExpanded || isMobileOpen ? (
               <>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-200/45">
