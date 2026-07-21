@@ -1384,64 +1384,178 @@ export default function TransformersIndex() {
             </div>
           </div>
 
-          {/* Workspace State */}
-          <div className="enterprise-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  Workspace State
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Access and filter overview
-                </h3>
+          {/* Workspace State / Reading Filters */}
+          {viewMode === 'CONTROLLER_READINGS' ? (
+            <div className="enterprise-card p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    Reading Filter
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Time window controls
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearControllerFilters}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
+                >
+                  <Filter className="h-4 w-4" />
+                  Clear
+                </button>
               </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-                <Filter className="h-4 w-4" />
-              </div>
-            </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Sensors access</p>
-                <p className={`mt-1 text-sm font-semibold ${canReadSensors ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {canReadSensors ? 'Enabled' : 'Restricted'}
-                </p>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="h-2 w-2 rounded-full bg-blue-500" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">From</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerStartDate}
+                        onChange={(date: Date | null) => {
+                          setControllerStartDate(date);
+                          setPage(1);
+                        }}
+                        dateFormat="MM/dd/yyyy"
+                        placeholderText="Select date"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <CalendarIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerStartTime}
+                        onChange={(date: Date | null) => {
+                          setControllerStartTime(date);
+                          setPage(1);
+                        }}
+                        showTimeSelect
+                        showTimeSelectOnly
+                        timeIntervals={15}
+                        timeCaption="Time"
+                        dateFormat="h:mm aa"
+                        placeholderText="--:-- --"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <ClockIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="h-2 w-2 rounded-full bg-violet-500" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">To</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerEndDate}
+                        onChange={(date: Date | null) => {
+                          setControllerEndDate(date);
+                          setPage(1);
+                        }}
+                        dateFormat="MM/dd/yyyy"
+                        placeholderText="Select date"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-violet-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <CalendarIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerEndTime}
+                        onChange={(date: Date | null) => {
+                          setControllerEndTime(date);
+                          setPage(1);
+                        }}
+                        showTimeSelect
+                        showTimeSelectOnly
+                        timeIntervals={15}
+                        timeCaption="Time"
+                        dateFormat="h:mm aa"
+                        placeholderText="--:-- --"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-violet-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <ClockIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Controllers access</p>
-                <p className={`mt-1 text-sm font-semibold ${canReadControllers ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {canReadControllers ? 'Enabled' : 'Restricted'}
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Filters</p>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {controllerFilterActive ? (filterWindowReady ? 'Time window' : 'Incomplete') : search || 'None'}
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Current scope</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  {currentScopeTotal.toLocaleString()}
-                </p>
-              </div>
-            </div>
-            
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-semibold text-slate-900 dark:text-slate-100">Visible records</span>
-                <span className="text-slate-500 dark:text-slate-400">
-                  {currentItemCount.toLocaleString()}
+
+              <div className="mt-3 flex items-center justify-between px-1 text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Window status</span>
+                <span className={`font-semibold ${filterWindowReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                  {filterWindowReady ? 'Ready' : 'Incomplete'}
                 </span>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                <div 
-                  className="h-full rounded-full bg-blue-600" 
-                  style={{ width: `${Math.max(currentScopeTotal ? (currentItemCount / currentScopeTotal) * 100 : 0, currentItemCount > 0 ? 10 : 0)}%` }} 
-                />
+            </div>
+          ) : (
+            <div className="enterprise-card p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    Workspace State
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Access and filter overview
+                  </h3>
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                  <Filter className="h-4 w-4" />
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Sensors access</p>
+                  <p className={`mt-1 text-sm font-semibold ${canReadSensors ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {canReadSensors ? 'Enabled' : 'Restricted'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Controllers access</p>
+                  <p className={`mt-1 text-sm font-semibold ${canReadControllers ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {canReadControllers ? 'Enabled' : 'Restricted'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Filters</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {controllerFilterActive ? (filterWindowReady ? 'Time window' : 'Incomplete') : search || 'None'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Current scope</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {currentScopeTotal.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">Visible records</span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {currentItemCount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div 
+                    className="h-full rounded-full bg-blue-600" 
+                    style={{ width: `${Math.max(currentScopeTotal ? (currentItemCount / currentScopeTotal) * 100 : 0, currentItemCount > 0 ? 10 : 0)}%` }} 
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Main Workspace Area */}
