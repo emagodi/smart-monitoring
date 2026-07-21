@@ -312,8 +312,86 @@ export default function AlertsIndex() {
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.55fr_0.72fr]">
-        <div className="enterprise-card overflow-hidden">
+      <section className="flex flex-col gap-4">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Alert Summary */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Alert Summary
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Current filter snapshot
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                <BellRing className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Visible alerts</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filtered.length}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Active matches</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.active}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Informational</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.informational}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Controller triggers</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.controllerTriggers}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Context */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Filter Context
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Operational scope
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Status mode</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {filterMode === "all" ? "All alerts" : filterMode === "active" ? "Active only" : "Info only"}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Search query</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {search ? `"${search}"` : "No active query"}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Unique transformers</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.uniqueTransformers}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Date range</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">All time</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Table Card */}
+        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
           <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
@@ -572,117 +650,9 @@ export default function AlertsIndex() {
             </>
           )}
         </div>
-
-        <div className="space-y-4">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Alert Summary
-                </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Current filter snapshot
-                </h3>
-              </div>
-
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <BellRing className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              <SummaryRow label="Visible alerts" value={filteredStats.total} />
-              <SummaryRow label="Active matches" value={filteredStats.active} />
-              <SummaryRow label="Informational" value={filteredStats.informational} />
-              <SummaryRow label="Controller triggers" value={filteredStats.controllerTriggers} />
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Filter Context
-                </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Operational scope
-                </h3>
-              </div>
-
-              <div className="rounded-xl bg-amber-50 p-2.5 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              <SummaryRow label="Status mode" value={getFilterLabel(filterMode)} />
-              <SummaryRow label="Search query" value={search.trim() || "No active query"} />
-              <SummaryRow label="Unique transformers" value={filteredStats.uniqueTransformers} />
-              <SummaryRow label="Unique devices" value={filteredStats.uniqueDevices} />
-              <SummaryRow
-                label="Alert share"
-                value={`${filteredStats.activeShare}% active`}
-              />
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Signal Mix
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Top sensor categories
-              </h3>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {topSensorTypes.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No sensor categories found for this view.
-                </div>
-              ) : (
-                topSensorTypes.map((sensor) => (
-                  <div key={sensor.label}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100">
-                        {sensor.label}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400">
-                        {sensor.count} alerts
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                        style={{ width: `${Math.max(sensor.share, 8)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {highlightedSignals.length > 0 ? (
-              <div className="mt-4 border-t border-slate-200/80 pt-4 dark:border-slate-800">
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                  Controller Signals
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {highlightedSignals.map((signal) => (
-                    <span
-                      key={signal.label}
-                      className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                    >
-                      {signal.label} · {signal.count}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
       </section>
+
+      {/* Detail Panel */}
     </div>
   );
 }

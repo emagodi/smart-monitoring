@@ -277,8 +277,107 @@ export default function NewControllersIndex() {
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr_0.72fr]">
-        <div className="enterprise-card overflow-hidden">
+      <section className="flex flex-col gap-4">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Assignment Summary */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Assignment Summary
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Operator readiness
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+            </div>
+            
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Pending</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.unassigned}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Visible matches</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.filtered}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Lookup targets</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.transformerOptions}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Access</p>
+                <p className={`mt-1 text-sm font-semibold ${canUpdate ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {canUpdate ? 'Enabled' : 'Restricted'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Scope</p>
+              </div>
+              <p className="mt-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+                {isSupplierUser ? 'Supplier-visible transformer catalogue' : 'Full transformer assignment catalogue'}
+              </p>
+            </div>
+          </div>
+
+          {/* Controller Mix */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Controller Mix
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Types awaiting assignment
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                <Cpu className="h-4 w-4" />
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {controllerTypes.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  No controller types available yet.
+                </div>
+              ) : (
+                controllerTypes.slice(0, 4).map((type) => {
+                  const width = totals.unassigned ? (type.count / totals.unassigned) * 100 : 0;
+
+                  return (
+                    <div key={type.label}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {formatTypeLabel(type.label)}
+                        </span>
+                        <span className="text-slate-500 dark:text-slate-400">
+                          {type.count}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-blue-500 dark:bg-blue-600"
+                          style={{ width: `${Math.max(width, 4)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Table Card */}
+        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
           <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
@@ -474,90 +573,6 @@ export default function NewControllersIndex() {
                   Next
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Assignment Summary
-                </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Operator readiness rail
-                </h3>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              <SummaryStat label="Pending controllers" value={totals.unassigned} />
-              <SummaryStat label="Visible controllers" value={totals.filtered} mutedZero />
-              <SummaryStat label="Current page window" value={totals.visible} mutedZero />
-              <SummaryStat label="Lookup options" value={totals.transformerOptions} mutedZero />
-              <SummaryStat
-                label="Assignment access"
-                value={canUpdate ? 'Enabled' : 'Restricted'}
-                accent={canUpdate ? 'success' : 'muted'}
-              />
-            </div>
-
-            <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Scope</p>
-              <p className="mt-2 text-sm font-semibold text-slate-950 dark:text-slate-50">
-                {isSupplierUser ? 'Supplier-visible transformer catalogue' : 'Full transformer assignment catalogue'}
-              </p>
-              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                {isSupplierUser
-                  ? 'The assignment list is limited to transformers exposed to the current supplier organisation.'
-                  : 'Operators can route controllers to any transformer returned by the assignment options endpoint.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Controller Mix
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Types awaiting assignment
-              </h3>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {controllerTypes.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No controller types available yet.
-                </div>
-              ) : (
-                controllerTypes.slice(0, 5).map((type) => {
-                  const width = totals.unassigned ? (type.count / totals.unassigned) * 100 : 0;
-
-                  return (
-                    <div key={type.label}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                          {formatTypeLabel(type.label)}
-                        </span>
-                        <span className="text-slate-500 dark:text-slate-400">
-                          {type.count} controller{type.count === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                          style={{ width: `${Math.max(width, 8)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
             </div>
           </div>
         </div>

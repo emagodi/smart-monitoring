@@ -508,8 +508,149 @@ export default function OculusControlIndex() {
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.7fr)_360px]">
-        <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+      <section className="flex flex-col gap-4">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Summary Rail */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Summary Rail
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Control posture snapshot
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                <Shield className="h-4 w-4" />
+              </div>
+            </div>
+            
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Armed posture</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{stats.armed}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Disarmed posture</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{stats.disarmed}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Unknown posture</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{stats.unknown}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Pending confirmation</p>
+                <p className="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">{stats.pending}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Unavailable controls</p>
+                <p className="mt-1 text-lg font-semibold text-red-600 dark:text-red-400">{stats.unavailable}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Online controllers</p>
+                <p className="mt-1 text-lg font-semibold text-emerald-600 dark:text-emerald-400">{stats.online}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Selected Asset */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Selected Asset
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Focused control context
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                <MapPinned className="h-4 w-4" />
+              </div>
+            </div>
+
+            {selectedRow ? (
+              <div className="mt-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-950 dark:text-slate-50">{selectedRow.transformerName}</p>
+                    <div className="mt-1 inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                      <span className={`h-2 w-2 rounded-full ${armStateDot(selectedEffectiveState)}`} />
+                      {selectedEffectiveState === "ARMED"
+                        ? "Armed now"
+                        : selectedEffectiveState === "DISARMED"
+                          ? "Disarmed now"
+                          : "Unknown posture"}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    startIcon={<Eye className="h-4 w-4" />}
+                    onClick={() => setShowDetails(true)}
+                  >
+                    Details
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Location</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedRow.districtName}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Controller</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedRow.controllerName || "None"}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Telemetry</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedRow.minutesSinceLastTelemetry != null ? `${selectedRow.minutesSinceLastTelemetry}m ago` : "None"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Target</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedCommandTarget || "None"}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    size="sm"
+                    variant="outline"
+                    startIcon={<Lock className="h-4 w-4" />}
+                    disabled={disableSelectedArm}
+                    isLoading={activeCommand === `${selectedRow.transformerId}:arm`}
+                    onClick={() => void sendCommand(selectedRow.transformerId, "arm")}
+                  >
+                    Arm
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    size="sm"
+                    variant="secondary"
+                    startIcon={<Unlock className="h-4 w-4" />}
+                    disabled={disableSelectedDisarm}
+                    isLoading={activeCommand === `${selectedRow.transformerId}:disarm`}
+                    onClick={() => void sendCommand(selectedRow.transformerId, "disarm")}
+                  >
+                    Disarm
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                Select a transformer to inspect command posture.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Main Table Card */}
+        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
           <div className="flex flex-col gap-4 border-b border-slate-200/80 px-5 py-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
@@ -742,131 +883,6 @@ export default function OculusControlIndex() {
               </div>
             </>
           )}
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Summary Rail</p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Control posture snapshot</h3>
-              </div>
-              <div className="rounded-2xl bg-blue-50 p-3 text-blue-600">
-                <Shield className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-5 space-y-3">
-              <SummaryRow label="Armed posture" value={stats.armed} />
-              <SummaryRow label="Disarmed posture" value={stats.disarmed} />
-              <SummaryRow label="Unknown posture" value={stats.unknown} tone={stats.unknown > 0 ? "warning" : "neutral"} />
-              <SummaryRow label="Pending confirmation" value={stats.pending} tone={stats.pending > 0 ? "warning" : "neutral"} />
-              <SummaryRow label="Unavailable controls" value={stats.unavailable} tone={stats.unavailable > 0 ? "warning" : "neutral"} />
-              <SummaryRow label="Online controllers" value={stats.online} />
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Selected Asset</p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Focused control context</h3>
-              </div>
-              <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-600">
-                <MapPinned className="h-5 w-5" />
-              </div>
-            </div>
-
-            {selectedRow ? (
-              <div className="mt-5 space-y-4">
-                <div>
-                  <p className="text-lg font-semibold text-slate-950">{selectedRow.transformerName}</p>
-                  <div className="mt-2 inline-flex items-center gap-2 text-sm text-slate-600">
-                    <span className={`h-2 w-2 rounded-full ${armStateDot(selectedEffectiveState)}`} />
-                    {selectedEffectiveState === "ARMED"
-                      ? "Armed now"
-                      : selectedEffectiveState === "DISARMED"
-                        ? "Disarmed now"
-                        : "Unknown posture"}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                  <RailValue label="Location" value={`${selectedRow.regionName} / ${selectedRow.districtName}`} />
-                  <RailValue label="Depot" value={selectedRow.depotName} />
-                  <RailValue label="Controller" value={selectedRow.controllerName || "No linked controller"} />
-                  <RailValue label="Device EUI" value={selectedRow.controllerDevEui || "Unavailable"} />
-                  <RailValue
-                    label="Telemetry"
-                    value={selectedRow.lastTelemetryAt ? formatDateTime(selectedRow.lastTelemetryAt) : "No telemetry yet"}
-                  />
-                  <RailValue
-                    label="Availability"
-                    value={selectedRow.controlAvailable ? "Control ready" : selectedRow.availabilityReason || "Unavailable"}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-2">
-                  <Button
-                    variant="outline"
-                    startIcon={<Eye className="h-4 w-4" />}
-                    onClick={() => setShowDetails(true)}
-                  >
-                    Open centered detail modal
-                  </Button>
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1"
-                      size="sm"
-                      variant="outline"
-                      startIcon={<Lock className="h-4 w-4" />}
-                      disabled={disableSelectedArm}
-                      isLoading={activeCommand === `${selectedRow.transformerId}:arm`}
-                      onClick={() => void sendCommand(selectedRow.transformerId, "arm")}
-                    >
-                      Arm
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      size="sm"
-                      variant="secondary"
-                      startIcon={<Unlock className="h-4 w-4" />}
-                      disabled={disableSelectedDisarm}
-                      isLoading={activeCommand === `${selectedRow.transformerId}:disarm`}
-                      onClick={() => void sendCommand(selectedRow.transformerId, "disarm")}
-                    >
-                      Disarm
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-5 rounded-[24px] border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                Select a transformer to inspect command posture and open the detail modal.
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Command Flow</p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Operator and telemetry alignment</h3>
-              </div>
-              <div className="rounded-2xl bg-amber-50 p-3 text-amber-600">
-                <Globe className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-5 space-y-3">
-              <SummaryRow label="Selected target" value={selectedCommandTarget || "No command target"} />
-              <SummaryRow label="Confirmed status" value={selectedRow ? getConfirmationStatusLabel(selectedRow) : "No selection"} tone={selectedAwaitingConfirmation ? "warning" : "neutral"} />
-              <SummaryRow label="Source of posture" value={selectedRow?.effectiveStateSource === "COMMAND" ? "Operator command" : "Confirmed telemetry"} />
-              <SummaryRow
-                label="Selected availability"
-                value={selectedRow ? (selectedRow.controlAvailable ? "Ready" : "Unavailable") : "No selection"}
-                tone={selectedRow && !selectedRow.controlAvailable ? "warning" : "neutral"}
-              />
-            </div>
-          </div>
         </div>
       </section>
 
