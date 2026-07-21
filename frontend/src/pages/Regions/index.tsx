@@ -652,303 +652,84 @@ export default function RegionsIndex() {
         ))}
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr_0.75fr]">
-        <div className="enterprise-card overflow-hidden">
-          <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Regional Table
-                </p>
-                <h3 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-lg">
-                  Network coverage by region
-                </h3>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={fetchRegions}
-                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  Refresh
-                </button>
-                <button
-                  onClick={() => {
-                    setSearch("");
-                    setPage(1);
-                  }}
-                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
-                >
-                  <Filter className="h-4 w-4" />
-                  Reset
-                </button>
-                {canCreate && (
-                  <button
-                    onClick={openCreate}
-                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Region
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
-              <div className="enterprise-chip inline-flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
-                <span className="font-semibold text-slate-900 dark:text-slate-100">Show</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  className="bg-transparent text-sm outline-none"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
-              <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2.5">
-                <svg className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M17.5 17.5L13.875 13.875M15.8333 9.16667C15.8333 12.8486 12.8486 15.8333 9.16667 15.8333C5.48477 15.8333 2.5 12.8486 2.5 9.16667C2.5 5.48477 5.48477 2.5 9.16667 2.5C12.8486 2.5 15.8333 5.48477 15.8333 9.16667Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search regions or statuses..."
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto p-4 pt-0">
-            <table className="min-w-full border-separate border-spacing-y-2.5">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                  <th className="px-3 py-2.5">Region</th>
-                  <th className="px-3 py-2.5">Districts</th>
-                  <th className="px-3 py-2.5">Depots</th>
-                  <th className="px-3 py-2.5">Transformers</th>
-                  <th className="px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginated.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-12">
-                      <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                        No regions found for the current filter.
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginated.map((region) => (
-                    <tr key={region.id} className="enterprise-subtle-card">
-                      <td className="rounded-l-[22px] px-3 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                            <MapPinned className="h-4.5 w-4.5" />
-                          </div>
-                          <div>
-                            <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{region.name}</p>
-                            <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
-                              {region.alerts > 0
-                                ? `${region.alerts} active alert${region.alerts === 1 ? "" : "s"}`
-                                : "No active regional alerts"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            region.districts > 0
-                              ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
-                              : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                          }`}
-                        >
-                          {region.districts}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            region.depots > 0
-                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                              : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                          }`}
-                        >
-                          {region.depots}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="space-y-1.5">
-                          <div
-                            className={`flex items-center gap-2 text-sm font-semibold ${
-                              region.transformers > 0
-                                ? "text-slate-900 dark:text-slate-100"
-                                : "text-slate-500 dark:text-slate-400"
-                            }`}
-                          >
-                            <Zap className={`h-4 w-4 ${region.transformers > 0 ? "text-amber-500" : "text-slate-400 dark:text-slate-500"}`} />
-                            {region.transformers.toLocaleString()}
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                              style={{ width: `${Math.max(region.healthScore, 8)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-col gap-1.5">
-                          <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                            <span
-                              className={`h-2 w-2 rounded-full ${
-                                region.status === "Active"
-                                  ? "bg-emerald-500"
-                                  : region.status === "Monitoring"
-                                    ? "bg-amber-500"
-                                    : "bg-slate-400 dark:bg-slate-500"
-                              }`}
-                            />
-                            {region.status}
-                          </span>
-                          <span className="text-[12px] text-slate-400 dark:text-slate-500">
-                            Health score {region.healthScore}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="rounded-r-[22px] px-3 py-3 text-right">
-                        <ActionMenu
-                          placement="bottom-end"
-                          onView={() => openView(region)}
-                          onEdit={canUpdate ? () => openEdit(region) : undefined}
-                          onDelete={canDelete ? () => openDelete(region) : undefined}
-                        />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, filtered.length)} of {filtered.length} regions
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page === 1}
-                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
-                >
-                  Previous
-                </button>
-                <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">{page}</div>
-                <button
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  disabled={page === totalPages}
-                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Region Summary
-                </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Coverage overview
-                </h3>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              {[
-                ["Active regions", regionRollups.filter((region) => region.status === "Active").length],
-                ["Monitoring regions", regionRollups.filter((region) => region.status === "Monitoring").length],
-                ["Active alerts", totals.totalAlerts],
-                ["Health score", `${totals.healthScore}%`],
-              ].map(([label, value]) => (
-                <div key={String(label)} className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowAlertCenter(true)}
-              className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-            >
-              Open Alert Center
-            </button>
-          </div>
-
-          <div className="enterprise-card p-4">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="enterprise-card p-4">
+          <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Leading Regions
+                Region Summary
               </p>
               <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Highest transformer density
+                Coverage overview
               </h3>
             </div>
-
-            <div className="mt-4 space-y-3">
-              {topRegions.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No region rollups available yet.
-                </div>
-              ) : (
-                topRegions.slice(0, 4).map((region) => {
-                  const width = totals.totalTransformers
-                    ? (region.transformers / totals.totalTransformers) * 100
-                    : 0;
-
-                  return (
-                    <div key={region.id}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{region.name}</span>
-                        <span className="text-slate-500 dark:text-slate-400">
-                          {region.transformers.toLocaleString()} transformers
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                          style={{ width: `${Math.max(width, 8)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+              <ShieldCheck className="h-5 w-5" />
             </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Active regions", regionRollups.filter((region) => region.status === "Active").length],
+              ["Monitoring regions", regionRollups.filter((region) => region.status === "Monitoring").length],
+              ["Active alerts", totals.totalAlerts],
+              ["Health score", `${totals.healthScore}%`],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="enterprise-subtle-card flex items-center justify-between px-3 py-3">
+                <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAlertCenter(true)}
+            className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+          >
+            Open Alert Center
+          </button>
+        </div>
+
+        <div className="enterprise-card p-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+              Leading Regions
+            </p>
+            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
+              Highest transformer density
+            </h3>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {topRegions.length === 0 ? (
+              <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                No region rollups available yet.
+              </div>
+            ) : (
+              topRegions.slice(0, 4).map((region) => {
+                const width = totals.totalTransformers
+                  ? (region.transformers / totals.totalTransformers) * 100
+                  : 0;
+
+                return (
+                  <div key={region.id}>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">{region.name}</span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {region.transformers.toLocaleString()} transformers
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
+                        style={{ width: `${Math.max(width, 8)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </section>
@@ -1134,6 +915,223 @@ export default function RegionsIndex() {
                   Regions flagged for attention
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="enterprise-card overflow-hidden">
+        <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Regional Table
+              </p>
+              <h3 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-lg">
+                Network coverage by region
+              </h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={fetchRegions}
+                className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Refresh
+              </button>
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setPage(1);
+                }}
+                className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
+              >
+                <Filter className="h-4 w-4" />
+                Reset
+              </button>
+              {canCreate && (
+                <button
+                  onClick={openCreate}
+                  className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Region
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="enterprise-chip inline-flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
+              <span className="font-semibold text-slate-900 dark:text-slate-100">Show</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="bg-transparent text-sm outline-none"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+
+            <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2.5">
+              <svg className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.5 17.5L13.875 13.875M15.8333 9.16667C15.8333 12.8486 12.8486 15.8333 9.16667 15.8333C5.48477 15.8333 2.5 12.8486 2.5 9.16667C2.5 5.48477 5.48477 2.5 9.16667 2.5C12.8486 2.5 15.8333 5.48477 15.8333 9.16667Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search regions or statuses..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto p-4 pt-0">
+          <table className="min-w-full border-separate border-spacing-y-2.5">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                <th className="px-3 py-2.5">Region</th>
+                <th className="px-3 py-2.5">Districts</th>
+                <th className="px-3 py-2.5">Depots</th>
+                <th className="px-3 py-2.5">Transformers</th>
+                <th className="px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginated.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12">
+                    <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                      No regions found for the current filter.
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                paginated.map((region) => (
+                  <tr key={region.id} className="enterprise-subtle-card">
+                    <td className="rounded-l-[22px] px-3 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                          <MapPinned className="h-4.5 w-4.5" />
+                        </div>
+                        <div>
+                          <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{region.name}</p>
+                          <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                            {region.alerts > 0
+                              ? `${region.alerts} active alert${region.alerts === 1 ? "" : "s"}`
+                              : "No active regional alerts"}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          region.districts > 0
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                        }`}
+                      >
+                        {region.districts}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          region.depots > 0
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                        }`}
+                      >
+                        {region.depots}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="space-y-1.5">
+                        <div
+                          className={`flex items-center gap-2 text-sm font-semibold ${
+                            region.transformers > 0
+                              ? "text-slate-900 dark:text-slate-100"
+                              : "text-slate-500 dark:text-slate-400"
+                          }`}
+                        >
+                          <Zap className={`h-4 w-4 ${region.transformers > 0 ? "text-amber-500" : "text-slate-400 dark:text-slate-500"}`} />
+                          {region.transformers.toLocaleString()}
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
+                            style={{ width: `${Math.max(region.healthScore, 8)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-col gap-1.5">
+                        <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                          <span
+                            className={`h-2 w-2 rounded-full ${
+                              region.status === "Active"
+                                ? "bg-emerald-500"
+                                : region.status === "Monitoring"
+                                  ? "bg-amber-500"
+                                  : "bg-slate-400 dark:bg-slate-500"
+                            }`}
+                          />
+                          {region.status}
+                        </span>
+                        <span className="text-[12px] text-slate-400 dark:text-slate-500">
+                          Health score {region.healthScore}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="rounded-r-[22px] px-3 py-3 text-right">
+                      <ActionMenu
+                        placement="bottom-end"
+                        onView={() => openView(region)}
+                        onEdit={canUpdate ? () => openEdit(region) : undefined}
+                        onDelete={canDelete ? () => openDelete(region) : undefined}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, filtered.length)} of {filtered.length} regions
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
+              >
+                Previous
+              </button>
+              <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">{page}</div>
+              <button
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page === totalPages}
+                className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
+              >
+                Next
+              </button>
             </div>
           </div>
         </div>

@@ -383,188 +383,15 @@ export default function SiteIndex() {
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_360px]">
-        <div className="space-y-4">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-slate-200/80 px-1 pb-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Network Map</p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Geographic transformer footprint</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  Circle markers keep existing location logic and highlight the current filtered map coverage.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Map points</span>
-                <span className="mt-1 block font-semibold text-slate-900">{mapSites.length.toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div className="mt-4 overflow-hidden rounded-[24px] border border-slate-200">
-              <MapContainer center={[-19.015, 29.154]} zoom={6} scrollWheelZoom style={{ height: 460, width: "100%" }}>
-                <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                {mapSites.map((site) => (
-                  <CircleMarker
-                    key={site.id}
-                    center={[site.lat as number, site.lng as number]}
-                    radius={6}
-                    color={site.isActive ? "#16a34a" : "#dc2626"}
-                    fillColor={site.isActive ? "#22c55e" : "#ef4444"}
-                    fillOpacity={0.85}
-                    eventHandlers={{ click: () => setSelected(site) }}
-                  >
-                    <Popup>
-                      <div className="space-y-1.5">
-                        <div className="font-semibold text-slate-900">{site.name}</div>
-                        <div className="text-sm text-slate-600">Region: {site.regionName}</div>
-                        <div className="text-sm text-slate-600">District: {site.districtName}</div>
-                        <div className="text-sm text-slate-600">Depot: {site.depotName}</div>
-                        <div className="text-sm text-slate-600">
-                          Capacity: {typeof site.capacity === "number" ? `${site.capacity.toLocaleString()} kVA` : "Unavailable"}
-                        </div>
-                        <div className="flex items-center gap-2 pt-1 text-sm text-slate-600">
-                          <span className={`h-2 w-2 rounded-full ${site.isActive ? "bg-emerald-500" : "bg-red-500"}`} />
-                          {site.isActive ? "Active" : "Inactive"}
-                        </div>
-                        {isSupplierUser ? <div className="text-sm text-slate-600">Organisation: {user?.supplierName || "Supplier"}</div> : null}
-                        <div className="pt-2">
-                          <button
-                            type="button"
-                            onClick={() => void openDetails(site)}
-                            className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
-                          >
-                            View sensors
-                          </button>
-                        </div>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                ))}
-              </MapContainer>
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-4 border-b border-slate-200/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Site Directory</p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Premium table shell for network sites</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  Select a row to update the summary rail or open the centered sensor detail modal.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Selection</span>
-                <span className="mt-1 block font-semibold text-slate-900">{selected?.name || "No site selected"}</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-slate-50/80">
-                  <tr>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transformer</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Location</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Capacity</th>
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Status</th>
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200/80 bg-white">
-                  {paginatedSites.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-5 py-14 text-center text-sm text-slate-500">
-                        No sites match the current filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedSites.map((site) => (
-                      <tr
-                        key={site.id}
-                        onClick={() => setSelected(site)}
-                        className={`cursor-pointer transition hover:bg-slate-50 ${
-                          selected?.id === site.id ? "bg-blue-50/60" : "bg-white"
-                        }`}
-                      >
-                        <td className="px-5 py-4">
-                          <div className="font-semibold text-slate-900">{site.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">#{site.id}</div>
-                        </td>
-                        <td className="px-5 py-4 text-sm text-slate-600">
-                          <div>{site.regionName}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {site.districtName} • {site.depotName}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 text-sm text-slate-600">
-                          {typeof site.capacity === "number" ? `${site.capacity.toLocaleString()} kVA` : "Unavailable"}
-                        </td>
-                        <td className="px-5 py-4 text-sm">
-                          <span className="inline-flex items-center gap-2 text-slate-700">
-                            <span className={`h-2 w-2 rounded-full ${site.isActive ? "bg-emerald-500" : "bg-red-500"}`} />
-                            {site.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void openDetails(site);
-                            }}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                          >
-                            View sensors
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border-t border-slate-200/80 px-5 py-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <p className="text-sm text-slate-500">
-                  Showing {paginatedSites.length === 0 ? 0 : (page - 1) * pageSize + 1} to {(page - 1) * pageSize + paginatedSites.length} of{" "}
-                  {filteredSites.length} site entries
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    disabled={page === 1}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Previous
-                  </button>
-                  <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">{page}</div>
-                  <button
-                    type="button"
-                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                    disabled={page >= totalPages}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="rounded-[30px] border border-blue-100 bg-gradient-to-br from-white via-blue-50/80 to-slate-50 p-5 shadow-[0_24px_60px_-34px_rgba(37,99,235,0.45)]">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Summary Rail</p>
                 <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Selected site focus</h3>
               </div>
-              <div className="rounded-2xl bg-blue-50 p-3 text-blue-600">
+              <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 p-3 text-white shadow-lg shadow-blue-600/25">
                 <MapIcon className="h-5 w-5" />
               </div>
             </div>
@@ -573,7 +400,7 @@ export default function SiteIndex() {
               <div className="mt-5 space-y-4">
                 <div>
                   <p className="text-lg font-semibold text-slate-950">{selected.name}</p>
-                  <div className="mt-2 inline-flex items-center gap-2 text-sm text-slate-600">
+                  <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-sm text-slate-600 shadow-sm">
                     <span className={`h-2 w-2 rounded-full ${selected.isActive ? "bg-emerald-500" : "bg-red-500"}`} />
                     {selected.isActive ? "Active asset" : "Inactive asset"}
                   </div>
@@ -597,7 +424,7 @@ export default function SiteIndex() {
                 <button
                   type="button"
                   onClick={() => void openDetails(selected)}
-                  className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  className="inline-flex w-full items-center justify-center rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:from-blue-700 hover:to-indigo-700"
                 >
                   Open centered sensor detail
                 </button>
@@ -609,13 +436,13 @@ export default function SiteIndex() {
             )}
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[30px] border border-amber-100 bg-gradient-to-br from-white via-amber-50/70 to-slate-50 p-5 shadow-[0_24px_60px_-34px_rgba(245,158,11,0.3)]">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Coverage Summary</p>
                 <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Regional concentration</h3>
               </div>
-              <div className="rounded-2xl bg-amber-50 p-3 text-amber-600">
+              <div className="rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 p-3 text-white shadow-lg shadow-amber-500/20">
                 <Activity className="h-5 w-5" />
               </div>
             </div>
@@ -644,13 +471,13 @@ export default function SiteIndex() {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[30px] border border-emerald-100 bg-gradient-to-br from-white via-emerald-50/70 to-slate-50 p-5 shadow-[0_24px_60px_-34px_rgba(16,185,129,0.28)]">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Network Posture</p>
                 <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Map and visibility summary</h3>
               </div>
-              <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-600">
+              <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 p-3 text-white shadow-lg shadow-emerald-500/20">
                 <Gauge className="h-5 w-5" />
               </div>
             </div>
@@ -660,6 +487,177 @@ export default function SiteIndex() {
               <SummaryRow label="Inactive assets" value={siteStats.inactive} tone={siteStats.inactive > 0 ? "warning" : "neutral"} />
               <SummaryRow label="Unmapped assets" value={siteStats.unmapped} tone={siteStats.unmapped > 0 ? "warning" : "neutral"} />
               <SummaryRow label="Supplier scope" value={isSupplierUser ? user?.supplierName || "Supplier-linked view" : "System-wide visibility"} />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-[32px] border border-blue-100 bg-gradient-to-br from-white via-blue-50/55 to-red-50/45 p-4 shadow-[0_30px_90px_-42px_rgba(37,99,235,0.45)]">
+          <div className="flex flex-col gap-3 border-b border-slate-200/80 px-1 pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Network Map</p>
+              <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Geographic transformer footprint</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Circle markers keep existing location logic and highlight the current filtered map coverage.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Map points</span>
+              <span className="mt-1 block font-semibold text-slate-900">{mapSites.length.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-[28px] border border-white/70 bg-white/70 shadow-inner">
+            <MapContainer center={[-19.015, 29.154]} zoom={6} scrollWheelZoom style={{ height: 560, width: "100%" }}>
+              <TileLayer
+                attribution="&copy; OpenStreetMap contributors"
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {mapSites.map((site) => (
+                <CircleMarker
+                  key={site.id}
+                  center={[site.lat as number, site.lng as number]}
+                  radius={6}
+                  color={site.isActive ? "#16a34a" : "#dc2626"}
+                  fillColor={site.isActive ? "#22c55e" : "#ef4444"}
+                  fillOpacity={0.85}
+                  eventHandlers={{ click: () => setSelected(site) }}
+                >
+                  <Popup>
+                    <div className="space-y-1.5">
+                      <div className="font-semibold text-slate-900">{site.name}</div>
+                      <div className="text-sm text-slate-600">Region: {site.regionName}</div>
+                      <div className="text-sm text-slate-600">District: {site.districtName}</div>
+                      <div className="text-sm text-slate-600">Depot: {site.depotName}</div>
+                      <div className="text-sm text-slate-600">
+                        Capacity: {typeof site.capacity === "number" ? `${site.capacity.toLocaleString()} kVA` : "Unavailable"}
+                      </div>
+                      <div className="flex items-center gap-2 pt-1 text-sm text-slate-600">
+                        <span className={`h-2 w-2 rounded-full ${site.isActive ? "bg-emerald-500" : "bg-red-500"}`} />
+                        {site.isActive ? "Active" : "Inactive"}
+                      </div>
+                      {isSupplierUser ? <div className="text-sm text-slate-600">Organisation: {user?.supplierName || "Supplier"}</div> : null}
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => void openDetails(site)}
+                          className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                        >
+                          View sensors
+                        </button>
+                      </div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+          </div>
+        </div>
+
+        <div className="rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_70px_-42px_rgba(15,23,42,0.35)]">
+          <div className="flex flex-col gap-4 border-b border-slate-200/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Site Directory</p>
+              <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Premium table shell for network sites</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Select a row to update the summary rail or open the centered sensor detail modal.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Selection</span>
+              <span className="mt-1 block font-semibold text-slate-900">{selected?.name || "No site selected"}</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-slate-50/80">
+                <tr>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transformer</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Location</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Capacity</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Status</th>
+                  <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/80 bg-white">
+                {paginatedSites.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-14 text-center text-sm text-slate-500">
+                      No sites match the current filter.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedSites.map((site) => (
+                    <tr
+                      key={site.id}
+                      onClick={() => setSelected(site)}
+                      className={`cursor-pointer transition hover:bg-slate-50 ${
+                        selected?.id === site.id ? "bg-blue-50/60" : "bg-white"
+                      }`}
+                    >
+                      <td className="px-5 py-4">
+                        <div className="font-semibold text-slate-900">{site.name}</div>
+                        <div className="mt-1 text-xs text-slate-500">#{site.id}</div>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-slate-600">
+                        <div>{site.regionName}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {site.districtName} • {site.depotName}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-slate-600">
+                        {typeof site.capacity === "number" ? `${site.capacity.toLocaleString()} kVA` : "Unavailable"}
+                      </td>
+                      <td className="px-5 py-4 text-sm">
+                        <span className="inline-flex items-center gap-2 text-slate-700">
+                          <span className={`h-2 w-2 rounded-full ${site.isActive ? "bg-emerald-500" : "bg-red-500"}`} />
+                          {site.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void openDetails(site);
+                          }}
+                          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          View sensors
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border-t border-slate-200/80 px-5 py-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <p className="text-sm text-slate-500">
+                Showing {paginatedSites.length === 0 ? 0 : (page - 1) * pageSize + 1} to {(page - 1) * pageSize + paginatedSites.length} of{" "}
+                {filteredSites.length} site entries
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">{page}</div>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page >= totalPages}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -827,20 +825,20 @@ function SiteMetricCard({
   tone: "slate" | "emerald" | "blue" | "amber";
 }) {
   const toneMap: Record<string, string> = {
-    slate: "bg-slate-50 text-slate-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    blue: "bg-blue-50 text-blue-700",
-    amber: "bg-amber-50 text-amber-700",
+    slate: "from-slate-700 to-slate-900 text-white shadow-slate-700/20",
+    emerald: "from-emerald-500 to-teal-500 text-white shadow-emerald-500/20",
+    blue: "from-blue-600 to-indigo-600 text-white shadow-blue-600/20",
+    amber: "from-amber-500 to-orange-500 text-white shadow-amber-500/20",
   };
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-[30px] border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/70 to-white p-5 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.25)]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">{label}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">{label}</p>
           <p className="mt-2 text-3xl font-semibold text-slate-950">{value.toLocaleString()}</p>
         </div>
-        <div className={`rounded-2xl p-3 ${toneMap[tone]}`}>{icon}</div>
+        <div className={`rounded-2xl bg-gradient-to-br p-3 shadow-lg ${toneMap[tone]}`}>{icon}</div>
       </div>
       <p className="mt-3 text-xs leading-5 text-slate-500">{helper}</p>
     </div>

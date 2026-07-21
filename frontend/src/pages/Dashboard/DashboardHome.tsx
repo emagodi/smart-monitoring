@@ -627,14 +627,25 @@ export default function DashboardHome() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="enterprise-card relative overflow-hidden border border-slate-200/80 bg-white/90 px-5 py-5 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/90">
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.12),transparent_58%)]" />
+    <div className="powertel-dashboard space-y-5">
+      <section className="powertel-hero-panel enterprise-card relative overflow-hidden px-5 py-5 backdrop-blur-sm">
+        <div className="pointer-events-none absolute -left-10 top-12 h-32 w-32 rounded-full bg-red-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-8 top-0 h-40 w-40 rounded-full bg-blue-500/12 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 right-24 h-24 w-24 rounded-full bg-red-500/10 blur-2xl" />
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_420px] xl:items-start">
           <div className="relative max-w-3xl">
-            <div className="enterprise-chip inline-flex items-center gap-2 border border-blue-100/80 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300">
-              <ShieldCheck className="h-4 w-4" />
-              Utility Monitoring Platform
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="powertel-logo-badge">
+                <img src="/images/powertel.png" alt="Powertel" />
+                <div className="powertel-logo-copy">
+                  <span className="powertel-kicker">Powertel</span>
+                  <span className="powertel-subcopy">Blue, red, and white executive command view</span>
+                </div>
+              </div>
+              <div className="enterprise-chip inline-flex items-center gap-2 border border-blue-100/80 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300">
+                <ShieldCheck className="h-4 w-4" />
+                Utility Monitoring Platform
+              </div>
             </div>
             <h2 className="mt-3 text-[28px] font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-[32px]">
               Grid operations overview
@@ -658,9 +669,9 @@ export default function DashboardHome() {
                 <span className="h-2 w-2 rounded-full bg-slate-400" />
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Sensors: {stats.totalSensors}</span>
               </div>
-              <div className="enterprise-subtle-card inline-flex items-center gap-2 border border-slate-200/80 bg-white/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
-                <span className="h-2 w-2 rounded-full bg-slate-500" />
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Live alerts: {liveAlertCount}</span>
+              <div className="powertel-red-chip enterprise-subtle-card inline-flex items-center gap-2 border px-3 py-2">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                <span className="text-xs font-medium">Live alerts: {liveAlertCount}</span>
               </div>
             </div>
           </div>
@@ -682,7 +693,7 @@ export default function DashboardHome() {
             </div>
             <div className="enterprise-subtle-card border border-slate-200/80 bg-white/75 px-4 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/60">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Live Alerts</p>
-              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-blue-700 dark:text-blue-300">{liveAlertCount}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-red-600 dark:text-red-300">{liveAlertCount}</p>
               <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Current event stream</p>
             </div>
           </div>
@@ -708,15 +719,15 @@ export default function DashboardHome() {
           title="Offline"
           value={stats.offlineTransformers}
           subtitle="Assets requiring communication or field attention."
-          icon={<Waves className="h-5 w-5 text-slate-600 dark:text-slate-300" />}
-          tone="border border-slate-200 bg-slate-50/90 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          icon={<Waves className="h-5 w-5 text-red-600 dark:text-red-300" />}
+          tone="border border-red-100 bg-red-50/90 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300"
         />
         <MetricCard
           title="Critical Alerts"
           value={Math.max(stats.totalAlerts, liveAlertCount)}
           subtitle="Alarm activity requiring operator awareness."
-          icon={<AlertTriangle className="h-5 w-5 text-slate-600 dark:text-slate-300" />}
-          tone="border border-slate-200 bg-slate-50/90 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          icon={<AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-300" />}
+          tone="border border-red-100 bg-red-50/90 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300"
         />
       </section>
 
@@ -724,7 +735,7 @@ export default function DashboardHome() {
         <div className="enterprise-card overflow-hidden p-4">
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+              <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
                 Network Map
               </p>
               <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50">
@@ -744,7 +755,7 @@ export default function DashboardHome() {
                       key={region.id}
                       className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300"
                     >
-                      <span className="h-2 w-2 rounded-full bg-blue-500" />
+                      <span className="h-2 w-2 rounded-full bg-gradient-to-r from-blue-500 to-red-500" />
                       {region.name} - {region.transformers} transformers - {region.alerts} alerts
                     </span>
                   ))
@@ -761,7 +772,7 @@ export default function DashboardHome() {
               </Link>
               <Link
                 to="/transformers"
-                className="rounded-full bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                className="powertel-blue-button rounded-full px-3.5 py-1.5 text-sm font-medium text-white transition"
               >
                 View Assets
               </Link>
@@ -842,7 +853,7 @@ export default function DashboardHome() {
           <div className="enterprise-card p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
                   Regional Snapshot
                 </p>
                 <h3 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50">
@@ -875,13 +886,13 @@ export default function DashboardHome() {
                             {region.districts} districts, {region.depots} depots
                           </p>
                         </div>
-                        <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                        <div className="powertel-red-chip rounded-full px-3 py-1 text-xs font-semibold">
                           {region.alerts} alerts
                         </div>
                       </div>
                       <div className="mt-3.5 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
+                          className="h-full rounded-full bg-gradient-to-r from-blue-600 via-blue-500 to-red-500"
                           style={{ width: `${width}%` }}
                         />
                       </div>
@@ -901,7 +912,7 @@ export default function DashboardHome() {
           <div className="enterprise-card p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
                   Incident Feed
                 </p>
                 <h3 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50">
@@ -932,7 +943,7 @@ export default function DashboardHome() {
                           {alert.transformerName || "Transformer event"}
                         </p>
                       </div>
-                      <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                      <span className="powertel-red-chip rounded-full px-2.5 py-1 text-xs font-semibold">
                         {alert.severity || "Alert"}
                       </span>
                     </div>
@@ -974,7 +985,7 @@ export default function DashboardHome() {
             <Chart
               type="donut"
               height={280}
-              options={buildDonutOptions(theme, ["Armed", "Disarmed", "Unknown"], ["#10B981", "#F59E0B", "#94A3B8"])}
+              options={buildDonutOptions(theme, ["Armed", "Disarmed", "Unknown"], ["#2563EB", "#EF4444", "#CBD5E1"])}
               series={[controlStateSummary.armed, controlStateSummary.disarmed, controlStateSummary.unknown]}
             />
           )}
@@ -1007,7 +1018,7 @@ export default function DashboardHome() {
               options={buildHorizontalBarOptions(
                 theme,
                 supplierRanking.topSuppliers.map((item) => item.name),
-                ["#2563EB", "#3B82F6", "#4F46E5", "#8B5CF6", "#14B8A6"]
+                ["#1D4ED8", "#2563EB", "#3B82F6", "#DC2626", "#F87171"]
               )}
               series={[{ name: "Transformers", data: supplierRanking.topSuppliers.map((item) => item.total) }]}
             />
@@ -1044,7 +1055,7 @@ export default function DashboardHome() {
             <Chart
               type="donut"
               height={280}
-              options={buildDonutOptions(theme, ["Critical", "Warning", "Informational"], ["#EF4444", "#F59E0B", "#3B82F6"])}
+              options={buildDonutOptions(theme, ["Critical", "Warning", "Informational"], ["#DC2626", "#F87171", "#2563EB"])}
               series={[alertSummary.critical, alertSummary.warning, alertSummary.informational]}
             />
           )}
@@ -1097,7 +1108,7 @@ export default function DashboardHome() {
       <section className="enterprise-card p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+            <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
               Live Telemetry
             </p>
             <h3 className="mt-0.5 text-lg font-semibold text-slate-950 dark:text-slate-50">
@@ -1105,7 +1116,7 @@ export default function DashboardHome() {
             </h3>
           </div>
           <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
-            <Activity className="h-4 w-4 text-emerald-500" />
+            <Activity className="h-4 w-4 text-blue-600 dark:text-blue-300" />
             {latestRealtime.length} recent events captured
           </div>
         </div>
