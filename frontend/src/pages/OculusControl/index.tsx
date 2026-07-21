@@ -756,9 +756,10 @@ export default function OculusControlIndex() {
                               <div className="mt-2 text-xs text-slate-500">{row.activeAlertSummary || "No active intrusion alerts"}</div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
-                              <div>{row.regionName}</div>
-                              <div className="mt-1">{row.districtName}</div>
-                              <div className="mt-1 text-xs text-slate-500">{row.depotName}</div>
+                              <div className="font-medium text-slate-900">{row.depotName}</div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {row.depotName === "Unassigned Depot" ? "No depot mapping" : "Depot scope"}
+                              </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
                               <div className="font-medium text-slate-900">{row.controllerName || "No linked controller"}</div>
