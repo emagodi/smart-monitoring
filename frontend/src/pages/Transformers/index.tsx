@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
-import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 import {
   Plus,
@@ -29,6 +27,9 @@ import {
   RefreshCcw,
   Filter,
   Save,
+  Eye,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -117,7 +118,6 @@ type OverviewCard = {
 
 export default function TransformersIndex() {
   const { token, hasPermission, user } = useAuth();
-  const navigate = useNavigate();
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   const canCreateTransformers = !isSupplierUser && hasPermission('transformers.create');
   const canUpdateTransformers = !isSupplierUser && hasPermission('transformers.update');
@@ -165,6 +165,8 @@ export default function TransformersIndex() {
 
   // Modal State
   const [showCreate, setShowCreate] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [showView, setShowView] = useState(false);
   const [activeTransformer, setActiveTransformer] = useState<Transformer | null>(null);
   const [createDepotOptions, setCreateDepotOptions] = useState<Depot[]>([]);
@@ -178,6 +180,17 @@ export default function TransformersIndex() {
   const [createDepotInput, setCreateDepotInput] = useState<number | ''>('');
   const [createLatInput, setCreateLatInput] = useState<number | ''>('');
   const [createLngInput, setCreateLngInput] = useState<number | ''>('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editNameInput, setEditNameInput] = useState('');
+  const [editCapacityInput, setEditCapacityInput] = useState<number | ''>('');
+  const [editTypeInput, setEditTypeInput] = useState<TransformerTypeOption | ''>('');
+  const [editIsActiveInput, setEditIsActiveInput] = useState(true);
+  const [editDepotInput, setEditDepotInput] = useState<number | ''>('');
+  const [editLatInput, setEditLatInput] = useState<number | ''>('');
+  const [editLngInput, setEditLngInput] = useState<number | ''>('');
+  const [savingDelete, setSavingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   
   const [notice, setNotice] = useState<{ variant: 'success' | 'error' | 'info' | 'warning'; title: string; message: string } | null>(null);
 
@@ -470,9 +483,9 @@ export default function TransformersIndex() {
   }, [isSupplierUser]);
 
   useEffect(() => {
-    if (!showCreate || !token || isSupplierUser || !hasPermission('depots.read')) return;
+    if ((!showCreate && !showEdit) || !token || isSupplierUser || !hasPermission('depots.read')) return;
     void fetchCreateDepotOptions();
-  }, [showCreate, token, isSupplierUser, hasPermission, fetchCreateDepotOptions]);
+  }, [showCreate, showEdit, token, isSupplierUser, hasPermission, fetchCreateDepotOptions]);
 
   // --- Event Handlers ---
 
@@ -605,13 +618,28 @@ export default function TransformersIndex() {
       setShowCreate(true);
   };
 
-  const handleEditTransformer = (t: Transformer) => {
-      navigate(`/transformers/${t.id}/edit`);
+  const openEditModal = (t: Transformer) => {
+      setActiveTransformer(t);
+      setEditNameInput(t.name || '');
+      setEditCapacityInput(t.capacity ?? '');
+      setEditTypeInput((t.type as TransformerTypeOption | undefined) ?? '');
+      setEditIsActiveInput(t.isActive ?? true);
+      setEditDepotInput(t.depotId ?? t.depot?.id ?? selectedDepot?.id ?? '');
+      setEditLatInput(t.lat ?? '');
+      setEditLngInput(t.lng ?? '');
+      setEditError(null);
+      setShowEdit(true);
   };
 
   const openViewModal = (t: Transformer) => {
       setActiveTransformer(t);
       setShowView(true);
+  };
+
+  const openDeleteModal = (t: Transformer) => {
+      setActiveTransformer(t);
+      setDeleteError(null);
+      setShowDelete(true);
   };
 
   const handleCreateTransformer = async (e: React.FormEvent) => {
@@ -660,14 +688,75 @@ export default function TransformersIndex() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-      if (!confirm('Are you sure you want to delete this transformer?')) return;
+  const handleUpdateTransformer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTransformer) return;
+    if (!editNameInput.trim()) {
+      setEditError('Name is required');
+      return;
+    }
+    if (!isSupplierUser && !editDepotInput) {
+      setEditError('Depot is required');
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      setEditError(null);
+
+      const matchedDepot = createDepotOptions.find((depot) => depot.id === Number(editDepotInput));
+      const payload = {
+        name: editNameInput.trim(),
+        capacity: editCapacityInput === '' ? undefined : Number(editCapacityInput),
+        type: editTypeInput || null,
+        isActive: editIsActiveInput,
+        depotId: isSupplierUser ? null : Number(editDepotInput),
+        lat: editLatInput === '' ? undefined : Number(editLatInput),
+        lng: editLngInput === '' ? undefined : Number(editLngInput),
+      };
+
+      await axios.put(`${API_BASE_URL}/api/v1/transformers/${activeTransformer.id}`, payload, { headers });
+
+      setActiveTransformer({
+        ...activeTransformer,
+        ...payload,
+        depotId: isSupplierUser ? activeTransformer.depotId : Number(editDepotInput),
+        depot: matchedDepot ? { id: matchedDepot.id, name: matchedDepot.name } : activeTransformer.depot,
+      });
+      setShowEdit(false);
+      setNotice({ variant: 'success', title: 'Transformer updated', message: 'Transformer changes were saved.' });
+      if (selectedDepot) {
+        await fetchTransformers(selectedDepot.id);
+      } else {
+        await fetchTransformers();
+      }
+    } catch (err: any) {
+      console.error(err);
+      setEditError(err.response?.data?.message || 'Failed to update transformer');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+      if (!activeTransformer) return;
       try {
-          await axios.delete(`${API_BASE_URL}/api/v1/transformers/${id}`, { headers });
+          setSavingDelete(true);
+          setDeleteError(null);
+          await axios.delete(`${API_BASE_URL}/api/v1/transformers/${activeTransformer.id}`, { headers });
+          setShowDelete(false);
+          setShowView(false);
           setNotice({ variant: 'success', title: 'Success', message: 'Transformer deleted' });
-          if (selectedDepot) fetchTransformers(selectedDepot.id);
-      } catch {
-          setNotice({ variant: 'error', title: 'Error', message: 'Failed to delete transformer' });
+          if (selectedDepot) {
+            await fetchTransformers(selectedDepot.id);
+          } else {
+            await fetchTransformers();
+          }
+      } catch (err: any) {
+          console.error(err);
+          setDeleteError(err.response?.data?.message || 'Failed to delete transformer');
+      } finally {
+          setSavingDelete(false);
       }
   };
 
@@ -1872,12 +1961,36 @@ export default function TransformersIndex() {
                           </div>
                         </td>
                         <td className="rounded-r-[22px] px-3 py-3 text-right">
-                          <ActionMenu
-                            placement="bottom-end"
-                            onView={() => openViewModal(transformer)}
-                            onEdit={canUpdateTransformers ? () => handleEditTransformer(transformer) : undefined}
-                            onDelete={canDeleteTransformers ? () => handleDelete(transformer.id) : undefined}
-                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openViewModal(transformer)}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/40 dark:hover:text-blue-300"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View
+                            </button>
+                            {canUpdateTransformers ? (
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(transformer)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit
+                              </button>
+                            ) : null}
+                            {canDeleteTransformers ? (
+                              <button
+                                type="button"
+                                onClick={() => openDeleteModal(transformer)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -2218,6 +2331,250 @@ export default function TransformersIndex() {
               </button>
             </div>
           </form>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showEdit}
+        onClose={() => setShowEdit(false)}
+        variant="center"
+        showCloseButton={false}
+        className="max-h-[90vh] max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/12 dark:text-violet-300">
+                  <Pencil className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600 dark:text-violet-300">
+                    Transformer
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Edit transformer
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Update transformer details without leaving the hierarchy workspace.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEdit(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdateTransformer} className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+            {editError ? <Alert variant="error" title="Error" message={editError} /> : null}
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editNameInput}
+                  onChange={(e) => setEditNameInput(e.target.value)}
+                  placeholder="e.g. TF-1234"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              {!isSupplierUser && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    Depot
+                  </label>
+                  <div className="mt-2">
+                    {loadingCreateDepots ? (
+                      <div className="enterprise-chip flex items-center gap-2 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                        Loading depots...
+                      </div>
+                    ) : (
+                      <SearchableSelect
+                        options={createDepotOptions}
+                        value={editDepotInput}
+                        onChange={setEditDepotInput}
+                        placeholder="Select depot..."
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Capacity (kVA)
+                </label>
+                <input
+                  type="number"
+                  value={editCapacityInput}
+                  onChange={(e) => setEditCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 500"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Type
+                </label>
+                <select
+                  value={editTypeInput}
+                  onChange={(e) => setEditTypeInput((e.target.value as TransformerTypeOption | '') || '')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="">Select type...</option>
+                  <option value="GROUND_MOUNTED">GMT</option>
+                  <option value="POLE_MOUNTED">PMT</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Latitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={editLatInput}
+                  onChange={(e) => setEditLatInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. -1.2921"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Longitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={editLngInput}
+                  onChange={(e) => setEditLngInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 36.8219"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Status
+                </label>
+                <select
+                  value={editIsActiveInput ? 'true' : 'false'}
+                  onChange={(e) => setEditIsActiveInput(e.target.value === 'true')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowEdit(false)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="inline-flex min-w-[170px] items-center justify-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {savingEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        variant="center"
+        showCloseButton={false}
+        className="max-w-[520px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-500/12 dark:text-rose-300">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-600 dark:text-rose-300">
+                    Transformer
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Delete transformer
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Remove this transformer from the current depot inventory.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-5 px-6 py-6">
+            {deleteError ? <Alert variant="error" title="Delete failed" message={deleteError} /> : null}
+            <div className="rounded-[24px] border border-rose-100 bg-rose-50/70 p-5 dark:border-rose-500/20 dark:bg-rose-500/10">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                You are about to delete
+                <span className="mx-1 font-semibold text-slate-950 dark:text-slate-50">
+                  {activeTransformer?.name || 'this transformer'}
+                </span>
+                from the workspace.
+              </p>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingDelete}
+                onClick={() => void handleDelete()}
+                className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingDelete ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {savingDelete ? 'Deleting...' : 'Delete Transformer'}
+              </button>
+            </div>
+          </div>
         </div>
       </Modal>
 
