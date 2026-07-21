@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Alert from '../../components/ui/alert/Alert';
-import Button from '../../components/ui/button/Button';
-import { Search, Loader2, Cpu, Settings, Link2, Save } from 'lucide-react';
+import {
+  Search,
+  Loader2,
+  Cpu,
+  Settings,
+  Link2,
+  Save,
+  RefreshCcw,
+  Filter,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
 import { Modal } from '../../components/ui/modal';
 import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
 
@@ -31,6 +41,7 @@ interface TransformerOption {
 export default function NewControllersIndex() {
   const { token, hasPermission, user } = useAuth();
   const navigate = useNavigate();
+  const initialLoadTokenRef = useRef<string | null>(null);
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   const [items, setItems] = useState<Controller[]>([]);
   const [transformers, setTransformers] = useState<TransformerOption[]>([]);
@@ -44,6 +55,11 @@ export default function NewControllersIndex() {
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [transformerInput, setTransformerInput] = useState<number | ''>('');
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', deviceId: '', devEui: '', type: '' });
   
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
@@ -99,19 +115,72 @@ export default function NewControllersIndex() {
   }, [API_BASE_URL, headers]);
 
   useEffect(() => {
-    if (token) {
-      fetchControllers();
-      fetchTransformers();
-    } else {
-       console.log('No token available');
+    if (!token) {
+      initialLoadTokenRef.current = null;
+      return;
     }
+
+    if (initialLoadTokenRef.current === token) return;
+
+    initialLoadTokenRef.current = token;
+    void fetchControllers();
+    void fetchTransformers();
   }, [token, fetchControllers, fetchTransformers]);
+
+  const closeAssign = () => {
+    setShowAssign(false);
+    setActive(null);
+    setTransformerInput('');
+    setAssignError(null);
+  };
 
   const openAssign = (controller: Controller) => {
     setActive(controller);
     setTransformerInput(controller.transformerId ?? '');
     setAssignError(null);
     setShowAssign(true);
+  };
+
+  const openEdit = (controller: Controller) => {
+    setActive(controller);
+    setEditForm({
+      name: controller.name || '',
+      deviceId: controller.deviceId || '',
+      devEui: controller.devEui || '',
+      type: controller.type || '',
+    });
+    setEditError(null);
+    setShowEdit(true);
+  };
+
+  const closeEdit = () => {
+    setShowEdit(false);
+    setActive(null);
+    setEditError(null);
+  };
+
+  const submitEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!active) return;
+    try {
+      setEditing(true);
+      setEditError(null);
+      await axios.put(
+        `${API_BASE_URL}/api/v1/controllers/${active.id}`,
+        {
+          ...editForm,
+          transformerId: active.transformerId,
+        },
+        { headers }
+      );
+      closeEdit();
+      await fetchControllers();
+    } catch (err: any) {
+      console.error(err);
+      setEditError(err.response?.data?.message || 'Failed to update controller.');
+    } finally {
+      setEditing(false);
+    }
   };
 
   const submitAssign = async (event: React.FormEvent) => {
@@ -135,9 +204,7 @@ export default function NewControllersIndex() {
         },
         { headers }
       );
-      setShowAssign(false);
-      setActive(null);
-      setTransformerInput('');
+      closeAssign();
       await fetchControllers();
       await fetchTransformers();
     } catch (err: any) {
@@ -148,62 +215,266 @@ export default function NewControllersIndex() {
     }
   };
 
-  const filtered = items.filter((c) => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      c.name.toLowerCase().includes(q) ||
-      c.deviceId.toLowerCase().includes(q) ||
-      c.devEui.toLowerCase().includes(q)
-    );
-  });
+    if (!q) return items;
+
+    return items.filter((controller) => {
+      return (
+        controller.name.toLowerCase().includes(q) ||
+        controller.deviceId.toLowerCase().includes(q) ||
+        controller.devEui.toLowerCase().includes(q)
+      );
+    });
+  }, [items, search]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const resultsFrom = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const resultsTo = filtered.length === 0 ? 0 : Math.min(page * pageSize, filtered.length);
 
-  if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /><span className="ml-2 text-gray-500">Loading controllers...</span></div>;
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const controllerTypes = useMemo(() => {
+    const breakdown = new Map<string, number>();
+    items.forEach((controller) => {
+      const key = controller.type || 'Unknown';
+      breakdown.set(key, (breakdown.get(key) || 0) + 1);
+    });
+
+    return Array.from(breakdown.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [items]);
+
+  const totals = useMemo(
+    () => ({
+      unassigned: items.length,
+      transformerOptions: transformers.length,
+      filtered: filtered.length,
+      visible: paginated.length,
+      types: controllerTypes.length,
+    }),
+    [controllerTypes.length, filtered.length, items.length, paginated.length, transformers.length]
+  );
+
+  if (loading) {
+    return (
+      <div className="enterprise-card flex h-96 items-center justify-center gap-3 text-slate-500 dark:text-slate-300">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <span>Loading controllers...</span>
+      </div>
+    );
+  }
 
   if (error) {
     return (
-      <div className="flex h-96 flex-col items-center justify-center space-y-4">
-        <p className="text-red-500">{error}</p>
-        <button 
-          onClick={() => fetchControllers()} 
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Retry
-        </button>
+      <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>{error}</p>
+          <button
+            onClick={() => {
+              void fetchControllers();
+              void fetchTransformers();
+            }}
+            className="inline-flex w-fit items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">      
-      <div className="flex justify-between items-center">
-        <div>
-           <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-             <Cpu className="w-8 h-8 text-brand-500" />
-             New Controllers
-           </h2>
-           <p className="mt-1 text-sm text-gray-500">
-             {isSupplierUser
-               ? 'Assign unlinked controllers to any transformer visible to your organisation.'
-               : 'Manage unassigned controllers and assign them to transformers.'}
-           </p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Unassigned Controllers"
+          value={totals.unassigned}
+          subtitle="Controllers waiting for transformer ownership"
+          icon={<Cpu className="h-6 w-6" />}
+          tone="bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300"
+        />
+        <MetricCard
+          label="Transformer Options"
+          value={totals.transformerOptions}
+          subtitle="Available assignment targets from the lookup service"
+          icon={<Link2 className="h-6 w-6" />}
+          tone="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/14 dark:text-indigo-300"
+        />
+        <MetricCard
+          label="Search Matches"
+          value={totals.filtered}
+          subtitle="Controllers in the active filter workspace"
+          icon={<Search className="h-6 w-6" />}
+          tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300"
+        />
+        <MetricCard
+          label="Controller Types"
+          value={totals.types}
+          subtitle="Distinct hardware types awaiting configuration"
+          icon={<ShieldCheck className="h-6 w-6" />}
+          tone="bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300"
+        />
+      </section>
 
-      <div className="rounded-xl bg-white shadow-sm dark:bg-gray-900 border border-gray-100">
-        <div className="p-4 border-b border-gray-100 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4 flex-1">
-              {/* Show [N] */}
+      <section className="flex flex-col gap-4">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Assignment Summary */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Assignment Summary
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Operator readiness
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+            </div>
+            
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Pending</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.unassigned}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Visible matches</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.filtered}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Lookup targets</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.transformerOptions}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Access</p>
+                <p className={`mt-1 text-sm font-semibold ${canUpdate ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {canUpdate ? 'Enabled' : 'Restricted'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800/50 dark:bg-slate-900/50">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-brand-500 bg-brand-50 px-2 py-1 rounded">Show</span>
-                <select 
-                  value={pageSize} 
-                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} 
-                  className="text-sm border-none bg-transparent font-medium focus:ring-0 cursor-pointer"
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Scope</p>
+              </div>
+              <p className="mt-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+                {isSupplierUser ? 'Supplier-visible transformer catalogue' : 'Full transformer assignment catalogue'}
+              </p>
+            </div>
+          </div>
+
+          {/* Controller Mix */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Controller Mix
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Types awaiting assignment
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                <Cpu className="h-4 w-4" />
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {controllerTypes.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  No controller types available yet.
+                </div>
+              ) : (
+                controllerTypes.slice(0, 4).map((type) => {
+                  const width = totals.unassigned ? (type.count / totals.unassigned) * 100 : 0;
+
+                  return (
+                    <div key={type.label}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {formatTypeLabel(type.label)}
+                        </span>
+                        <span className="text-slate-500 dark:text-slate-400">
+                          {type.count}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-blue-500 dark:bg-blue-600"
+                          style={{ width: `${Math.max(width, 4)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Table Card */}
+        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
+          <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                  Assignment Workspace
+                </p>
+                <h3 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-lg">
+                  New controller intake and transformer linking
+                </h3>
+                <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400 md:text-sm">
+                  {isSupplierUser
+                    ? 'Assign unlinked controllers to transformers visible to your organisation.'
+                    : 'Review unassigned controllers and connect them to the correct transformers.'}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    setSearch('');
+                    setPage(1);
+                  }}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
+                >
+                  <Filter className="h-4 w-4" />
+                  Reset
+                </button>
+                <button
+                  onClick={() => {
+                    void fetchControllers();
+                    void fetchTransformers();
+                  }}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+              <div className="enterprise-chip inline-flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Show</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="bg-transparent text-sm outline-none"
                 >
                   <option value={10}>10</option>
                   <option value={20}>20</option>
@@ -211,153 +482,456 @@ export default function NewControllersIndex() {
                 </select>
               </div>
 
-              {/* Search Bar */}
-              <div className="flex-1 max-w-md relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
-                </div>
-                <input 
-                  type="text" 
-                  placeholder="Search controllers..." 
-                  value={search} 
-                  onChange={(e) => { setSearch(e.target.value); setPage(1); }} 
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-md leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 sm:text-sm" 
+              <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2.5">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search controllers, device IDs, or DevEUI..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
                 />
               </div>
             </div>
-            
-             <button 
-                onClick={() => fetchControllers()} 
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-brand-500 hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 shadow-sm"
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Refresh
-              </button>
           </div>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-white border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Device ID</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">DevEUI</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500">
-                    No unassigned controllers found.
-                  </td>
+          <div className="overflow-x-auto p-4 pt-0">
+            <table className="min-w-full border-separate border-spacing-y-2.5">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                  <th className="px-3 py-2.5">Controller</th>
+                  <th className="px-3 py-2.5">Device ID</th>
+                  <th className="px-3 py-2.5">DevEUI</th>
+                  <th className="px-3 py-2.5">Type</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5 text-right">Actions</th>
                 </tr>
-              ) : (
-                paginated.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-700">{c.name}</div></td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{c.deviceId}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{c.devEui}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                         <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-blue-100 text-blue-800">
-                           {c.type}
-                         </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                      {canUpdate ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => openAssign(c)}>
-                            <Link2 className="w-4 h-4 mr-1" /> Assign
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/new-controllers/${c.id}/edit`)}>
-                            <Settings className="w-4 h-4 mr-1" /> Edit
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">No access</span>
-                      )}
+              </thead>
+              <tbody>
+                {paginated.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12">
+                      <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                        {search.trim()
+                          ? 'No unassigned controllers match the current search.'
+                          : 'No unassigned controllers are waiting for assignment.'}
+                      </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        
-        {totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
-               <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Previous</button>
-               <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Next</button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Showing <span className="font-medium text-gray-900">{(page - 1) * pageSize + 1}</span> to <span className="font-medium text-gray-900">{Math.min(page * pageSize, filtered.length)}</span> of <span className="font-medium text-gray-900">{filtered.length}</span> results</p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button onClick={() => setPage(1)} disabled={page === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">«</button>
-                  {/* Simple pagination logic */}
-                  <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {page} of {totalPages}</span>
-                  <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">»</button>
-                </nav>
-              </div>
-            </div>
+                ) : (
+                  paginated.map((controller) => (
+                    <tr key={controller.id} className="enterprise-subtle-card">
+                      <td className="rounded-l-[22px] px-3 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                            <Cpu className="h-4.5 w-4.5" />
+                          </div>
+                          <div>
+                            <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">
+                              {controller.name}
+                            </p>
+                            <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                              Ready for transformer assignment
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                          {controller.deviceId}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="font-mono text-sm text-slate-500 dark:text-slate-400">
+                          {controller.devEui}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                          {formatTypeLabel(controller.type)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <span className="h-2 w-2 rounded-full bg-amber-500" />
+                            Unassigned
+                          </span>
+                          <span className="text-[12px] text-slate-400 dark:text-slate-500">
+                            Awaiting transformer link
+                          </span>
+                        </div>
+                      </td>
+                      <td className="rounded-r-[22px] px-3 py-3">
+                        {canUpdate ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openAssign(controller)}
+                              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                            >
+                              <Link2 className="h-4 w-4" />
+                              Assign
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(controller)}
+                              className="enterprise-chip inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200"
+                            >
+                              <Settings className="h-4 w-4" />
+                              Edit
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-right text-xs text-slate-400 dark:text-slate-500">No access</div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
 
-      <Modal isOpen={showAssign} onClose={() => setShowAssign(false)} className="max-w-xl w-full p-0 overflow-hidden rounded-2xl bg-white shadow-xl" backdropBlur={true}>
-        <div className="bg-gradient-to-r from-brand-600 to-brand-800 px-6 py-6">
-          <h3 className="text-xl font-bold text-white">Assign To Transformer</h3>
-          <p className="mt-1 text-sm text-brand-100">Link this controller to a supplier-visible transformer.</p>
+          <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Showing {resultsFrom} to {resultsTo} of {filtered.length} controllers
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
+                >
+                  Previous
+                </button>
+                <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">
+                  {page}
+                </div>
+                <button
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page === totalPages}
+                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <form onSubmit={submitAssign} className="space-y-6 p-6">
-          {assignError ? <Alert variant="error" title="Assignment" message={assignError} /> : null}
-          <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
-            <InfoCard label="Controller" value={active?.name || '—'} />
-            <InfoCard label="Device ID" value={active?.deviceId || '—'} />
-            <InfoCard label="Current Assignment" value={active?.transformer?.name || 'Unassigned'} />
-            <InfoCard label="Last Updated" value={active?.updatedAt ? new Date(active.updatedAt).toLocaleString() : 'Not yet updated'} />
+      </section>
+
+      <Modal
+        isOpen={showAssign}
+        onClose={closeAssign}
+        variant="center"
+        showCloseButton={false}
+        className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="flex max-h-[90vh] min-h-0 flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                  <Link2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                    Assign Controller
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Link controller to transformer
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeAssign}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-700">Transformer</label>
-            <SearchableSelect
-              options={transformers}
-              value={transformerInput}
-              onChange={(value) => setTransformerInput(value)}
-              placeholder={isSupplierUser ? 'Select organisation transformer...' : 'Select transformer...'}
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              {isSupplierUser
-                ? 'Only transformers visible to your organisation are listed here.'
-                : 'Select the transformer that should own this controller.'}
-            </p>
-          </div>
-          <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setShowAssign(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={assigning}>
-              {!assigning ? <Save className="w-4 h-4 mr-1" /> : null}
-              Save Assignment
-            </Button>
-          </div>
-        </form>
+
+          <form onSubmit={submitAssign} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+              {assignError ? <Alert variant="error" title="Assignment" message={assignError} /> : null}
+
+
+
+              <div className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                    Controller Snapshot
+                  </p>
+                  <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                    Assignment details
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <InfoCard label="Controller" value={active?.name || '—'} />
+                  <InfoCard label="Device ID" value={active?.deviceId || '—'} />
+                  <InfoCard label="Current assignment" value={active?.transformer?.name || 'Unassigned'} />
+                  <InfoCard
+                    label="Last updated"
+                    value={active?.updatedAt ? new Date(active.updatedAt).toLocaleString() : 'Not yet updated'}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                    Transformer Selection
+                  </p>
+                  <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                    Choose assignment target
+                  </h4>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                    Transformer *
+                  </label>
+                  <SearchableSelect
+                    options={transformers}
+                    value={transformerInput}
+                    onChange={(value) => setTransformerInput(value)}
+                    placeholder={isSupplierUser ? 'Select organisation transformer...' : 'Select transformer...'}
+                  />
+                  <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    {isSupplierUser
+                      ? 'Only transformers visible to your organisation are available in this selector.'
+                      : 'Select the transformer that should own this controller after assignment.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeAssign}
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={assigning}
+                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {assigning ? 'Saving...' : 'Save Assignment'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </Modal>
+
+      <Modal
+        isOpen={showEdit}
+        onClose={closeEdit}
+        variant="center"
+        showCloseButton={false}
+        className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="flex max-h-[90vh] min-h-0 flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                  <Settings className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                    Edit Controller
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Update controller properties
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={submitEdit} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+              {editError ? <Alert variant="error" title="Update failed" message={editError} /> : null}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Controller Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Device ID *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.deviceId}
+                    onChange={(e) => setEditForm({ ...editForm, deviceId: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    DevEUI *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.devEui}
+                    onChange={(e) => setEditForm({ ...editForm, devEui: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Type
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.type}
+                    onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                    placeholder="e.g. IO_CONTROLLER, DRAGINO_LT22222"
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editing}
+                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {editing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {editing ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  subtitle,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  subtitle: string;
+  icon: React.ReactNode;
+  tone: string;
+}) {
+  return (
+    <div className="enterprise-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
+          <p
+            className={`mt-2 text-3xl font-semibold tracking-tight ${
+              value > 0 ? 'text-slate-950 dark:text-slate-50' : 'text-slate-400 dark:text-slate-500'
+            }`}
+          >
+            {value.toLocaleString()}
+          </p>
+          <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
+        </div>
+        <div className={`rounded-xl p-2.5 ${tone}`}>{icon}</div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  accent = 'default',
+  mutedZero = false,
+}: {
+  label: string;
+  value: string | number;
+  accent?: 'default' | 'success' | 'muted';
+  mutedZero?: boolean;
+}) {
+  const isZero = typeof value === 'number' && value === 0;
+  const valueTone =
+    accent === 'success'
+      ? 'text-emerald-600 dark:text-emerald-300'
+      : accent === 'muted' || (mutedZero && isZero)
+        ? 'text-slate-400 dark:text-slate-500'
+        : 'text-slate-900 dark:text-slate-100';
+
+  return (
+    <div className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
+      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+      <span className={`text-sm font-semibold ${valueTone}`}>{value}</span>
     </div>
   );
 }
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-gray-900">{value}</p>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 text-xs font-medium text-slate-900 break-words dark:text-slate-100">{value}</p>
     </div>
   );
+}
+
+function formatTypeLabel(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function buildTransformerDescription(item: any) {

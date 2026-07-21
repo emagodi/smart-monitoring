@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
-import { Menu, Search } from "lucide-react";
+import { ChevronRight, Menu, Search } from "lucide-react";
 import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
 import NotificationDropdown from "../components/header/NotificationDropdown";
 import UserDropdown from "../components/header/UserDropdown";
@@ -9,6 +8,7 @@ import UserDropdown from "../components/header/UserDropdown";
 const AppHeader: React.FC = () => {
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
   const location = useLocation();
+  const pathSegments = location.pathname.split("/").filter(Boolean);
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) {
@@ -18,61 +18,130 @@ const AppHeader: React.FC = () => {
     }
   };
 
-  const getPageTitle = (pathname: string) => {
-    if (pathname === "/" || pathname === "/dashboard") return "Dashboard";
-    if (pathname.includes("/regions")) return "Regions";
-    if (pathname.includes("/districts")) return "Districts";
-    if (pathname.includes("/depots")) return "Depots";
-    if (pathname.includes("/transformers")) return "Transformers";
-    if (pathname.includes("/sensors")) return "Sensors";
-    if (pathname.includes("/sites")) return "Sites";
-    if (pathname.includes("/users")) return "User Management";
-    if (pathname.includes("/profile")) return "Profile";
-    return "Dashboard";
-  };
+  const pageMeta = (() => {
+    const titleMap: Record<string, { title: string; description: string }> = {
+      dashboard: {
+        title: "Dashboard",
+        description: "Monitor transformer health, alarms, telemetry, and field activity.",
+      },
+      regions: {
+        title: "Regions",
+        description: "Manage grid coverage, district alignment, and operational capacity by region.",
+      },
+      districts: {
+        title: "Districts",
+        description: "Review district-level infrastructure, maintenance hubs, and network performance.",
+      },
+      depots: {
+        title: "Depots",
+        description: "Coordinate service depots, field logistics, and assigned transformer assets.",
+      },
+      transformers: {
+        title: "Transformers",
+        description: "Track transformer inventory, telemetry health, and assignment status.",
+      },
+      sensors: {
+        title: "Sensors",
+        description: "Supervise telemetry devices, controller activity, and monitoring readiness.",
+      },
+      alerts: {
+        title: "Alerts",
+        description: "Investigate active incidents, thresholds, and utility response priorities.",
+      },
+      sites: {
+        title: "Sites",
+        description: "Visualize field locations, geospatial coverage, and monitored transformer sites.",
+      },
+      users: {
+        title: "Users",
+        description: "Administer operator accounts, access scope, and user lifecycle actions.",
+      },
+      roles: {
+        title: "Roles",
+        description: "Configure enterprise access roles and utility governance permissions.",
+      },
+      permissions: {
+        title: "Permissions",
+        description: "Review fine-grained access controls for the monitoring platform.",
+      },
+      profile: {
+        title: "Profile",
+        description: "Manage your account preferences and platform identity settings.",
+      },
+    };
+
+    const activeKey = pathSegments[0] || "dashboard";
+    return titleMap[activeKey] || titleMap.dashboard;
+  })();
+
+  const breadcrumbs = [
+    { label: "Home", to: "/dashboard" },
+    ...pathSegments.map((segment, index) => ({
+      label: segment
+        .split("-")
+        .map((value) => value.charAt(0).toUpperCase() + value.slice(1))
+        .join(" "),
+      to: `/${pathSegments.slice(0, index + 1).join("/")}`,
+    })),
+  ];
 
   return (
-    <header className="sticky top-0 z-40 flex w-full bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800 h-16 font-outfit">
-      <div className="flex flex-grow items-center justify-between px-4 md:px-6 2xl:px-11 h-full">
-        {/* Left Side: Toggle + Logo(Mobile) + Title */}
-        <div className="flex items-center gap-4">
-          <button
-            aria-controls="sidebar"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleToggle();
-            }}
-            className="flex items-center justify-center p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-300 shadow-sm"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+    <header className="sticky top-0 z-40 px-3 pb-1 pt-2 md:px-4 md:pt-3 xl:px-6">
+      <div className="rounded-2xl border border-slate-200/90 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex min-h-[48px] items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              aria-controls="sidebar"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggle();
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-blue-300"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
 
-          <Link className="block flex-shrink-0 lg:hidden" to="/">
-             <span className="text-xl font-bold text-blue-600">TAIS</span>
-          </Link>
+            <Link className="block flex-shrink-0 lg:hidden" to="/">
+              <span className="text-base font-semibold text-blue-600 dark:text-blue-300">TMS</span>
+            </Link>
 
-          <div className="hidden sm:block">
-             <div className="flex flex-col justify-center h-full">
-               {/* <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
-                 {getPageTitle(location.pathname).toUpperCase()}
-               </h1> */}
-               <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Link to="/" className="hover:text-blue-600">Home</Link>
-                  <span>/</span>
-                  <span className="text-blue-600 font-medium">{getPageTitle(location.pathname)}</span>
-               </div>
-             </div>
+            <div className="hidden min-w-0 items-center gap-1.5 text-xs text-slate-500 sm:flex dark:text-slate-400">
+              {breadcrumbs.map((crumb, index) => (
+                <div key={crumb.to} className="flex items-center gap-1.5">
+                  {index > 0 && <ChevronRight className="h-3.5 w-3.5" />}
+                  <Link
+                    to={crumb.to}
+                    className={`transition hover:text-blue-600 dark:hover:text-blue-300 ${
+                      index === breadcrumbs.length - 1
+                        ? "font-semibold text-blue-600 dark:text-blue-300"
+                        : ""
+                    }`}
+                  >
+                    {crumb.label}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300">
+              <Search className="h-4 w-4" />
+            </button>
+            <NotificationDropdown />
+            <ThemeToggleButton />
+            <UserDropdown />
           </div>
         </div>
 
-        {/* Right Side: Actions + User */}
-        <div className="flex items-center gap-3 2xsm:gap-7">
-          <div className="hidden sm:block relative">
-             {/* Optional Search or Actions */}
-          </div>
-          
-          <UserDropdown />
-        </div>
+      {/*   <div className="px-1 pb-1 pt-2">
+          <h1 className="truncate text-[18px] font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-[20px]">
+            {pageMeta.title}
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-[11px] leading-4 text-slate-500 dark:text-slate-400 md:text-xs">
+            {pageMeta.description}
+          </p>
+        </div> */}
       </div>
     </header>
   );

@@ -1,5 +1,6 @@
 import type React from "react";
 import { useRef, useState, useLayoutEffect } from "react";
+import { MoreHorizontal } from "lucide-react";
 import { Dropdown } from "./Dropdown";
 import { DropdownItem } from "./DropdownItem";
 
@@ -64,27 +65,9 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
             return next;
           });
         }}
-        className={`dropdown-toggle inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] ${buttonClassName}`}
+        className={`dropdown-toggle inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/[0.04] dark:hover:text-slate-200 ${buttonClassName}`}
       >
-        <svg
-          className="w-3.5 h-3.5"
-          viewBox="0 0 20 20"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M9.999 2.499c.46 0 .834.373.834.834v.557c.66.129 1.273.404 1.803.797l.395-.395a.834.834 0 011.179 0l1.179 1.179a.834.834 0 010 1.179l-.395.395c.393.53.668 1.143.797 1.803h.557c.461 0 .834.374.834.834v1.667a.834.834 0 01-.834.834h-.557a5.006 5.006 0 01-.797 1.803l.395.395a.834.834 0 010 1.179l-1.179 1.179a.834.834 0 01-1.179 0l-.395-.395a5.006 5.006 0 01-1.803.797v.557a.834.834 0 01-.834.834H8.332a.834.834 0 01-.834-.834v-.557a5.006 5.006 0 01-1.803-.797l-.395.395a.834.834 0 01-1.179 0L2.942 15.33a.834.834 0 010-1.179l.395-.395a5.006 5.006 0 01-.797-1.803h-.557a.834.834 0 01-.834-.834V9.453c0-.46.373-.834.834-.834h.557c.129-.66.404-1.273.797-1.803l-.395-.395a.834.834 0 010-1.179L4.346 3.059a.834.834 0 011.179 0l.395.395c.53-.393 1.143-.668 1.803-.797v-.557c0-.461.374-.834.834-.834h1.667zM10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"
-            fill="currentColor"
-          />
-        </svg>
-        <svg
-          className="w-3.5 h-3.5"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.25 8.27a.75.75 0 01-.02-1.06z" />
-        </svg>
+        <MoreHorizontal className="h-4.5 w-4.5" />
       </button>
 
       <Dropdown isOpen={open} onClose={close} usePortal anchorRect={rect} placement={placement}>

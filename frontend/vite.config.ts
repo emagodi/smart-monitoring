@@ -19,8 +19,30 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
-  server: {
+    server: {
+      host: "0.0.0.0",
       port: 3000,
+      strictPort: true,
+      watch: {
+        usePolling: true,
+        interval: 1000,
+        awaitWriteFinish: {
+          stabilityThreshold: 500,
+          pollInterval: 100,
+        },
+        ignored: [
+          "**/.git/**",
+          "**/.idea/**",
+          "**/.vscode/**",
+          "**/dist/**",
+          "**/coverage/**",
+          "**/node_modules/**",
+        ],
+      },
+      hmr: {
+        host: "localhost",
+        port: 3000,
+      },
       proxy: {
         '/api': {
           target: target,
@@ -30,6 +52,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
+      host: "0.0.0.0",
       port: 3000,
       proxy: {
         '/api': {

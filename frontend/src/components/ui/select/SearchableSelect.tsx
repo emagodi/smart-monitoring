@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Check } from 'lucide-react';
 
 interface Option {
@@ -27,6 +28,9 @@ export const SearchableSelect = ({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const selectedOption = options.find((o) => o.id === value);
   const filteredOptions = options.filter((o) =>
@@ -35,7 +39,13 @@ export const SearchableSelect = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -43,30 +53,40 @@ export const SearchableSelect = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  return (
-    <div className="relative w-full" ref={wrapperRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`flex w-full items-center justify-between rounded-lg border bg-white px-3 py-2 text-sm shadow-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:ring-offset-gray-900 ${
-          compact ? 'h-9' : 'h-10'
-        } ${!selectedOption ? 'text-gray-500' : ''}`}
-      >
-        <span className="min-w-0 text-left">
-          <span className="block truncate">
-            {selectedOption ? selectedOption.name : placeholder}
-          </span>
-          {selectedOption?.description ? (
-            <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
-              {selectedOption.description}
-            </span>
-          ) : null}
-        </span>
-        <ChevronDown className="h-4 w-4 opacity-50" />
-      </button>
+  useEffect(() => {
+    if (!isOpen) return;
 
-      {isOpen && (
-        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:border-gray-700 dark:bg-gray-800 sm:text-sm">
+    const updatePosition = () => {
+      if (!buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    document.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      document.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
+
+  const dropdown = isOpen && dropdownStyle
+    ? createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[100000] max-h-60 overflow-auto rounded-md border bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:border-gray-700 dark:bg-gray-800 sm:text-sm"
+          style={{
+            top: dropdownStyle.top,
+            left: dropdownStyle.left,
+            width: dropdownStyle.width,
+          }}
+        >
           <div className="sticky top-0 border-b bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
             <div className="relative flex items-center">
               <Search className="absolute left-2 h-4 w-4 text-gray-500" />
@@ -120,8 +140,34 @@ export const SearchableSelect = ({
               </div>
             ))
           )}
-        </div>
-      )}
+        </div>,
+        document.body
+      )
+    : null;
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex w-full items-center justify-between rounded-lg border bg-white px-3 py-2 text-sm shadow-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:ring-offset-gray-900 ${
+          compact ? 'h-9' : 'h-10'
+        } ${!selectedOption ? 'text-gray-500' : ''}`}
+      >
+        <span className="min-w-0 text-left">
+          <span className="block truncate">
+            {selectedOption ? selectedOption.name : placeholder}
+          </span>
+          {selectedOption?.description ? (
+            <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+              {selectedOption.description}
+            </span>
+          ) : null}
+        </span>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </button>
+      {dropdown}
     </div>
   );
 };

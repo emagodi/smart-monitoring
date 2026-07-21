@@ -12,6 +12,7 @@ export default function UserDropdown() {
   const name = user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username : "User";
   const shortName = user?.first_name || user?.username || "User";
   const email = user?.email || "";
+  const roleLabel = user?.userType || user?.role || "System Operator";
   const initials = (() => {
     const f = user?.first_name?.trim();
     const l = user?.last_name?.trim();
@@ -37,14 +38,21 @@ export default function UserDropdown() {
     <div className="relative">
       <button
         onClick={toggleDropdown}
-        className="flex items-center text-gray-700 dropdown-toggle dark:text-gray-400"
+        className="enterprise-chip flex items-center gap-2.5 px-2.5 py-1.5 text-slate-700 dropdown-toggle transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
       >
-        <span className="mr-3 flex items-center justify-center rounded-full h-8 w-8 bg-blue-500 text-white font-semibold">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-xs font-semibold text-white shadow-lg shadow-blue-500/20">
           {initials}
         </span>
-        {/* <span className="block mr-1 font-medium text-theme-sm">{shortName}</span> */}
+        <span className="hidden text-left lg:block">
+          <span className="block text-sm font-semibold leading-tight text-slate-900 dark:text-slate-100">
+            {name}
+          </span>
+          <span className="hidden text-[11px] text-slate-500 dark:text-slate-400 xl:block">
+            {roleLabel}
+          </span>
+        </span>
         <svg
-          className={`stroke-gray-500 dark:stroke-gray-400 transition-transform duration-200 ${
+          className={`stroke-slate-500 dark:stroke-slate-400 transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
           }`}
           width="18"

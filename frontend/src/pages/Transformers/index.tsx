@@ -1,14 +1,36 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { Modal } from '../../components/ui/modal';
 import Alert from '../../components/ui/alert/Alert';
-import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
-import Button from '../../components/ui/button/Button';
-import { Plus, MapPin, Zap, Activity, Building2, X, ChevronRight, ArrowLeft, Loader2, Search, Cpu, List as ListIcon, ChevronLeft as ChevronLeftIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
+import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
+import {
+  Plus,
+  MapPin,
+  Zap,
+  Activity,
+  Building2,
+  X,
+  ChevronRight,
+  ArrowLeft,
+  Loader2,
+  Search,
+  Cpu,
+  List as ListIcon,
+  Calendar as CalendarIcon,
+  Clock as ClockIcon,
+  Globe,
+  Warehouse,
+  ShieldCheck,
+  RefreshCcw,
+  Filter,
+  Save,
+  Eye,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 
 // --- Interfaces ---
 
@@ -83,10 +105,19 @@ interface Controller {
 }
 
 type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'READINGS' | 'CONTROLLERS' | 'CONTROLLER_READINGS';
+type TransformerTypeOption = 'GROUND_MOUNTED' | 'POLE_MOUNTED';
+
+type OverviewCard = {
+  label: string;
+  value: string;
+  subtitle: string;
+  icon: ReactNode;
+  tone: string;
+  compactValue?: boolean;
+};
 
 export default function TransformersIndex() {
   const { token, hasPermission, user } = useAuth();
-  const navigate = useNavigate();
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
   const canCreateTransformers = !isSupplierUser && hasPermission('transformers.create');
   const canUpdateTransformers = !isSupplierUser && hasPermission('transformers.update');
@@ -133,8 +164,33 @@ export default function TransformersIndex() {
   const [totalElements, setTotalElements] = useState(0);
 
   // Modal State
+  const [showCreate, setShowCreate] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [showView, setShowView] = useState(false);
   const [activeTransformer, setActiveTransformer] = useState<Transformer | null>(null);
+  const [createDepotOptions, setCreateDepotOptions] = useState<Depot[]>([]);
+  const [loadingCreateDepots, setLoadingCreateDepots] = useState(false);
+  const [savingCreate, setSavingCreate] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createNameInput, setCreateNameInput] = useState('');
+  const [createCapacityInput, setCreateCapacityInput] = useState<number | ''>('');
+  const [createTypeInput, setCreateTypeInput] = useState<TransformerTypeOption | ''>('');
+  const [createIsActiveInput, setCreateIsActiveInput] = useState(true);
+  const [createDepotInput, setCreateDepotInput] = useState<number | ''>('');
+  const [createLatInput, setCreateLatInput] = useState<number | ''>('');
+  const [createLngInput, setCreateLngInput] = useState<number | ''>('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editNameInput, setEditNameInput] = useState('');
+  const [editCapacityInput, setEditCapacityInput] = useState<number | ''>('');
+  const [editTypeInput, setEditTypeInput] = useState<TransformerTypeOption | ''>('');
+  const [editIsActiveInput, setEditIsActiveInput] = useState(true);
+  const [editDepotInput, setEditDepotInput] = useState<number | ''>('');
+  const [editLatInput, setEditLatInput] = useState<number | ''>('');
+  const [editLngInput, setEditLngInput] = useState<number | ''>('');
+  const [savingDelete, setSavingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   
   const [notice, setNotice] = useState<{ variant: 'success' | 'error' | 'info' | 'warning'; title: string; message: string } | null>(null);
 
@@ -272,6 +328,26 @@ export default function TransformersIndex() {
     }
   }, [API_BASE_URL, headers]);
 
+  const fetchCreateDepotOptions = useCallback(async () => {
+    try {
+      setLoadingCreateDepots(true);
+      const res = await axios.get(`${API_BASE_URL}/api/v1/depots`, { headers });
+      const list = normalizeList(res.data) as Depot[];
+      setCreateDepotOptions(
+        list.map((depot) => ({
+          id: depot.id,
+          name: depot.name,
+          districtId: depot.districtId,
+        }))
+      );
+    } catch (err) {
+      console.error(err);
+      setCreateError('Failed to load depots.');
+    } finally {
+      setLoadingCreateDepots(false);
+    }
+  }, [API_BASE_URL, headers]);
+
   const fetchSensors = useCallback(async (transformerId: number) => {
     try {
       setLoading(true);
@@ -406,6 +482,11 @@ export default function TransformersIndex() {
     }
   }, [isSupplierUser]);
 
+  useEffect(() => {
+    if ((!showCreate && !showEdit) || !token || isSupplierUser || !hasPermission('depots.read')) return;
+    void fetchCreateDepotOptions();
+  }, [showCreate, showEdit, token, isSupplierUser, hasPermission, fetchCreateDepotOptions]);
+
   // --- Event Handlers ---
 
   const handleRegionClick = (region: Region) => {
@@ -526,11 +607,28 @@ export default function TransformersIndex() {
   // --- CRUD Handlers (Transformers) ---
 
   const handleAddTransformer = () => {
-      navigate('/transformers/new');
+      setCreateNameInput('');
+      setCreateCapacityInput('');
+      setCreateTypeInput('');
+      setCreateIsActiveInput(true);
+      setCreateDepotInput(selectedDepot?.id ?? '');
+      setCreateLatInput('');
+      setCreateLngInput('');
+      setCreateError(null);
+      setShowCreate(true);
   };
 
-  const handleEditTransformer = (t: Transformer) => {
-      navigate(`/transformers/${t.id}/edit`);
+  const openEditModal = (t: Transformer) => {
+      setActiveTransformer(t);
+      setEditNameInput(t.name || '');
+      setEditCapacityInput(t.capacity ?? '');
+      setEditTypeInput((t.type as TransformerTypeOption | undefined) ?? '');
+      setEditIsActiveInput(t.isActive ?? true);
+      setEditDepotInput(t.depotId ?? t.depot?.id ?? selectedDepot?.id ?? '');
+      setEditLatInput(t.lat ?? '');
+      setEditLngInput(t.lng ?? '');
+      setEditError(null);
+      setShowEdit(true);
   };
 
   const openViewModal = (t: Transformer) => {
@@ -538,726 +636,2064 @@ export default function TransformersIndex() {
       setShowView(true);
   };
 
-  const handleDelete = async (id: number) => {
-      if (!confirm('Are you sure you want to delete this transformer?')) return;
+  const openDeleteModal = (t: Transformer) => {
+      setActiveTransformer(t);
+      setDeleteError(null);
+      setShowDelete(true);
+  };
+
+  const handleCreateTransformer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createNameInput.trim()) {
+      setCreateError('Name is required');
+      return;
+    }
+    if (!isSupplierUser && !createDepotInput) {
+      setCreateError('Depot is required');
+      return;
+    }
+
+    try {
+      setSavingCreate(true);
+      setCreateError(null);
+      await axios.post(
+        `${API_BASE_URL}/api/v1/transformers/create`,
+        {
+          name: createNameInput.trim(),
+          capacity: createCapacityInput === '' ? 0 : Number(createCapacityInput),
+          type: createTypeInput || null,
+          isActive: createIsActiveInput,
+          depotId: isSupplierUser ? null : Number(createDepotInput),
+          lat: createLatInput === '' ? 0 : Number(createLatInput),
+          lng: createLngInput === '' ? 0 : Number(createLngInput),
+        },
+        { headers }
+      );
+
+      setShowCreate(false);
+      setNotice({
+        variant: 'success',
+        title: 'Transformer created',
+        message: 'The transformer was created successfully.',
+      });
+
+      if (viewMode === 'TRANSFORMERS' && selectedDepot && Number(createDepotInput) === selectedDepot.id) {
+        await fetchTransformers(selectedDepot.id);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setCreateError(err.response?.data?.message || 'Failed to create transformer');
+    } finally {
+      setSavingCreate(false);
+    }
+  };
+
+  const handleUpdateTransformer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTransformer) return;
+    if (!editNameInput.trim()) {
+      setEditError('Name is required');
+      return;
+    }
+    if (!isSupplierUser && !editDepotInput) {
+      setEditError('Depot is required');
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      setEditError(null);
+
+      const matchedDepot = createDepotOptions.find((depot) => depot.id === Number(editDepotInput));
+      const payload = {
+        name: editNameInput.trim(),
+        capacity: editCapacityInput === '' ? undefined : Number(editCapacityInput),
+        type: editTypeInput || null,
+        isActive: editIsActiveInput,
+        depotId: isSupplierUser ? null : Number(editDepotInput),
+        lat: editLatInput === '' ? undefined : Number(editLatInput),
+        lng: editLngInput === '' ? undefined : Number(editLngInput),
+      };
+
+      await axios.put(`${API_BASE_URL}/api/v1/transformers/${activeTransformer.id}`, payload, { headers });
+
+      setActiveTransformer({
+        ...activeTransformer,
+        ...payload,
+        depotId: isSupplierUser ? activeTransformer.depotId : Number(editDepotInput),
+        depot: matchedDepot ? { id: matchedDepot.id, name: matchedDepot.name } : activeTransformer.depot,
+      });
+      setShowEdit(false);
+      setNotice({ variant: 'success', title: 'Transformer updated', message: 'Transformer changes were saved.' });
+      if (selectedDepot) {
+        await fetchTransformers(selectedDepot.id);
+      } else {
+        await fetchTransformers();
+      }
+    } catch (err: any) {
+      console.error(err);
+      setEditError(err.response?.data?.message || 'Failed to update transformer');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+      if (!activeTransformer) return;
       try {
-          await axios.delete(`${API_BASE_URL}/api/v1/transformers/${id}`, { headers });
+          setSavingDelete(true);
+          setDeleteError(null);
+          await axios.delete(`${API_BASE_URL}/api/v1/transformers/${activeTransformer.id}`, { headers });
+          setShowDelete(false);
+          setShowView(false);
           setNotice({ variant: 'success', title: 'Success', message: 'Transformer deleted' });
-          if (selectedDepot) fetchTransformers(selectedDepot.id);
-      } catch {
-          setNotice({ variant: 'error', title: 'Error', message: 'Failed to delete transformer' });
+          if (selectedDepot) {
+            await fetchTransformers(selectedDepot.id);
+          } else {
+            await fetchTransformers();
+          }
+      } catch (err: any) {
+          console.error(err);
+          setDeleteError(err.response?.data?.message || 'Failed to delete transformer');
+      } finally {
+          setSavingDelete(false);
       }
   };
 
   // --- Render Helpers ---
 
-  const renderBreadcrumbs = () => (
-      <nav className="flex items-center text-sm text-gray-500 mb-6 overflow-x-auto whitespace-nowrap">
-          <button onClick={() => navigateTo('REGIONS')} className={`hover:text-brand-600 ${viewMode === 'REGIONS' ? 'font-bold text-brand-600' : ''}`}>
-              Regions
-          </button>
-          {selectedRegion && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <button onClick={() => navigateTo('DISTRICTS')} className={`hover:text-brand-600 ${viewMode === 'DISTRICTS' ? 'font-bold text-brand-600' : ''}`}>
-                      {selectedRegion.name}
-                  </button>
-              </>
-          )}
-          {selectedDistrict && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <button onClick={() => navigateTo('DEPOTS')} className={`hover:text-brand-600 ${viewMode === 'DEPOTS' ? 'font-bold text-brand-600' : ''}`}>
-                      {selectedDistrict.name}
-                  </button>
-              </>
-          )}
-          {selectedDepot && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <button onClick={() => navigateTo('TRANSFORMERS')} className={`hover:text-brand-600 ${viewMode === 'TRANSFORMERS' ? 'font-bold text-brand-600' : ''}`}>
-                      {selectedDepot.name}
-                  </button>
-              </>
-          )}
-          {selectedTransformer && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className={`hover:text-brand-600 ${['SENSORS', 'CONTROLLERS'].includes(viewMode) ? 'font-bold text-brand-600' : ''}`}>
-                      {selectedTransformer.name}
-                  </span>
-              </>
-          )}
-          {viewMode === 'SENSORS' && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Sensors</span>
-              </>
-          )}
-          {viewMode === 'CONTROLLERS' && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Controllers</span>
-              </>
-          )}
-          {selectedSensor && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <button onClick={() => navigateTo('SENSORS')} className="hover:text-brand-600">Sensors</button>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Readings</span>
-              </>
-          )}
-          {selectedController && (
-              <>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <button onClick={() => navigateTo('CONTROLLERS')} className="hover:text-brand-600">Controllers</button>
-                  <ChevronRight className="h-4 w-4 mx-2" />
-                  <span className="font-bold text-brand-600">Readings</span>
-              </>
-          )}
-      </nav>
+  const filteredList = <T extends { name: string }>(list: T[]) => {
+    if (!search.trim()) return list;
+    return list.filter((item) => item.name.toLowerCase().includes(search.trim().toLowerCase()));
+  };
+
+  const visibleRegions = useMemo(() => filteredList(regions), [regions, search]);
+  const visibleDistricts = useMemo(() => filteredList(districts), [districts, search]);
+  const visibleDepots = useMemo(() => filteredList(depots), [depots, search]);
+  const visibleTransformers = useMemo(() => filteredList(transformers), [transformers, search]);
+  const visibleSensors = useMemo(() => filteredList(sensors), [sensors, search]);
+  const visibleControllers = useMemo(() => filteredList(controllers), [controllers, search]);
+
+  const currentLevelLabel = useMemo(() => {
+    switch (viewMode) {
+      case 'REGIONS':
+        return 'Regions';
+      case 'DISTRICTS':
+        return 'Districts';
+      case 'DEPOTS':
+        return 'Depots';
+      case 'TRANSFORMERS':
+        return 'Transformers';
+      case 'SENSORS':
+        return 'Sensors';
+      case 'READINGS':
+        return 'Sensor Readings';
+      case 'CONTROLLERS':
+        return 'Controllers';
+      case 'CONTROLLER_READINGS':
+        return 'Controller Readings';
+      default:
+        return 'Workspace';
+    }
+  }, [viewMode]);
+
+  const searchEnabled = viewMode !== 'READINGS' && viewMode !== 'CONTROLLER_READINGS';
+  const paginationEnabled = viewMode === 'REGIONS' || viewMode === 'CONTROLLER_READINGS';
+
+  const currentItemCount = useMemo(() => {
+    switch (viewMode) {
+      case 'REGIONS':
+        return visibleRegions.length;
+      case 'DISTRICTS':
+        return visibleDistricts.length;
+      case 'DEPOTS':
+        return visibleDepots.length;
+      case 'TRANSFORMERS':
+        return visibleTransformers.length;
+      case 'SENSORS':
+        return visibleSensors.length;
+      case 'READINGS':
+        return readings.length;
+      case 'CONTROLLERS':
+        return visibleControllers.length;
+      case 'CONTROLLER_READINGS':
+        return controllerReadings.length;
+      default:
+        return 0;
+    }
+  }, [
+    viewMode,
+    visibleRegions.length,
+    visibleDistricts.length,
+    visibleDepots.length,
+    visibleTransformers.length,
+    visibleSensors.length,
+    readings.length,
+    visibleControllers.length,
+    controllerReadings.length,
+  ]);
+
+  const currentScopeTotal = paginationEnabled ? totalElements : currentItemCount;
+  const controllerFilterActive = Boolean(
+    controllerStartDate || controllerStartTime || controllerEndDate || controllerEndTime
+  );
+  const filterWindowReady = Boolean(
+    controllerStartDate && controllerStartTime && controllerEndDate && controllerEndTime
   );
 
-  const filteredList = <T extends { name: string }>(list: T[]) => {
-      if (!search) return list;
-      return list.filter(item => item.name.toLowerCase().includes(search.toLowerCase()));
+  const currentFocusLabel = useMemo(() => {
+    if (viewMode === 'CONTROLLER_READINGS') return selectedController?.name || 'Controller';
+    if (viewMode === 'READINGS') return selectedSensor?.name || 'Sensor';
+    if (viewMode === 'SENSORS' || viewMode === 'CONTROLLERS') return selectedTransformer?.name || 'Transformer';
+    if (viewMode === 'TRANSFORMERS') return selectedDepot?.name || 'Depot';
+    if (viewMode === 'DEPOTS') return selectedDistrict?.name || 'District';
+    if (viewMode === 'DISTRICTS') return selectedRegion?.name || 'Region';
+    return isSupplierUser ? 'Supplier visible network' : 'National hierarchy';
+  }, [
+    viewMode,
+    selectedController,
+    selectedSensor,
+    selectedTransformer,
+    selectedDepot,
+    selectedDistrict,
+    selectedRegion,
+    isSupplierUser,
+  ]);
+
+  const hierarchyDepth = useMemo(() => {
+    if (viewMode === 'REGIONS') return 1;
+    if (viewMode === 'DISTRICTS') return 2;
+    if (viewMode === 'DEPOTS') return 3;
+    if (viewMode === 'TRANSFORMERS') return 4;
+    if (viewMode === 'SENSORS' || viewMode === 'CONTROLLERS') return 5;
+    return 6;
+  }, [viewMode]);
+
+  const transformerStatusCounts = useMemo(
+    () =>
+      transformers.reduce(
+        (acc, transformer) => {
+          if (transformer.isActive) {
+            acc.active += 1;
+          } else {
+            acc.maintenance += 1;
+          }
+          return acc;
+        },
+        { active: 0, maintenance: 0 }
+      ),
+    [transformers]
+  );
+
+  const operationsCard = useMemo<OverviewCard>(() => {
+    if (viewMode === 'TRANSFORMERS') {
+      return {
+        label: 'Active Units',
+        value: transformerStatusCounts.active.toLocaleString(),
+        subtitle: `${transformerStatusCounts.maintenance.toLocaleString()} in maintenance`,
+        icon: <ShieldCheck className="h-5 w-5" />,
+        tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300',
+      };
+    }
+    if (viewMode === 'SENSORS' || viewMode === 'READINGS') {
+      return {
+        label: 'Sensor Scope',
+        value: sensors.length.toLocaleString(),
+        subtitle: selectedTransformer ? `Attached to ${selectedTransformer.name}` : 'Current sensor scope',
+        icon: <Cpu className="h-5 w-5" />,
+        tone: 'bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300',
+      };
+    }
+    if (viewMode === 'CONTROLLERS' || viewMode === 'CONTROLLER_READINGS') {
+      return {
+        label: 'Controller Scope',
+        value: controllers.length.toLocaleString(),
+        subtitle: selectedTransformer ? `Attached to ${selectedTransformer.name}` : 'Current controller scope',
+        icon: <Cpu className="h-5 w-5" />,
+        tone: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/14 dark:text-indigo-300',
+      };
+    }
+    return {
+      label: 'Selection Focus',
+      value: currentFocusLabel,
+      subtitle: 'Active hierarchy anchor',
+      icon: <Building2 className="h-5 w-5" />,
+      tone: 'bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300',
+      compactValue: true,
+    };
+  }, [
+    viewMode,
+    transformerStatusCounts.active,
+    transformerStatusCounts.maintenance,
+    sensors.length,
+    controllers.length,
+    selectedTransformer,
+    currentFocusLabel,
+  ]);
+
+  const overviewCards = useMemo<OverviewCard[]>(
+    () => [
+      {
+        label: 'Current Level',
+        value: currentLevelLabel,
+        subtitle: 'Active workspace layer',
+        icon: <Activity className="h-5 w-5" />,
+        tone: 'bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300',
+        compactValue: true,
+      },
+      {
+        label: 'Visible Records',
+        value: currentItemCount.toLocaleString(),
+        subtitle: `${currentScopeTotal.toLocaleString()} records in scope`,
+        icon: <Globe className="h-5 w-5" />,
+        tone: 'bg-sky-50 text-sky-600 dark:bg-sky-500/14 dark:text-sky-300',
+      },
+      {
+        label: 'Hierarchy Depth',
+        value: `${hierarchyDepth}/6`,
+        subtitle: currentFocusLabel,
+        icon: <Warehouse className="h-5 w-5" />,
+        tone: 'bg-violet-50 text-violet-600 dark:bg-violet-500/14 dark:text-violet-300',
+      },
+      operationsCard,
+    ],
+    [currentLevelLabel, currentItemCount, currentScopeTotal, hierarchyDepth, currentFocusLabel, operationsCard]
+  );
+
+  const scopeSummary = [
+    { label: 'Region', value: selectedRegion?.name ?? 'All regions' },
+    { label: 'District', value: selectedDistrict?.name ?? 'All districts' },
+    { label: 'Depot', value: selectedDepot?.name ?? 'All depots' },
+    { label: 'Transformer', value: selectedTransformer?.name ?? 'Not selected' },
+  ];
+
+  const workspaceSummary = [
+    {
+      label: 'Sensors access',
+      value: canReadSensors ? 'Enabled' : 'Restricted',
+      tone: canReadSensors ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-400',
+    },
+    {
+      label: 'Controllers access',
+      value: canReadControllers ? 'Enabled' : 'Restricted',
+      tone: canReadControllers ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-400',
+    },
+    {
+      label: 'Filters',
+      value: controllerFilterActive ? (filterWindowReady ? 'Time window applied' : 'Incomplete time window') : search || 'None',
+      tone: controllerFilterActive || search ? 'text-blue-600 dark:text-blue-300' : 'text-slate-400',
+    },
+  ];
+
+  const tableTitle = useMemo(() => {
+    switch (viewMode) {
+      case 'REGIONS':
+        return 'Regional transformer coverage';
+      case 'DISTRICTS':
+        return `District coverage for ${selectedRegion?.name ?? 'selected region'}`;
+      case 'DEPOTS':
+        return `Depot network in ${selectedDistrict?.name ?? 'selected district'}`;
+      case 'TRANSFORMERS':
+        return `Transformers at ${selectedDepot?.name ?? 'selected depot'}`;
+      case 'SENSORS':
+        return `Sensors attached to ${selectedTransformer?.name ?? 'selected transformer'}`;
+      case 'READINGS':
+        return `Sensor readings for ${selectedSensor?.name ?? 'selected sensor'}`;
+      case 'CONTROLLERS':
+        return `Controllers attached to ${selectedTransformer?.name ?? 'selected transformer'}`;
+      case 'CONTROLLER_READINGS':
+        return `Controller readings for ${selectedController?.name ?? 'selected controller'}`;
+      default:
+        return 'Transformer workspace';
+    }
+  }, [viewMode, selectedRegion, selectedDistrict, selectedDepot, selectedTransformer, selectedSensor, selectedController]);
+
+  const tableDescription = useMemo(() => {
+    if (viewMode === 'REGIONS') {
+      return 'Step through the same hierarchy used in Regions,  table styling and contextual actions.';
+    }
+    if (viewMode === 'TRANSFORMERS') {
+      return 'Review status, capacity, and downstream device access without leaving the current hierarchy context.';
+    }
+    if (viewMode === 'CONTROLLER_READINGS') {
+      return 'Apply a time window and inspect decoded controller payloads in the same workspace.';
+    }
+    return `Showing ${currentLevelLabel.toLowerCase()} for the active hierarchy selection.`;
+  }, [viewMode, currentLevelLabel]);
+
+  const totalPages = Math.max(1, Math.ceil(currentScopeTotal / pageSize));
+  const currentStart = currentScopeTotal === 0 ? 0 : (page - 1) * pageSize + 1;
+  const currentEnd = Math.min(page * pageSize, currentScopeTotal);
+
+  const clearControllerFilters = () => {
+    setControllerStartDate(null);
+    setControllerStartTime(null);
+    setControllerEndDate(null);
+    setControllerEndTime(null);
+    setPage(1);
+  };
+
+  const resetWorkspaceFilters = () => {
+    setSearch('');
+    setPage(1);
+    if (viewMode === 'CONTROLLER_READINGS') {
+      clearControllerFilters();
+    }
+  };
+
+  const refreshCurrentView = useCallback(() => {
+    if (viewMode === 'REGIONS') {
+      if (isSupplierUser) {
+        void fetchSupplierHierarchy();
+      } else {
+        void fetchRegions();
+      }
+      return;
+    }
+
+    if (viewMode === 'DISTRICTS' && selectedRegion) {
+      if (isSupplierUser) {
+        const filtered = (selectedRegion.districts || []) as District[];
+        setDistricts(filtered);
+        setTotalElements(filtered.length);
+      } else {
+        void fetchDistricts(selectedRegion.id);
+      }
+      return;
+    }
+
+    if (viewMode === 'DEPOTS' && selectedDistrict) {
+      if (isSupplierUser) {
+        const filtered = supplierDepots.filter((depot) => depot.districtId === selectedDistrict.id);
+        setDepots(filtered);
+        setTotalElements(filtered.length);
+      } else {
+        void fetchDepots(selectedDistrict.id);
+      }
+      return;
+    }
+
+    if (viewMode === 'TRANSFORMERS' && selectedDepot) {
+      void fetchTransformers(selectedDepot.id);
+      return;
+    }
+
+    if (viewMode === 'SENSORS' && selectedTransformer) {
+      void fetchSensors(selectedTransformer.id);
+      return;
+    }
+
+    if (viewMode === 'READINGS' && selectedSensor) {
+      void fetchReadings(selectedSensor.id);
+      return;
+    }
+
+    if (viewMode === 'CONTROLLERS' && selectedTransformer) {
+      void fetchControllers(selectedTransformer.id);
+      return;
+    }
+
+    if (viewMode === 'CONTROLLER_READINGS' && selectedController) {
+      void fetchControllerReadings(selectedController.id);
+    }
+  }, [
+    viewMode,
+    isSupplierUser,
+    fetchSupplierHierarchy,
+    fetchRegions,
+    fetchDistricts,
+    fetchDepots,
+    fetchTransformers,
+    fetchSensors,
+    fetchReadings,
+    fetchControllers,
+    fetchControllerReadings,
+    selectedRegion,
+    selectedDistrict,
+    selectedDepot,
+    selectedTransformer,
+    selectedSensor,
+    selectedController,
+    supplierDepots,
+  ]);
+
+  const renderEmptyState = (message: string, colSpan: number) => (
+    <tr>
+      <td colSpan={colSpan} className="px-4 py-12">
+        <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          {message}
+        </div>
+      </td>
+    </tr>
+  );
+
+  const renderBreadcrumbs = () => (
+    <nav className="flex flex-wrap items-center gap-2">
+      <button
+        onClick={() => navigateTo('REGIONS')}
+        className={`enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium transition ${
+          viewMode === 'REGIONS'
+            ? 'bg-blue-600 text-white'
+            : 'text-slate-700 hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300'
+        }`}
+      >
+        Regions
+      </button>
+      {selectedRegion && (
+        <>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <button
+            onClick={() => navigateTo('DISTRICTS')}
+            className={`enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              viewMode === 'DISTRICTS'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-700 hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300'
+            }`}
+          >
+            {selectedRegion.name}
+          </button>
+        </>
+      )}
+      {selectedDistrict && (
+        <>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <button
+            onClick={() => navigateTo('DEPOTS')}
+            className={`enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              viewMode === 'DEPOTS'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-700 hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300'
+            }`}
+          >
+            {selectedDistrict.name}
+          </button>
+        </>
+      )}
+      {selectedDepot && (
+        <>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <button
+            onClick={() => navigateTo('TRANSFORMERS')}
+            className={`enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              viewMode === 'TRANSFORMERS'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-700 hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300'
+            }`}
+          >
+            {selectedDepot.name}
+          </button>
+        </>
+      )}
+      {selectedTransformer && (
+        <>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <span className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+            {selectedTransformer.name}
+          </span>
+        </>
+      )}
+      {selectedSensor && (
+        <>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <button
+            onClick={() => navigateTo('SENSORS')}
+            className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+          >
+            Sensors
+          </button>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <span className="enterprise-chip rounded-full bg-blue-600 px-3 py-1.5 text-sm font-medium text-white">
+            Readings
+          </span>
+        </>
+      )}
+      {selectedController && (
+        <>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <button
+            onClick={() => navigateTo('CONTROLLERS')}
+            className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+          >
+            Controllers
+          </button>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <span className="enterprise-chip rounded-full bg-blue-600 px-3 py-1.5 text-sm font-medium text-white">
+            Readings
+          </span>
+        </>
+      )}
+    </nav>
+  );
+
+  const renderPagination = () => {
+    if (!paginationEnabled || currentScopeTotal === 0) return null;
+
+    return (
+      <div className="flex flex-col gap-3 border-t border-slate-200/80 px-4 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Showing <span className="font-semibold text-slate-900 dark:text-slate-100">{currentStart}</span> to{' '}
+          <span className="font-semibold text-slate-900 dark:text-slate-100">{currentEnd}</span> of{' '}
+          <span className="font-semibold text-slate-900 dark:text-slate-100">{currentScopeTotal}</span> results
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={page === 1}
+            className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 transition disabled:opacity-50 dark:text-slate-200"
+          >
+            Previous
+          </button>
+          <div className="enterprise-chip rounded-full px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
+            Page {page} of {totalPages}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={page >= totalPages}
+            className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 transition disabled:opacity-50 dark:text-slate-200"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // --- Main Render ---
 
+  if (loading) {
+    return (
+      <div className="enterprise-card flex h-96 items-center justify-center gap-3 text-slate-500 dark:text-slate-300">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <span>Loading transformer workspace...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+        {error}
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {notice && (
-        <div className="mb-4">
-          <Alert variant={notice.variant} title={notice.title}>{notice.message}</Alert>
-        </div>
-      )}
+    <div className="space-y-4">
+      {notice && <Alert variant={notice.variant} title={notice.title} message={notice.message} />}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Transformers</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {isSupplierUser ? 'Browse the same region, district, and depot hierarchy as admin, filtered to transformers linked to your organisation devices.' : 'Manage electrical infrastructure hierarchy'}
-          </p>
-        </div>
-        {canCreateTransformers && (
-            <Button onClick={handleAddTransformer} icon={<Plus className="h-4 w-4" />}>
-                Create Transformer
-            </Button>
-        )}
-      </div>
+      <section className="enterprise-card overflow-hidden">
+        <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Transformer Shell
+              </p>
+              <h1 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-xl">
+                Transformer workspace
+              </h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {isSupplierUser
+                  ? 'Browse the region, district, depot, and transformer hierarchy filtered to your organisation footprint.'
+                  : 'Navigate the network hierarchy with the same enterprise shell used by the Regions workspace.'}
+              </p>
+            </div>
 
-      {/* Navigation & Search */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              {renderBreadcrumbs()}
-              
-              <div className="relative max-w-xs w-full">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Search className="h-4 w-4 text-gray-400" />
-                  </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {viewMode !== 'REGIONS' && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={refreshCurrentView}
+                className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Refresh
+              </button>
+              {(searchEnabled || controllerFilterActive) && (
+                <button
+                  type="button"
+                  onClick={resetWorkspaceFilters}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
+                >
+                  <Filter className="h-4 w-4" />
+                  Reset view
+                </button>
+              )}
+              {canCreateTransformers && (
+                <button
+                  type="button"
+                  onClick={handleAddTransformer}
+                  className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Transformer
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">{renderBreadcrumbs()}</div>
+
+            <div className="flex flex-col gap-3 xl:min-w-[420px] xl:flex-row xl:items-center xl:justify-end">
+              {paginationEnabled && (
+                <div className="enterprise-chip inline-flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">Show</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="bg-transparent text-sm outline-none"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
+                <Activity className="h-4 w-4 text-blue-500" />
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{currentLevelLabel}</span>
+                <span className="text-slate-400 dark:text-slate-500">Level {hierarchyDepth}</span>
+              </div>
+
+              {searchEnabled ? (
+                <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2.5">
+                  <Search className="h-4 w-4 text-slate-400" />
                   <input
-                      type="text"
-                      placeholder={`Search ${viewMode.toLowerCase()}...`}
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-md leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+                    type="text"
+                    placeholder={`Search ${currentLevelLabel.toLowerCase()}...`}
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
                   />
+                </div>
+              ) : (
+                <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
+                  <Filter className="h-4 w-4 text-blue-500" />
+                  <span>{controllerFilterActive ? (filterWindowReady ? 'Time window applied' : 'Waiting for full time window') : 'No time window set'}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {overviewCards.map((card) => (
+          <div key={card.label} className="enterprise-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{card.label}</p>
+                <p
+                  className={`mt-2 font-semibold tracking-tight text-slate-950 dark:text-slate-50 ${
+                    card.compactValue ? 'text-lg md:text-xl' : 'text-3xl'
+                  }`}
+                >
+                  {card.value}
+                </p>
+                <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{card.subtitle}</p>
               </div>
+              <div className={`rounded-xl p-2.5 ${card.tone}`}>{card.icon}</div>
+            </div>
           </div>
-      </div>
+        ))}
+      </section>
 
-      {loading ? (
-          <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-          </div>
-      ) : (
-          <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
-              {/* REGIONS VIEW */}
-              {viewMode === 'REGIONS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region Name</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredList(regions).map((r) => (
-                              <tr key={r.id} onClick={() => handleRegionClick(r)} className="hover:bg-gray-50 cursor-pointer transition-colors">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                          <MapPin className="h-5 w-5 text-gray-400 mr-3" />
-                                          <div className="text-sm font-medium text-gray-900">{r.name}</div>
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                      <ChevronRight className="h-5 w-5 text-gray-400 inline-block" />
-                                  </td>
-                              </tr>
-                          ))}
-                          {regions.length === 0 && (
-                              <tr><td colSpan={2} className="px-6 py-12 text-center text-gray-500">No regions found.</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-
-              {/* DISTRICTS VIEW */}
-              {viewMode === 'DISTRICTS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">District Name</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredList(districts).map((d) => (
-                              <tr key={d.id} onClick={() => handleDistrictClick(d)} className="hover:bg-gray-50 cursor-pointer transition-colors">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                          <MapPin className="h-5 w-5 text-gray-400 mr-3" />
-                                          <div className="text-sm font-medium text-gray-900">{d.name}</div>
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                      <ChevronRight className="h-5 w-5 text-gray-400 inline-block" />
-                                  </td>
-                              </tr>
-                          ))}
-                          {districts.length === 0 && (
-                              <tr><td colSpan={2} className="px-6 py-12 text-center text-gray-500">No districts found in {selectedRegion?.name}.</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-
-              {/* DEPOTS VIEW */}
-              {viewMode === 'DEPOTS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depot Name</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredList(depots).map((d) => (
-                              <tr key={d.id} onClick={() => handleDepotClick(d)} className="hover:bg-gray-50 cursor-pointer transition-colors">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                          <Building2 className="h-5 w-5 text-gray-400 mr-3" />
-                                          <div className="text-sm font-medium text-gray-900">{d.name}</div>
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                      <ChevronRight className="h-5 w-5 text-gray-400 inline-block" />
-                                  </td>
-                              </tr>
-                          ))}
-                          {depots.length === 0 && (
-                              <tr><td colSpan={2} className="px-6 py-12 text-center text-gray-500">No depots found in {selectedDistrict?.name}.</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-
-              {/* TRANSFORMERS VIEW */}
-              {viewMode === 'TRANSFORMERS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transformer</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Sensors</th>
-                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Controllers</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredList(transformers).map((t) => (
-                              <tr key={t.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                          <Zap className="h-5 w-5 text-yellow-500 mr-3" />
-                                          <div>
-                                              <div className="text-sm font-medium text-gray-900">{t.name}</div>
-                                              {selectedDepot && (
-                                                <div className="text-xs text-gray-500">
-                                                  {selectedRegion?.name} / {selectedDistrict?.name} / {selectedDepot.name}
-                                                </div>
-                                              )}
-                                          </div>
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                      {t.capacity ? `${t.capacity} kVA` : '—'}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        formatTransformerType(t.type) === 'GMT'
-                                          ? 'bg-indigo-100 text-indigo-800'
-                                          : formatTransformerType(t.type) === 'PMT'
-                                          ? 'bg-cyan-100 text-cyan-800'
-                                          : 'bg-slate-100 text-slate-700'
-                                      }`}>
-                                          {formatTransformerType(t.type)}
-                                      </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${t.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                          {t.isActive ? 'Active' : 'Maintenance'}
-                                      </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                      {canReadSensors ? (
-                                        <button
-                                            onClick={() => handleViewSensors(t)}
-                                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                                        >
-                                            <Cpu className="h-3 w-3 mr-1.5" />
-                                            Sensors
-                                            <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
-                                                {t.sensors?.length || 0}
-                                            </span>
-                                        </button>
-                                      ) : <span className="text-xs text-gray-400">No access</span>}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                                      {canReadControllers ? (
-                                        <button
-                                            onClick={() => handleViewControllers(t)}
-                                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
-                                        >
-                                            <Cpu className="h-3 w-3 mr-1.5" />
-                                            Controllers
-                                            <span className="ml-1.5 bg-white bg-opacity-20 py-0.5 px-1.5 rounded-full text-[10px] font-semibold">
-                                                {t.controllers?.length || 0}
-                                            </span>
-                                        </button>
-                                      ) : <span className="text-xs text-gray-400">No access</span>}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                      <ActionMenu
-                                          placement="bottom-end"
-                                          onView={() => openViewModal(t)}
-                                          onEdit={canUpdateTransformers ? () => handleEditTransformer(t) : undefined}
-                                          onDelete={canDeleteTransformers ? () => handleDelete(t.id) : undefined}
-                                      />
-                                  </td>
-                              </tr>
-                          ))}
-                          {transformers.length === 0 && (
-                              <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">{isSupplierUser ? 'No transformers found for your organisation.' : `No transformers found in ${selectedDepot?.name}.`}</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-
-              {/* SENSORS VIEW */}
-              {viewMode === 'SENSORS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sensor Name</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredList(sensors).map((s) => (
-                              <tr key={s.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                          <Cpu className="h-5 w-5 text-gray-400 mr-3" />
-                                          <div className="text-sm font-medium text-gray-900">{s.name}</div>
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.type}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.deviceId || s.devEui || '-'}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                      <Button variant="secondary" size="sm" onClick={() => handleViewReadings(s)} icon={<ListIcon className="h-4 w-4" />}>
-                                          Readings
-                                      </Button>
-                                  </td>
-                              </tr>
-                          ))}
-                          {sensors.length === 0 && (
-                              <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No sensors found for {selectedTransformer?.name}.</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-
-              {/* READINGS VIEW */}
-              {viewMode === 'READINGS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Values</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {readings.map((r) => (
-                              <tr key={r.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                      {new Date(r.createdAt).toLocaleString()}
-                                  </td>
-                                  <td className="px-6 py-4 text-sm text-gray-500">
-                                          <AttributeGrid attributes={r.attributes || {}} />
-                                  </td>
-                              </tr>
-                          ))}
-                          {readings.length === 0 && (
-                              <tr><td colSpan={2} className="px-6 py-12 text-center text-gray-500">No readings found.</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-              {/* CONTROLLERS VIEW */}
-              {viewMode === 'CONTROLLERS' && (
-                  <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                          <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Controller Name</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID</th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredList(controllers).map((c) => (
-                              <tr key={c.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                          <Cpu className="h-5 w-5 text-gray-400 mr-3" />
-                                          <div className="text-sm font-medium text-gray-900">{c.name}</div>
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{c.type}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{c.deviceId || c.devEui || '-'}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                      <Button variant="secondary" size="sm" onClick={() => handleViewControllerReadings(c)} icon={<ListIcon className="h-4 w-4" />}>
-                                          Readings
-                                      </Button>
-                                  </td>
-                              </tr>
-                          ))}
-                          {controllers.length === 0 && (
-                              <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No controllers found for {selectedTransformer?.name}.</td></tr>
-                          )}
-                      </tbody>
-                  </table>
-              )}
-
-              {/* CONTROLLER READINGS VIEW */}
-              {viewMode === 'CONTROLLER_READINGS' && (
-                  <div className="p-6">
-                      <div className="flex flex-col gap-4 mb-6">
-                          <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-gray-900">Readings for {selectedController?.name}</h2>
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => { 
-                                    setControllerStartDate(null); 
-                                    setControllerStartTime(null); 
-                                    setControllerEndDate(null); 
-                                    setControllerEndTime(null); 
-                                }}
-                                className="text-xs"
-                            >
-                                Clear Filters
-                            </Button>
-                          </div>
-                          
-                          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  {/* From Section */}
-                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
-                                      <div className="flex items-center gap-2 mb-2">
-                                          <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">From</label>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-3">
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                selected={controllerStartDate}
-                                                onChange={(date: Date | null) => setControllerStartDate(date)}
-                                                dateFormat="MM/dd/yyyy"
-                                                placeholderText="Select Date"
-                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
-                                            />
-                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                selected={controllerStartTime}
-                                                onChange={(date: Date | null) => setControllerStartTime(date)}
-                                                showTimeSelect
-                                                showTimeSelectOnly
-                                                      timeIntervals={15}
-                                                      timeCaption="Time"
-                                                      dateFormat="h:mm aa"
-                                                      placeholderText="--:-- --"
-                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-1.5 pl-8 pr-2"
-                                                  />
-                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-
-                                  {/* To Section */}
-                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
-                                      <div className="flex items-center gap-2 mb-2">
-                                          <div className="h-2 w-2 rounded-full bg-indigo-500"></div>
-                                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">To</label>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-3">
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Date</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                selected={controllerEndDate}
-                                                onChange={(date: Date | null) => setControllerEndDate(date)}
-                                                dateFormat="MM/dd/yyyy"
-                                                placeholderText="Select Date"
-                                                className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
-                                            />
-                                                  <CalendarIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                          <div>
-                                              <label className="block text-[10px] font-medium text-slate-500 mb-1 uppercase">Time</label>
-                                              <div className="relative">
-                                                  <DatePicker
-                                                      selected={controllerEndTime}
-                                                      onChange={(date) => setControllerEndTime(date)}
-                                                      showTimeSelect
-                                                      showTimeSelectOnly
-                                                      timeIntervals={15}
-                                                      timeCaption="Time"
-                                                      dateFormat="h:mm aa"
-                                                      placeholderText="--:-- --"
-                                                      className="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 pl-8 pr-2"
-                                                  />
-                                                  <ClockIcon className="absolute left-2 top-1.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-
-                      {/* Pagination Info & Page Size Selector (Top) */}
-                      <div className="flex items-center justify-between mb-4 px-1">
-                          <p className="text-sm text-gray-700">
-                              Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, totalElements)}</span> of <span className="font-medium">{totalElements}</span> results
-                          </p>
-                          <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-500">Rows per page:</span>
-                              <select
-                                  value={pageSize}
-                                  onChange={(e) => {
-                                      setPageSize(Number(e.target.value));
-                                      setPage(1);
-                                  }}
-                                  className="block rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 cursor-pointer"
-                              >
-                                  <option value={10}>10</option>
-                                  <option value={25}>25</option>
-                                  <option value={50}>50</option>
-                                  <option value={100}>100</option>
-                              </select>
-                          </div>
-                      </div>
-
-                      <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg shadow-sm">
-                          <thead className="bg-gray-50">
-                              <tr>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Decoded Metrics</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Raw Payload</th>
-                              </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                              {controllerReadings.map((r) => (
-                                  <tr key={r.id} className="hover:bg-gray-50">
-                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                          {new Date(r.createdAt).toLocaleString()}
-                                      </td>
-                                      <td className="px-6 py-4 text-sm text-gray-500 min-w-[360px]">
-                                          <AttributeGrid attributes={r.attributes || {}} />
-                                      </td>
-                                      <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={r.rawPayload}>{r.rawPayload || '—'}</td>
-                                  </tr>
-                              ))}
-                              {controllerReadings.length === 0 && (
-                                  <tr><td colSpan={3} className="px-6 py-12 text-center text-gray-500">No readings found.</td></tr>
-                              )}
-                          </tbody>
-                      </table>
-                      
-                      {/* Pagination Controls */}
-                      {controllerReadings.length > 0 && (
-                          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-4">
-                              <div className="flex flex-1 justify-between sm:hidden">
-                                  <Button 
-                                      onClick={() => setPage(p => Math.max(1, p - 1))} 
-                                      disabled={page === 1}
-                                      variant="outline"
-                                  >
-                                      Previous
-                                  </Button>
-                                  <Button 
-                                      onClick={() => setPage(p => Math.min(Math.ceil(totalElements / pageSize), p + 1))} 
-                                      disabled={page >= Math.ceil(totalElements / pageSize)}
-                                      variant="outline"
-                                  >
-                                      Next
-                                  </Button>
-                              </div>
-                              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-end">
-                                  <div>
-                                      <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                          <button
-                                              onClick={() => setPage(p => Math.max(1, p - 1))}
-                                              disabled={page === 1}
-                                              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                                          >
-                                              <span className="sr-only">Previous</span>
-                                              <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
-                                          </button>
-                                          
-                                          {(() => {
-                                              const totalPages = Math.ceil(totalElements / pageSize);
-                                              const pageNumbers = [];
-                                              const maxVisible = 7;
-
-                                              if (totalPages <= maxVisible) {
-                                                  for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
-                                              } else {
-                                                  if (page <= 4) {
-                                                      for (let i = 1; i <= 5; i++) pageNumbers.push(i);
-                                                      pageNumbers.push('...');
-                                                      pageNumbers.push(totalPages);
-                                                  } else if (page >= totalPages - 3) {
-                                                      pageNumbers.push(1);
-                                                      pageNumbers.push('...');
-                                                      for (let i = totalPages - 4; i <= totalPages; i++) pageNumbers.push(i);
-                                                  } else {
-                                                      pageNumbers.push(1);
-                                                      pageNumbers.push('...');
-                                                      pageNumbers.push(page - 1);
-                                                      pageNumbers.push(page);
-                                                      pageNumbers.push(page + 1);
-                                                      pageNumbers.push('...');
-                                                      pageNumbers.push(totalPages);
-                                                  }
-                                              }
-
-                                              return pageNumbers.map((p, idx) => (
-                                                  <button
-                                                      key={idx}
-                                                      onClick={() => typeof p === 'number' && setPage(p)}
-                                                      disabled={p === '...'}
-                                                      className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                                          p === page
-                                                              ? 'z-10 bg-purple-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600'
-                                                              : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
-                                                      } ${p === '...' ? 'cursor-default' : ''}`}
-                                                  >
-                                                      {p}
-                                                  </button>
-                                              ));
-                                          })()}
-
-                                          <button
-                                              onClick={() => setPage(p => Math.min(Math.ceil(totalElements / pageSize), p + 1))}
-                                              disabled={page >= Math.ceil(totalElements / pageSize)}
-                                              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                                          >
-                                              <span className="sr-only">Next</span>
-                                              <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                                          </button>
-                                      </nav>
-                                  </div>
-                              </div>
-                          </div>
-                      )}
-                  </div>
-              )}
-          </div>
-      )}
-
-      {/* VIEW MODAL */}
-      <Modal isOpen={showView} onClose={() => setShowView(false)} title="Transformer Details">
-          {activeTransformer && (
-              <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Name</label>
-                          <p className="mt-1 text-sm text-gray-900 font-medium">{activeTransformer.name}</p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Region</label>
-                          <p className="mt-1 text-sm text-gray-900">{selectedRegion?.name ?? '—'}</p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">District</label>
-                          <p className="mt-1 text-sm text-gray-900">{selectedDistrict?.name ?? '—'}</p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Depot</label>
-                          <p className="mt-1 text-sm text-gray-900">{selectedDepot?.name ?? activeTransformer.depot?.name ?? '—'}</p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Status</label>
-                          <span className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${activeTransformer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                              {activeTransformer.isActive ? 'Active' : 'Maintenance'}
-                          </span>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Capacity</label>
-                          <p className="mt-1 text-sm text-gray-900">{activeTransformer.capacity ? `${activeTransformer.capacity} kVA` : '—'}</p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Transformer Type</label>
-                          <p className="mt-1 text-sm text-gray-900">{formatTransformerType(activeTransformer.type)}</p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">{isSupplierUser ? 'Visible Through' : 'Organisation'}</label>
-                          <p className="mt-1 text-sm text-gray-900">
-                              {isSupplierUser ? (user?.supplierName ?? 'Supplier-linked assignment') : (activeTransformer.supplierName ?? '—')}
-                          </p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-gray-500 uppercase">Coordinates</label>
-                          <p className="mt-1 text-sm text-gray-900">
-                              {activeTransformer.lat && activeTransformer.lng ? `${activeTransformer.lat}, ${activeTransformer.lng}` : '—'}
-                          </p>
-                      </div>
-                  </div>
-                  <div className="mt-6 flex justify-end">
-                      <Button variant="outline" onClick={() => setShowView(false)}>Close</Button>
-                  </div>
+      <section className="flex flex-col gap-4">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Hierarchy Summary */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Hierarchy Summary
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Current selection path
+                </h3>
               </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+            </div>
+            
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Region</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedRegion ? selectedRegion.name : 'All regions'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">District</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedDistrict ? selectedDistrict.name : 'All districts'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Depot</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedDepot ? selectedDepot.name : 'All depots'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Transformer</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedTransformer ? selectedTransformer.name : 'Not selected'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Focus</p>
+              </div>
+              <p className="mt-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+                {currentFocusLabel}
+              </p>
+            </div>
+          </div>
+
+          {/* Workspace State / Reading Filters */}
+          {viewMode === 'CONTROLLER_READINGS' ? (
+            <div className="enterprise-card p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    Reading Filter
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Time window controls
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearControllerFilters}
+                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
+                >
+                  <Filter className="h-4 w-4" />
+                  Clear
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="h-2 w-2 rounded-full bg-blue-500" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">From</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerStartDate}
+                        onChange={(date: Date | null) => {
+                          setControllerStartDate(date);
+                          setPage(1);
+                        }}
+                        dateFormat="MM/dd/yyyy"
+                        placeholderText="Select date"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <CalendarIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerStartTime}
+                        onChange={(date: Date | null) => {
+                          setControllerStartTime(date);
+                          setPage(1);
+                        }}
+                        showTimeSelect
+                        showTimeSelectOnly
+                        timeIntervals={15}
+                        timeCaption="Time"
+                        dateFormat="h:mm aa"
+                        placeholderText="--:-- --"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <ClockIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="h-2 w-2 rounded-full bg-violet-500" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">To</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerEndDate}
+                        onChange={(date: Date | null) => {
+                          setControllerEndDate(date);
+                          setPage(1);
+                        }}
+                        dateFormat="MM/dd/yyyy"
+                        placeholderText="Select date"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-violet-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <CalendarIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                    <div className="relative">
+                      <DatePicker
+                        selected={controllerEndTime}
+                        onChange={(date: Date | null) => {
+                          setControllerEndTime(date);
+                          setPage(1);
+                        }}
+                        showTimeSelect
+                        showTimeSelectOnly
+                        timeIntervals={15}
+                        timeCaption="Time"
+                        dateFormat="h:mm aa"
+                        placeholderText="--:-- --"
+                        className="block w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-900 outline-none transition focus:border-violet-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        portalId="root-portal"
+                      />
+                      <ClockIcon className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between px-1 text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Window status</span>
+                <span className={`font-semibold ${filterWindowReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                  {filterWindowReady ? 'Ready' : 'Incomplete'}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="enterprise-card p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    Workspace State
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Access and filter overview
+                  </h3>
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                  <Filter className="h-4 w-4" />
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Sensors access</p>
+                  <p className={`mt-1 text-sm font-semibold ${canReadSensors ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {canReadSensors ? 'Enabled' : 'Restricted'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Controllers access</p>
+                  <p className={`mt-1 text-sm font-semibold ${canReadControllers ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {canReadControllers ? 'Enabled' : 'Restricted'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Filters</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {controllerFilterActive ? (filterWindowReady ? 'Time window' : 'Incomplete') : search || 'None'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Current scope</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {currentScopeTotal.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">Visible records</span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {currentItemCount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div 
+                    className="h-full rounded-full bg-blue-600" 
+                    style={{ width: `${Math.max(currentScopeTotal ? (currentItemCount / currentScopeTotal) * 100 : 0, currentItemCount > 0 ? 10 : 0)}%` }} 
+                  />
+                </div>
+              </div>
+            </div>
           )}
+        </div>
+
+        {/* Main Workspace Area */}
+        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
+          <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                  {currentLevelLabel} Table
+                </p>
+                <h3 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-lg">
+                  {tableTitle}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{tableDescription}</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
+                  <Globe className="h-4 w-4 text-blue-500" />
+                  <span>{currentScopeTotal.toLocaleString()} in scope</span>
+                </div>
+                <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
+                  <ListIcon className="h-4 w-4 text-blue-500" />
+                  <span>{currentItemCount.toLocaleString()} visible</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto p-4 pt-0">
+            {viewMode === 'REGIONS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">Region</th>
+                    <th className="px-3 py-2.5">District Footprint</th>
+                    <th className="px-3 py-2.5">Visibility</th>
+                    <th className="px-3 py-2.5 text-right">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRegions.length === 0 ? (
+                    renderEmptyState('No regions found for the current scope.', 4)
+                  ) : (
+                    visibleRegions.map((region) => (
+                      <tr
+                        key={region.id}
+                        onClick={() => handleRegionClick(region)}
+                        className="enterprise-subtle-card cursor-pointer"
+                      >
+                        <td className="rounded-l-[22px] px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                              <MapPin className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{region.name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                                Region ID #{region.id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                            {(region.districts?.length ?? 0).toLocaleString()} districts
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                              {isSupplierUser ? 'Supplier filtered view' : 'National view'}
+                            </span>
+                            <span className="text-[12px] text-slate-400 dark:text-slate-500">
+                              Step into district coverage for this region.
+                            </span>
+                          </div>
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 text-right">
+                          <ChevronRight className="ml-auto h-5 w-5 text-slate-400" />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {viewMode === 'DISTRICTS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">District</th>
+                    <th className="px-3 py-2.5">Region</th>
+                    <th className="px-3 py-2.5">Hierarchy</th>
+                    <th className="px-3 py-2.5 text-right">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleDistricts.length === 0 ? (
+                    renderEmptyState(`No districts found in ${selectedRegion?.name ?? 'this region'}.`, 4)
+                  ) : (
+                    visibleDistricts.map((district) => (
+                      <tr
+                        key={district.id}
+                        onClick={() => handleDistrictClick(district)}
+                        className="enterprise-subtle-card cursor-pointer"
+                      >
+                        <td className="rounded-l-[22px] px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                              <MapPin className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{district.name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                                District ID #{district.id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                            {selectedRegion?.name ?? 'Region view'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                              Ready for depot navigation
+                            </span>
+                            <span className="text-[12px] text-slate-400 dark:text-slate-500">
+                              Drill down to associated depot coverage.
+                            </span>
+                          </div>
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 text-right">
+                          <ChevronRight className="ml-auto h-5 w-5 text-slate-400" />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {viewMode === 'DEPOTS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">Depot</th>
+                    <th className="px-3 py-2.5">District</th>
+                    <th className="px-3 py-2.5">Coverage</th>
+                    <th className="px-3 py-2.5 text-right">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleDepots.length === 0 ? (
+                    renderEmptyState(`No depots found in ${selectedDistrict?.name ?? 'this district'}.`, 4)
+                  ) : (
+                    visibleDepots.map((depot) => (
+                      <tr
+                        key={depot.id}
+                        onClick={() => handleDepotClick(depot)}
+                        className="enterprise-subtle-card cursor-pointer"
+                      >
+                        <td className="rounded-l-[22px] px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                              <Building2 className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{depot.name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                                Depot ID #{depot.id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                            {selectedDistrict?.name ?? 'District view'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                              Transformer-ready depot
+                            </span>
+                            <span className="text-[12px] text-slate-400 dark:text-slate-500">
+                              Open this depot to inspect installed transformers.
+                            </span>
+                          </div>
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 text-right">
+                          <ChevronRight className="ml-auto h-5 w-5 text-slate-400" />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {viewMode === 'TRANSFORMERS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">Transformer</th>
+                    <th className="px-3 py-2.5">Capacity</th>
+                    <th className="px-3 py-2.5">Type</th>
+                    <th className="px-3 py-2.5">Status</th>
+                    <th className="px-3 py-2.5">Devices</th>
+                    <th className="px-3 py-2.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleTransformers.length === 0 ? (
+                    renderEmptyState(
+                      isSupplierUser
+                        ? 'No transformers are currently visible for your organisation.'
+                        : `No transformers found in ${selectedDepot?.name ?? 'this depot'}.`,
+                      6
+                    )
+                  ) : (
+                    visibleTransformers.map((transformer) => (
+                      <tr key={transformer.id} className="enterprise-subtle-card">
+                        <td className="rounded-l-[22px] px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
+                              <Zap className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{transformer.name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                                {selectedDepot?.name ?? transformer.depot?.name ?? 'No depot assigned'}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`text-sm font-semibold ${
+                              transformer.capacity ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'
+                            }`}
+                          >
+                            {transformer.capacity ? `${transformer.capacity} kVA` : '—'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              formatTransformerType(transformer.type) === 'GMT'
+                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300'
+                                : formatTransformerType(transformer.type) === 'PMT'
+                                  ? 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300'
+                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                            }`}
+                          >
+                            {formatTransformerType(transformer.type)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                              <span className={`h-2 w-2 rounded-full ${transformer.isActive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                              {transformer.isActive ? 'Active' : 'Maintenance'}
+                            </span>
+                            <span className="text-[12px] text-slate-400 dark:text-slate-500">
+                              {transformer.supplierName || transformer.supplierCode || 'No supplier metadata'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            {canReadSensors ? (
+                              <button
+                                type="button"
+                                onClick={() => handleViewSensors(transformer)}
+                                className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                              >
+                                <Cpu className="h-3.5 w-3.5" />
+                                Sensors
+                                <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
+                                  {transformer.sensors?.length || 0}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                Sensors restricted
+                              </span>
+                            )}
+
+                            {canReadControllers ? (
+                              <button
+                                type="button"
+                                onClick={() => handleViewControllers(transformer)}
+                                className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-700"
+                              >
+                                <Cpu className="h-3.5 w-3.5" />
+                                Controllers
+                                <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
+                                  {transformer.controllers?.length || 0}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                Controllers restricted
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openViewModal(transformer)}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/40 dark:hover:text-blue-300"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View
+                            </button>
+                            {canUpdateTransformers ? (
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(transformer)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-violet-200 hover:text-violet-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit
+                              </button>
+                            ) : null}
+                            {canDeleteTransformers ? (
+                              <button
+                                type="button"
+                                onClick={() => openDeleteModal(transformer)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {viewMode === 'SENSORS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">Sensor</th>
+                    <th className="px-3 py-2.5">Type</th>
+                    <th className="px-3 py-2.5">Device ID</th>
+                    <th className="px-3 py-2.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleSensors.length === 0 ? (
+                    renderEmptyState(`No sensors found for ${selectedTransformer?.name ?? 'this transformer'}.`, 4)
+                  ) : (
+                    visibleSensors.map((sensor) => (
+                      <tr key={sensor.id} className="enterprise-subtle-card">
+                        <td className="rounded-l-[22px] px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                              <Cpu className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{sensor.name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                                Sensor ID #{sensor.id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-sm text-slate-700 dark:text-slate-200">{sensor.type}</td>
+                        <td className="px-3 py-3 text-sm text-slate-500 dark:text-slate-400">
+                          {sensor.deviceId || sensor.devEui || '—'}
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleViewReadings(sensor)}
+                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                          >
+                            <ListIcon className="h-3.5 w-3.5" />
+                            Readings
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {viewMode === 'READINGS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">Timestamp</th>
+                    <th className="px-3 py-2.5">Decoded Metrics</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {readings.length === 0 ? (
+                    renderEmptyState('No readings found for the selected sensor.', 2)
+                  ) : (
+                    readings.map((reading) => (
+                      <tr key={reading.id} className="enterprise-subtle-card">
+                        <td className="rounded-l-[22px] px-3 py-3 align-top">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+                            <CalendarIcon className="h-4 w-4 text-blue-500" />
+                            {new Date(reading.createdAt).toLocaleString()}
+                          </div>
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3">
+                          <AttributeGrid attributes={reading.attributes || {}} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {viewMode === 'CONTROLLERS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">Controller</th>
+                    <th className="px-3 py-2.5">Type</th>
+                    <th className="px-3 py-2.5">Device ID</th>
+                    <th className="px-3 py-2.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleControllers.length === 0 ? (
+                    renderEmptyState(`No controllers found for ${selectedTransformer?.name ?? 'this transformer'}.`, 4)
+                  ) : (
+                    visibleControllers.map((controller) => (
+                      <tr key={controller.id} className="enterprise-subtle-card">
+                        <td className="rounded-l-[22px] px-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
+                              <Cpu className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">{controller.name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                                Controller ID #{controller.id}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-sm text-slate-700 dark:text-slate-200">{controller.type}</td>
+                        <td className="px-3 py-3 text-sm text-slate-500 dark:text-slate-400">
+                          {controller.deviceId || controller.devEui || '—'}
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleViewControllerReadings(controller)}
+                            className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-700"
+                          >
+                            <ListIcon className="h-3.5 w-3.5" />
+                            Readings
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {viewMode === 'CONTROLLER_READINGS' && (
+              <table className="min-w-full border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    <th className="px-3 py-2.5">Timestamp</th>
+                    <th className="px-3 py-2.5">Decoded Metrics</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {controllerReadings.length === 0 ? (
+                    renderEmptyState('No controller readings found for the selected time window.', 2)
+                  ) : (
+                    controllerReadings.map((reading) => (
+                      <tr key={reading.id} className="enterprise-subtle-card">
+                        <td className="rounded-l-[22px] px-3 py-3 align-top">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+                            <ClockIcon className="h-4 w-4 text-violet-500" />
+                            {new Date(reading.createdAt).toLocaleString()}
+                          </div>
+                        </td>
+                        <td className="rounded-r-[22px] px-3 py-3 min-w-[320px]">
+                          <AttributeGrid attributes={reading.attributes || {}} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {renderPagination()}
+        </div>
+      </section>
+
+      <Modal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        variant="center"
+        showCloseButton={false}
+        className="max-h-[90vh] max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/12 dark:text-blue-300">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                    Transformer
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Create transformer
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Add a transformer without leaving the hierarchy workspace.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateTransformer} className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+            {createError && <Alert variant="error" title="Error" message={createError} />}
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={createNameInput}
+                  onChange={(e) => setCreateNameInput(e.target.value)}
+                  placeholder="e.g. TF-1234"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              {!isSupplierUser && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    Depot
+                  </label>
+                  <div className="mt-2">
+                    {loadingCreateDepots ? (
+                      <div className="enterprise-chip flex items-center gap-2 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                        Loading depots...
+                      </div>
+                    ) : (
+                      <SearchableSelect
+                        options={createDepotOptions}
+                        value={createDepotInput}
+                        onChange={setCreateDepotInput}
+                        placeholder="Select depot..."
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Capacity (kVA)
+                </label>
+                <input
+                  type="number"
+                  value={createCapacityInput}
+                  onChange={(e) => setCreateCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 500"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Type
+                </label>
+                <select
+                  value={createTypeInput}
+                  onChange={(e) => setCreateTypeInput((e.target.value as TransformerTypeOption | '') || '')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="">Select type...</option>
+                  <option value="GROUND_MOUNTED">GMT</option>
+                  <option value="POLE_MOUNTED">PMT</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Latitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={createLatInput}
+                  onChange={(e) => setCreateLatInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. -1.2921"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Longitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={createLngInput}
+                  onChange={(e) => setCreateLngInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 36.8219"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Status
+                </label>
+                <select
+                  value={createIsActiveInput ? 'true' : 'false'}
+                  onChange={(e) => setCreateIsActiveInput(e.target.value === 'true')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingCreate}
+                className="inline-flex min-w-[170px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingCreate ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {savingCreate ? 'Creating...' : 'Create Transformer'}
+              </button>
+            </div>
+          </form>
+        </div>
       </Modal>
 
+      <Modal
+        isOpen={showEdit}
+        onClose={() => setShowEdit(false)}
+        variant="center"
+        showCloseButton={false}
+        className="max-h-[90vh] max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/12 dark:text-violet-300">
+                  <Pencil className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600 dark:text-violet-300">
+                    Transformer
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Edit transformer
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Update transformer details without leaving the hierarchy workspace.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEdit(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdateTransformer} className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+            {editError ? <Alert variant="error" title="Error" message={editError} /> : null}
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editNameInput}
+                  onChange={(e) => setEditNameInput(e.target.value)}
+                  placeholder="e.g. TF-1234"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              {!isSupplierUser && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    Depot
+                  </label>
+                  <div className="mt-2">
+                    {loadingCreateDepots ? (
+                      <div className="enterprise-chip flex items-center gap-2 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                        Loading depots...
+                      </div>
+                    ) : (
+                      <SearchableSelect
+                        options={createDepotOptions}
+                        value={editDepotInput}
+                        onChange={setEditDepotInput}
+                        placeholder="Select depot..."
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Capacity (kVA)
+                </label>
+                <input
+                  type="number"
+                  value={editCapacityInput}
+                  onChange={(e) => setEditCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 500"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Transformer Type
+                </label>
+                <select
+                  value={editTypeInput}
+                  onChange={(e) => setEditTypeInput((e.target.value as TransformerTypeOption | '') || '')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="">Select type...</option>
+                  <option value="GROUND_MOUNTED">GMT</option>
+                  <option value="POLE_MOUNTED">PMT</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Latitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={editLatInput}
+                  onChange={(e) => setEditLatInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. -1.2921"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Longitude
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={editLngInput}
+                  onChange={(e) => setEditLngInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 36.8219"
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Status
+                </label>
+                <select
+                  value={editIsActiveInput ? 'true' : 'false'}
+                  onChange={(e) => setEditIsActiveInput(e.target.value === 'true')}
+                  className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowEdit(false)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="inline-flex min-w-[170px] items-center justify-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {savingEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        variant="center"
+        showCloseButton={false}
+        className="max-w-[520px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-500/12 dark:text-rose-300">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-600 dark:text-rose-300">
+                    Transformer
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Delete transformer
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Remove this transformer from the current depot inventory.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-5 px-6 py-6">
+            {deleteError ? <Alert variant="error" title="Delete failed" message={deleteError} /> : null}
+            <div className="rounded-[24px] border border-rose-100 bg-rose-50/70 p-5 dark:border-rose-500/20 dark:bg-rose-500/10">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                You are about to delete
+                <span className="mx-1 font-semibold text-slate-950 dark:text-slate-50">
+                  {activeTransformer?.name || 'this transformer'}
+                </span>
+                from the workspace.
+              </p>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingDelete}
+                onClick={() => void handleDelete()}
+                className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingDelete ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {savingDelete ? 'Deleting...' : 'Delete Transformer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showView}
+        onClose={() => setShowView(false)}
+        variant="center"
+        showCloseButton={false}
+        className="max-h-[88vh] max-w-[640px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        {activeTransformer && (
+          <div className="flex max-h-[88vh] flex-col bg-white dark:bg-slate-950">
+            <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                    <Zap className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                      Transformer Details
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                      {activeTransformer.name}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Centered detail modal for quick operational context without leaving the hierarchy shell.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowView(false)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  {
+                    label: 'Status',
+                    value: activeTransformer.isActive ? 'Active' : 'Maintenance',
+                    tone: activeTransformer.isActive ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300',
+                  },
+                  {
+                    label: 'Capacity',
+                    value: activeTransformer.capacity ? `${activeTransformer.capacity} kVA` : '—',
+                    tone: 'text-slate-900 dark:text-slate-100',
+                  },
+                  {
+                    label: 'Sensors',
+                    value: String(activeTransformer.sensors?.length ?? 0),
+                    tone: 'text-slate-900 dark:text-slate-100',
+                  },
+                  {
+                    label: 'Controllers',
+                    value: String(activeTransformer.controllers?.length ?? 0),
+                    tone: 'text-slate-900 dark:text-slate-100',
+                  },
+                ].map((metric) => (
+                  <div key={metric.label} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{metric.label}</p>
+                    <p className={`mt-2 text-sm font-semibold ${metric.tone}`}>{metric.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                    Hierarchy Mapping
+                  </p>
+                  <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                    Asset placement
+                  </h4>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {[
+                    ['Region', selectedRegion?.name ?? '—'],
+                    ['District', selectedDistrict?.name ?? '—'],
+                    ['Depot', selectedDepot?.name ?? activeTransformer.depot?.name ?? '—'],
+                    ['Transformer type', formatTransformerType(activeTransformer.type)],
+                    [isSupplierUser ? 'Visible through' : 'Organisation', isSupplierUser ? (user?.supplierName ?? 'Supplier-linked assignment') : (activeTransformer.supplierName ?? '—')],
+                    [
+                      'Coordinates',
+                      typeof activeTransformer.lat === 'number' && typeof activeTransformer.lng === 'number'
+                        ? `${activeTransformer.lat}, ${activeTransformer.lng}`
+                        : '—',
+                    ],
+                  ].map(([label, value]) => (
+                    <div key={String(label)}>
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{label}</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowView(false)}
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -1265,15 +2701,22 @@ export default function TransformersIndex() {
 function AttributeGrid({ attributes }: { attributes: Record<string, any> }) {
   const entries = flattenAttributes(attributes);
   if (entries.length === 0) {
-    return <span className="text-sm text-gray-400">No decoded metrics</span>;
+    return <span className="text-xs text-slate-400 dark:text-slate-500">No decoded metrics</span>;
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {entries.map(([key, value]) => (
-        <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{key}</div>
-          <div className="mt-1 text-sm font-medium text-gray-900">{formatAttributeValue(value)}</div>
+        <div
+          key={key}
+          className={`rounded-xl border px-2.5 py-1.5 ${getAttributeChipTone(key, value)}`}
+        >
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+            {formatAttributeKey(key)}
+          </div>
+          <div className={`mt-0.5 text-xs font-semibold ${getAttributeValueTone(key, value)}`}>
+            {formatAttributeValue(value)}
+          </div>
         </div>
       ))}
     </div>
@@ -1304,4 +2747,116 @@ function formatAttributeValue(value: any) {
     return '—';
   }
   return String(value);
+}
+
+function formatAttributeKey(key: string) {
+  return key.replaceAll('.', ' ').replaceAll('_', ' ');
+}
+
+function getAttributeChipTone(key: string, value: any) {
+  const normalizedKey = key.toLowerCase();
+  const normalizedValue = typeof value === 'string' ? value.toLowerCase() : value;
+
+  if (
+    normalizedKey.includes('alarm') ||
+    normalizedKey.includes('fault') ||
+    normalizedKey.includes('error') ||
+    normalizedKey.includes('alert') ||
+    normalizedValue === 'alarm' ||
+    normalizedValue === 'fault' ||
+    normalizedValue === 'error'
+  ) {
+    return 'border-rose-200 bg-rose-50/80 dark:border-rose-500/20 dark:bg-rose-500/10';
+  }
+
+  if (typeof value === 'boolean') {
+    return value
+      ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-500/20 dark:bg-emerald-500/10'
+      : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900';
+  }
+
+  if (normalizedKey.includes('mode_name') || normalizedKey.includes('hardware')) {
+    return 'border-fuchsia-200 bg-fuchsia-50/80 dark:border-fuchsia-500/20 dark:bg-fuchsia-500/10';
+  }
+
+  if (normalizedKey.includes('mode')) {
+    return 'border-violet-200 bg-violet-50/80 dark:border-violet-500/20 dark:bg-violet-500/10';
+  }
+
+  if (
+    normalizedKey.includes('voltage') ||
+    normalizedKey.includes('current') ||
+    normalizedKey.includes('battery')
+  ) {
+    return 'border-blue-200 bg-blue-50/80 dark:border-blue-500/20 dark:bg-blue-500/10';
+  }
+
+  if (normalizedKey.includes('rssi') || normalizedKey.includes('snr')) {
+    return 'border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/10';
+  }
+
+  if (typeof value === 'number' && value === 0) {
+    return 'border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900';
+  }
+
+  if (typeof value === 'number' && value > 0) {
+    return 'border-cyan-200 bg-cyan-50/80 dark:border-cyan-500/20 dark:bg-cyan-500/10';
+  }
+
+  return 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950';
+}
+
+function getAttributeValueTone(key: string, value: any) {
+  const normalizedKey = key.toLowerCase();
+  const normalizedValue = typeof value === 'string' ? value.toLowerCase() : value;
+
+  if (
+    normalizedKey.includes('alarm') ||
+    normalizedKey.includes('fault') ||
+    normalizedKey.includes('error') ||
+    normalizedKey.includes('alert') ||
+    normalizedValue === 'alarm' ||
+    normalizedValue === 'fault' ||
+    normalizedValue === 'error'
+  ) {
+    return 'text-rose-700 dark:text-rose-300';
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400';
+  }
+
+  if (normalizedKey.includes('mode_name') || normalizedKey.includes('hardware')) {
+    return 'text-fuchsia-700 dark:text-fuchsia-300';
+  }
+
+  if (normalizedKey.includes('mode')) {
+    return 'text-violet-700 dark:text-violet-300';
+  }
+
+  if (
+    normalizedKey.includes('voltage') ||
+    normalizedKey.includes('current') ||
+    normalizedKey.includes('battery')
+  ) {
+    return typeof value === 'number' && value === 0
+      ? 'text-slate-500 dark:text-slate-400'
+      : 'text-blue-700 dark:text-blue-300';
+  }
+
+  if (normalizedKey.includes('rssi') || normalizedKey.includes('snr')) {
+    return typeof value === 'number' && value === 0
+      ? 'text-slate-500 dark:text-slate-400'
+      : 'text-amber-700 dark:text-amber-300';
+  }
+
+  if (typeof value === 'number' && value === 0) {
+    return 'text-slate-500 dark:text-slate-400';
+  }
+
+  if (typeof value === 'number' && value > 0) {
+    return 'text-cyan-700 dark:text-cyan-300';
+  }
+
+  return 'text-slate-900 dark:text-slate-100';
 }
