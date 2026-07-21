@@ -1328,8 +1328,124 @@ export default function TransformersIndex() {
         ))}
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.55fr_0.85fr]">
-        <div className="enterprise-card overflow-hidden">
+      <section className="flex flex-col gap-4">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Hierarchy Summary */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Hierarchy Summary
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Current selection path
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+            </div>
+            
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Region</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedRegion ? selectedRegion.name : 'All regions'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">District</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedDistrict ? selectedDistrict.name : 'All districts'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Depot</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedDepot ? selectedDepot.name : 'All depots'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Transformer</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedTransformer ? selectedTransformer.name : 'Not selected'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Focus</p>
+              </div>
+              <p className="mt-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+                {currentFocusLabel}
+              </p>
+            </div>
+          </div>
+
+          {/* Workspace State */}
+          <div className="enterprise-card p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Workspace State
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Access and filter overview
+                </h3>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                <Filter className="h-4 w-4" />
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Sensors access</p>
+                <p className={`mt-1 text-sm font-semibold ${canReadSensors ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {canReadSensors ? 'Enabled' : 'Restricted'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Controllers access</p>
+                <p className={`mt-1 text-sm font-semibold ${canReadControllers ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {canReadControllers ? 'Enabled' : 'Restricted'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Filters</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {controllerFilterActive ? (filterWindowReady ? 'Time window' : 'Incomplete') : search || 'None'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Current scope</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  {currentScopeTotal.toLocaleString()}
+                </p>
+              </div>
+            </div>
+            
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Visible records</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  {currentItemCount.toLocaleString()}
+                </span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div 
+                  className="h-full rounded-full bg-blue-600" 
+                  style={{ width: `${Math.max(currentScopeTotal ? (currentItemCount / currentScopeTotal) * 100 : 0, currentItemCount > 0 ? 10 : 0)}%` }} 
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Workspace Area */}
+        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
           <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
@@ -1827,218 +1943,6 @@ export default function TransformersIndex() {
           </div>
 
           {renderPagination()}
-        </div>
-
-        <div className="space-y-4">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Hierarchy Summary
-                </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Current selection path
-                </h3>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              {scopeSummary.map((item) => (
-                <div key={item.label} className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{item.label}</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.value}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-violet-50 p-2.5 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
-                  <Warehouse className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Focus</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{currentFocusLabel}</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Hierarchy depth {hierarchyDepth} of 6</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Workspace State
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Access and filter overview
-              </h3>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              {workspaceSummary.map((item) => (
-                <div key={item.label} className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{item.label}</span>
-                  <span className={`text-sm font-semibold ${item.tone}`}>{item.value}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">Visible records</span>
-                  <span className="text-slate-500 dark:text-slate-400">{currentItemCount.toLocaleString()}</span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                    style={{ width: `${Math.max(currentScopeTotal ? (currentItemCount / currentScopeTotal) * 100 : 0, currentItemCount > 0 ? 10 : 0)}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Current scope</span>
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {currentScopeTotal.toLocaleString()} total
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {viewMode === 'CONTROLLER_READINGS' && (
-            <div className="enterprise-card p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                    Reading Filter
-                  </p>
-                  <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                    Time window controls
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={clearControllerFilters}
-                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
-                >
-                  <Filter className="h-4 w-4" />
-                  Clear
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <div className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-blue-500" />
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">From</p>
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                        Date
-                      </label>
-                      <div className="relative">
-                        <DatePicker
-                          selected={controllerStartDate}
-                          onChange={(date: Date | null) => {
-                            setControllerStartDate(date);
-                            setPage(1);
-                          }}
-                          dateFormat="MM/dd/yyyy"
-                          placeholderText="Select date"
-                          className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
-                        />
-                        <CalendarIcon className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                        Time
-                      </label>
-                      <div className="relative">
-                        <DatePicker
-                          selected={controllerStartTime}
-                          onChange={(date: Date | null) => {
-                            setControllerStartTime(date);
-                            setPage(1);
-                          }}
-                          showTimeSelect
-                          showTimeSelectOnly
-                          timeIntervals={15}
-                          timeCaption="Time"
-                          dateFormat="h:mm aa"
-                          placeholderText="--:-- --"
-                          className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
-                        />
-                        <ClockIcon className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-violet-500" />
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">To</p>
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                        Date
-                      </label>
-                      <div className="relative">
-                        <DatePicker
-                          selected={controllerEndDate}
-                          onChange={(date: Date | null) => {
-                            setControllerEndDate(date);
-                            setPage(1);
-                          }}
-                          dateFormat="MM/dd/yyyy"
-                          placeholderText="Select date"
-                          className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
-                        />
-                        <CalendarIcon className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                        Time
-                      </label>
-                      <div className="relative">
-                        <DatePicker
-                          selected={controllerEndTime}
-                          onChange={(date: Date | null) => {
-                            setControllerEndTime(date);
-                            setPage(1);
-                          }}
-                          showTimeSelect
-                          showTimeSelectOnly
-                          timeIntervals={15}
-                          timeCaption="Time"
-                          dateFormat="h:mm aa"
-                          placeholderText="--:-- --"
-                          className="block w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
-                        />
-                        <ClockIcon className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">Window status</span>
-                  <span className={`text-sm font-semibold ${filterWindowReady ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-400'}`}>
-                    {filterWindowReady ? 'Ready' : 'Incomplete'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
