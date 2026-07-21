@@ -55,6 +55,11 @@ export default function NewControllersIndex() {
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [transformerInput, setTransformerInput] = useState<number | ''>('');
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', deviceId: '', devEui: '', type: '' });
   
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
@@ -134,6 +139,48 @@ export default function NewControllersIndex() {
     setTransformerInput(controller.transformerId ?? '');
     setAssignError(null);
     setShowAssign(true);
+  };
+
+  const openEdit = (controller: Controller) => {
+    setActive(controller);
+    setEditForm({
+      name: controller.name || '',
+      deviceId: controller.deviceId || '',
+      devEui: controller.devEui || '',
+      type: controller.type || '',
+    });
+    setEditError(null);
+    setShowEdit(true);
+  };
+
+  const closeEdit = () => {
+    setShowEdit(false);
+    setActive(null);
+    setEditError(null);
+  };
+
+  const submitEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!active) return;
+    try {
+      setEditing(true);
+      setEditError(null);
+      await axios.put(
+        `${API_BASE_URL}/api/v1/controllers/${active.id}`,
+        {
+          ...editForm,
+          transformerId: active.transformerId,
+        },
+        { headers }
+      );
+      closeEdit();
+      await fetchControllers();
+    } catch (err: any) {
+      console.error(err);
+      setEditError(err.response?.data?.message || 'Failed to update controller.');
+    } finally {
+      setEditing(false);
+    }
   };
 
   const submitAssign = async (event: React.FormEvent) => {
@@ -531,7 +578,7 @@ export default function NewControllersIndex() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => navigate(`/new-controllers/${controller.id}/edit`)}
+                              onClick={() => openEdit(controller)}
                               className="enterprise-chip inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200"
                             >
                               <Settings className="h-4 w-4" />
@@ -583,10 +630,10 @@ export default function NewControllersIndex() {
         onClose={closeAssign}
         variant="center"
         showCloseButton={false}
-        className="max-h-[90vh] max-w-[640px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
         backdropBlur={true}
       >
-        <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+        <div className="flex max-h-[90vh] min-h-0 flex-col bg-white dark:bg-slate-950">
           <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -601,7 +648,7 @@ export default function NewControllersIndex() {
                     Link controller to transformer
                   </h3>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Centered assignment flow that keeps the operator in the intake workspace.
+                  
                   </p>
                 </div>
               </div>
@@ -615,28 +662,11 @@ export default function NewControllersIndex() {
             </div>
           </div>
 
-          <form onSubmit={submitAssign} className="flex flex-1 flex-col">
+          <form onSubmit={submitAssign} className="flex min-h-0 flex-1 flex-col">
             <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
               {assignError ? <Alert variant="error" title="Assignment" message={assignError} /> : null}
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Workflow</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    Centered modal assignment
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Available targets</p>
-                  <p
-                    className={`mt-2 text-sm font-semibold ${
-                      transformers.length > 0 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {transformers.length.toLocaleString()} transformer option{transformers.length === 1 ? '' : 's'}
-                  </p>
-                </div>
-              </div>
+
 
               <div className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                 <div>
@@ -710,6 +740,119 @@ export default function NewControllersIndex() {
           </form>
         </div>
       </Modal>
+
+      <Modal
+        isOpen={showEdit}
+        onClose={closeEdit}
+        variant="center"
+        showCloseButton={false}
+        className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        backdropBlur={true}
+      >
+        <div className="flex max-h-[90vh] min-h-0 flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                  <Settings className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                    Edit Controller
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    Update controller properties
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={submitEdit} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+              {editError ? <Alert variant="error" title="Update failed" message={editError} /> : null}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Controller Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Device ID *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.deviceId}
+                    onChange={(e) => setEditForm({ ...editForm, deviceId: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    DevEUI *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.devEui}
+                    onChange={(e) => setEditForm({ ...editForm, devEui: e.target.value })}
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Type
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.type}
+                    onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                    placeholder="e.g. IO_CONTROLLER, DRAGINO_LT22222"
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editing}
+                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {editing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {editing ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -776,9 +919,9 @@ function SummaryStat({
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 text-xs font-medium text-slate-900 break-words dark:text-slate-100">{value}</p>
     </div>
   );
 }

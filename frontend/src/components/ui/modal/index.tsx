@@ -117,8 +117,8 @@ export const Modal: React.FC<ModalProps> = ({
             </svg>
           </button>
         )}
-        <div className={resolvedVariant === "fullscreen" ? "h-full" : ""}>
-          <div className={title ? "p-4" : ""}>
+        <div className={`flex min-h-0 flex-col ${resolvedVariant === "fullscreen" ? "h-full" : "flex-1"}`}>
+          <div className={`flex min-h-0 flex-col flex-1 ${title ? "p-4" : ""}`}>
             {children}
           </div>
         </div>
