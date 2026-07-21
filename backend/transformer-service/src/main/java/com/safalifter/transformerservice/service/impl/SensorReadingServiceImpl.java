@@ -21,6 +21,7 @@ import com.safalifter.transformerservice.service.SensorReadingService;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.clients.NotificationClient;
+import com.safalifter.transformerservice.payload.client.NotificationType;
 import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 
 import java.util.List;
@@ -306,6 +307,11 @@ public class SensorReadingServiceImpl implements SensorReadingService {
             try { alertService.create(ar); } catch (Exception ignored) {}
             try {
                 notificationClient.send(SendNotificationRequest.builder()
+                        .notificationType(NotificationType.CRITICAL_ALERT)
+                        .supplierCode(tf != null ? tf.getSupplierCode() : null)
+                        .sourceSystem("transformer-service")
+                        .referenceId(reading.getId() != null ? String.valueOf(reading.getId()) : null)
+                        .subject("Sensor trigger detected")
                         .message(message)
                         .build());
             } catch (Exception ignored) {}

@@ -28,6 +28,12 @@ public class UserUpdateRequest {
     @Email(message = "email format is not valid")
     private String email;
 
+    private String phone;
+
+    private String whatsappNumber;
+
+    private String employeeNumber;
+
     @NotBlank(message = "password is required")
     @StrongPassword
     private String password;

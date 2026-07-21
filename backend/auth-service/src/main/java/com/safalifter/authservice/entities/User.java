@@ -46,6 +46,9 @@ public class User implements UserDetails { // make our app User a spring securit
 
     private String phone;
 
+    @Column(name = "whatsapp_number")
+    private String whatsappNumber;
+
     @Column(name = "employee_number")
     private String employeeNumber;
 

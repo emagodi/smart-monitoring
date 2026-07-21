@@ -18,6 +18,7 @@ public class AdminUserResponse {
     private String lastname;
     private String email;
     private String phone;
+    private String whatsappNumber;
     private String employeeNumber;
     private String status;
     private String userType;

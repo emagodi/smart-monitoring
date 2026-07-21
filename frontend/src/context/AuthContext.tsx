@@ -8,6 +8,7 @@ export interface AuthUser {
   first_name: string;
   last_name: string;
   phone?: string;
+  whatsappNumber?: string;
   employeeNumber?: string;
   status?: string;
   userType?: string;
@@ -110,6 +111,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           first_name: data?.firstname ?? data?.first_name ?? '',
           last_name: data?.lastname ?? data?.last_name ?? '',
           phone: data?.phone ?? '',
+          whatsappNumber: data?.whatsappNumber ?? data?.whatsapp_number ?? '',
           employeeNumber: data?.employeeNumber ?? data?.employee_number ?? '',
           status: data?.status ?? 'ACTIVE',
           userType: data?.userType ?? data?.user_type ?? '',

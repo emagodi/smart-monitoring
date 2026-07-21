@@ -27,6 +27,7 @@ type AdminUser = {
   lastname: string;
   email: string;
   phone?: string;
+  whatsappNumber?: string;
   employeeNumber?: string;
   status?: string;
   userType?: string;
@@ -69,6 +70,7 @@ type UserFormState = {
   lastname: string;
   email: string;
   phone: string;
+  whatsappNumber: string;
   employeeNumber: string;
   password: string;
   status: string;
@@ -87,6 +89,7 @@ const defaultFormState: UserFormState = {
   lastname: "",
   email: "",
   phone: "",
+  whatsappNumber: "",
   employeeNumber: "",
   password: "",
   status: "ACTIVE",
@@ -303,6 +306,7 @@ export default function Users() {
         user.email.toLowerCase().includes(query) ||
         (user.employeeNumber || "").toLowerCase().includes(query) ||
         (user.phone || "").toLowerCase().includes(query) ||
+        (user.whatsappNumber || "").toLowerCase().includes(query) ||
         (user.supplierName || "").toLowerCase().includes(query);
       const matchesRole = roleFilter === "ALL" || user.roles.includes(roleFilter);
       const matchesUserType = userTypeFilter === "ALL" || user.userType === userTypeFilter;
@@ -340,6 +344,7 @@ export default function Users() {
       lastname: user.lastname || "",
       email: user.email || "",
       phone: user.phone || "",
+      whatsappNumber: user.whatsappNumber || "",
       employeeNumber: user.employeeNumber || "",
       password: "",
       status: user.status || "ACTIVE",
@@ -421,6 +426,7 @@ export default function Users() {
       lastname: formState.lastname.trim(),
       email: formState.email.trim(),
       phone: formState.phone.trim(),
+      whatsappNumber: formState.whatsappNumber.trim(),
       employeeNumber: formState.employeeNumber.trim(),
       password: formState.password.trim() || undefined,
       status: formState.status,
@@ -1118,7 +1124,12 @@ export default function Users() {
                     />
                     <Field label="Phone" value={formState.phone} onChange={(value) => updateForm("phone", value)} />
                   </div>
-                  <div className="mt-4">
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="WhatsApp Number"
+                      value={formState.whatsappNumber}
+                      onChange={(value) => updateForm("whatsappNumber", value)}
+                    />
                     <Field
                       label="Employee Number"
                       value={formState.employeeNumber}
@@ -1363,6 +1374,7 @@ export default function Users() {
               <div className="grid gap-4 md:grid-cols-2">
                 <InfoItem label="Employee Number" value={activeUser.employeeNumber || "Not assigned"} />
                 <InfoItem label="Phone" value={activeUser.phone || "No phone"} />
+                <InfoItem label="WhatsApp" value={activeUser.whatsappNumber || "No WhatsApp"} />
                 {activeUser.userType !== "Supplier" ? <InfoItem label="Region" value={activeUser.region || "N/A"} /> : null}
                 {activeUser.userType !== "Supplier" ? <InfoItem label="District" value={activeUser.district || "N/A"} /> : null}
                 {activeUser.userType !== "Supplier" ? <InfoItem label="Depot" value={activeUser.depot || "N/A"} /> : null}

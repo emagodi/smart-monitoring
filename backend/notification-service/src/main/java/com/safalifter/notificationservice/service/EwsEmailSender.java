@@ -22,9 +22,9 @@ public class EwsEmailSender {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public void send(String to, String subject, String body) {
-        if (ewsUrl == null || ewsUrl.isBlank() || username == null || username.isBlank() || password == null || password.isBlank()) return;
-        if (to == null || to.isBlank() || body == null || body.isBlank()) return;
+    public boolean send(String to, String subject, String body) {
+        if (ewsUrl == null || ewsUrl.isBlank() || username == null || username.isBlank() || password == null || password.isBlank()) return false;
+        if (to == null || to.isBlank() || body == null || body.isBlank()) return false;
         try {
             String soap = buildSoapEnvelope(to, subject != null ? subject : "Notification", body);
             HttpHeaders headers = new HttpHeaders();
@@ -34,7 +34,10 @@ public class EwsEmailSender {
             headers.add("Authorization", "Basic " + basic);
             HttpEntity<String> req = new HttpEntity<>(soap, headers);
             restTemplate.postForEntity(ewsUrl, req, String.class);
-        } catch (Exception ignored) {}
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private String buildSoapEnvelope(String to, String subject, String body) {

@@ -4,6 +4,9 @@ import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.ControllerReading;
 import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.entities.TransformerType;
+import com.safalifter.transformerservice.clients.NotificationClient;
+import com.safalifter.transformerservice.payload.client.NotificationType;
+import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.payload.response.ControllerReadingDetailResponse;
 import com.safalifter.transformerservice.repository.ControllerReadingRepository;
@@ -35,6 +38,7 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     private final ControllerRepository controllerRepository;
     private final TransformerRepository transformerRepository;
     private final AlertService alertService;
+    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -75,6 +79,17 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                 .build();
         log.info("Creating controller trigger alert for transformer {} from controller {}", transformer.getId(), controller.getId());
         alertService.create(alert);
+        try {
+            notificationClient.send(SendNotificationRequest.builder()
+                    .notificationType(NotificationType.CONTROLLER_TRIGGER)
+                    .supplierCode(alert.getSupplierCode())
+                    .sourceSystem("transformer-service")
+                    .referenceId(reading.getId() != null ? String.valueOf(reading.getId()) : null)
+                    .subject("Controller trigger detected")
+                    .message(alert.getMessage())
+                    .build());
+        } catch (Exception ignored) {
+        }
     }
 
     private String buildTriggerSummary(TransformerType transformerType, ControllerReading reading) {

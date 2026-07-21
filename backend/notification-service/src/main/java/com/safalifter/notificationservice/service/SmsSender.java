@@ -21,9 +21,9 @@ public class SmsSender {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public void send(String to, String message) {
-        if (smsUrl == null || smsUrl.isBlank() || apiKey == null || apiKey.isBlank()) return;
-        if (to == null || to.isBlank() || message == null || message.isBlank()) return;
+    public boolean send(String to, String message) {
+        if (smsUrl == null || smsUrl.isBlank() || apiKey == null || apiKey.isBlank()) return false;
+        if (to == null || to.isBlank() || message == null || message.isBlank()) return false;
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -33,6 +33,9 @@ public class SmsSender {
             body.put("api_key", apiKey);
             HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
             restTemplate.postForEntity(smsUrl, req, String.class);
-        } catch (Exception ignored) {}
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 }
