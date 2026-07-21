@@ -203,7 +203,7 @@ export default function PermissionsPage() {
     >
       {notice ? <Alert variant={notice.variant} title={notice.title} message={notice.message} /> : null}
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         <div className="enterprise-card p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -255,7 +255,7 @@ export default function PermissionsPage() {
                 No modules are available yet.
               </div>
             ) : (
-              topModules.map(([module, count]) => (
+              topModules.slice(0, 3).map(([module, count]) => (
                 <div
                   key={module}
                   className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950"
@@ -289,7 +289,7 @@ export default function PermissionsPage() {
                 Common actions will appear here once the catalog loads.
               </div>
             ) : (
-              actionMix.map(([action, count]) => (
+              actionMix.slice(0, 3).map(([action, count]) => (
                 <div key={action}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-semibold text-slate-900 dark:text-slate-100">{action}</span>

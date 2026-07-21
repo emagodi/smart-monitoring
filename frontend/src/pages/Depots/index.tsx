@@ -614,7 +614,124 @@ export default function DepotsIndex() {
         ))}
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr_0.75fr]">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="enterprise-card p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Depot Summary
+              </p>
+              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
+                Filtered overview
+              </h3>
+            </div>
+            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+              <Building2 className="h-5 w-5" />
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2.5">
+            {[
+              ["Visible depots", visibleSummary.visible],
+              ["Assigned in view", visibleSummary.assignedVisible],
+              ["Unassigned in view", visibleSummary.unassignedVisible],
+              ["Current filter", selectedDistrictLabel],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
+                <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {canCreate && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+            >
+              Open Create Modal
+            </button>
+          )}
+        </div>
+
+        <div className="enterprise-card p-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+              District Mix
+            </p>
+            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
+              Highest depot concentration
+            </h3>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {leadingDistricts.length === 0 ? (
+              <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                No district assignments available yet.
+              </div>
+            ) : (
+              leadingDistricts.map(([districtName, count]) => {
+                const maxCount = leadingDistricts[0]?.[1] || 1;
+                const width = (count / maxCount) * 100;
+
+                return (
+                  <div key={districtName}>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">{districtName}</span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {count.toLocaleString()} depot{count === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
+                        style={{ width: `${Math.max(width, 8)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="enterprise-card p-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+              Coverage Health
+            </p>
+            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
+              District assignment status
+            </h3>
+          </div>
+
+          <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Coverage rate</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950 dark:text-slate-50">
+                  {totals.districtCoverage}%
+                </p>
+              </div>
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                {totals.assignedDistricts}/{Math.max(districts.length, 0)} districts linked
+              </span>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
+                style={{ width: `${Math.max(totals.districtCoverage, 8)}%` }}
+              />
+            </div>
+            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+              Unassigned depots stay visible in the table so operators can close coverage gaps quickly.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4">
         <div className="enterprise-card overflow-hidden">
           <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -838,123 +955,6 @@ export default function DepotsIndex() {
                   Next
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Depot Summary
-                </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Filtered overview
-                </h3>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <Building2 className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              {[
-                ["Visible depots", visibleSummary.visible],
-                ["Assigned in view", visibleSummary.assignedVisible],
-                ["Unassigned in view", visibleSummary.unassignedVisible],
-                ["Current filter", selectedDistrictLabel],
-              ].map(([label, value]) => (
-                <div key={String(label)} className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
-                </div>
-              ))}
-            </div>
-
-            {canCreate && (
-              <button
-                type="button"
-                onClick={openCreate}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-              >
-                Open Create Modal
-              </button>
-            )}
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                District Mix
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Highest depot concentration
-              </h3>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {leadingDistricts.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No district assignments available yet.
-                </div>
-              ) : (
-                leadingDistricts.map(([districtName, count]) => {
-                  const maxCount = leadingDistricts[0]?.[1] || 1;
-                  const width = (count / maxCount) * 100;
-
-                  return (
-                    <div key={districtName}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{districtName}</span>
-                        <span className="text-slate-500 dark:text-slate-400">
-                          {count.toLocaleString()} depot{count === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                          style={{ width: `${Math.max(width, 8)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Coverage Health
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                District assignment status
-              </h3>
-            </div>
-
-            <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Coverage rate</p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-950 dark:text-slate-50">
-                    {totals.districtCoverage}%
-                  </p>
-                </div>
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                  {totals.assignedDistricts}/{Math.max(districts.length, 0)} districts linked
-                </span>
-              </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                  style={{ width: `${Math.max(totals.districtCoverage, 8)}%` }}
-                />
-              </div>
-              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                Unassigned depots stay visible in the table so operators can close coverage gaps quickly.
-              </p>
             </div>
           </div>
         </div>

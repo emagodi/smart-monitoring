@@ -1072,7 +1072,7 @@ function SensorFormModal({
       className="max-h-[90vh] max-w-[720px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
       backdropBlur={true}
     >
-      <div className="flex max-h-[90vh] flex-col bg-white dark:bg-slate-950">
+      <div className="flex max-h-[90vh] min-h-0 flex-col bg-white dark:bg-slate-950">
         <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -1097,8 +1097,8 @@ function SensorFormModal({
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="flex flex-1 flex-col">
-          <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
             <div className="grid grid-cols-2 gap-3">
               <InfoStatCard label="Workflow" value={isEdit ? 'Edit in modal' : 'Create in modal'} />
               <InfoStatCard label="Visible Transformers" value={transformers.length.toLocaleString()} />
@@ -1264,7 +1264,7 @@ function SensorAssignModal({
       className="max-h-[88vh] max-w-[620px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
       backdropBlur={true}
     >
-      <div className="flex max-h-[88vh] flex-col bg-white dark:bg-slate-950">
+      <div className="flex max-h-[88vh] min-h-0 flex-col bg-white dark:bg-slate-950">
         <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -1287,8 +1287,8 @@ function SensorAssignModal({
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="flex flex-1 flex-col">
-          <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
             <div className="grid grid-cols-2 gap-3">
               <InfoStatCard label="Sensor" value={sensor?.name || 'N/A'} />
               <InfoStatCard label="Current Assignment" value={currentAssignment} />
@@ -1374,7 +1374,7 @@ function SensorViewModal({
       className="max-h-[88vh] max-w-[720px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
       backdropBlur={true}
     >
-      <div className="flex max-h-[88vh] flex-col bg-white dark:bg-slate-950">
+      <div className="flex max-h-[88vh] min-h-0 flex-col bg-white dark:bg-slate-950">
         <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -1397,7 +1397,7 @@ function SensorViewModal({
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-6">
           <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="grid grid-cols-2 gap-3">
               <InfoStatCard label="Type" value={formatSensorType(sensor.type)} />

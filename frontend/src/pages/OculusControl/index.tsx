@@ -200,6 +200,30 @@ const controllerStatusLabel = (status?: string | null) => {
   return "No Keepalive";
 };
 
+const armStateLabel = (state?: string | null) => {
+  if (state === "ARMED") return "Armed";
+  if (state === "DISARMED") return "Disarmed";
+  return "Unknown";
+};
+
+const armStateTone = (state?: string | null) => {
+  if (state === "ARMED") return "bg-emerald-100 text-emerald-700";
+  if (state === "DISARMED") return "bg-amber-100 text-amber-700";
+  return "bg-slate-100 text-slate-700";
+};
+
+const commandTargetLabel = (state?: "ARMED" | "DISARMED" | null) => {
+  if (state === "ARMED") return "Arm Requested";
+  if (state === "DISARMED") return "Disarm Requested";
+  return "No Command Target";
+};
+
+const effectiveStateSourceLabel = (source?: "COMMAND" | "TELEMETRY" | null) => {
+  if (source === "COMMAND") return "Source: latest command";
+  if (source === "TELEMETRY") return "Source: confirmed telemetry";
+  return "Source: no confirmed telemetry";
+};
+
 const transformerTypeTone = (transformerType?: string | null) => {
   if (transformerType === "GMT") return "bg-indigo-100 text-indigo-700";
   if (transformerType === "PMT") return "bg-cyan-100 text-cyan-700";
@@ -657,13 +681,12 @@ export default function OculusControlIndex() {
         {/* Main Table Card */}
         <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
           <div className="flex flex-col gap-4 border-b border-slate-200/80 px-5 py-4">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Control Directory</p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Premium table shell for command-ready assets</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  Row selection drives the summary rail and the centered detail modal while preserving the existing command and telemetry workflow.
-                </p>
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <FilterButton active={armStateFilter === "all"} onClick={() => setArmStateFilter("all")} label="All" />
+                <FilterButton active={armStateFilter === "ARMED"} onClick={() => setArmStateFilter("ARMED")} label="Armed" />
+                <FilterButton active={armStateFilter === "DISARMED"} onClick={() => setArmStateFilter("DISARMED")} label="Disarmed" />
+                <FilterButton active={armStateFilter === "UNKNOWN"} onClick={() => setArmStateFilter("UNKNOWN")} label="Unknown" />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-[280px]">
@@ -687,13 +710,6 @@ export default function OculusControlIndex() {
                 </select>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterButton active={armStateFilter === "all"} onClick={() => setArmStateFilter("all")} label="All" />
-              <FilterButton active={armStateFilter === "ARMED"} onClick={() => setArmStateFilter("ARMED")} label="Armed" />
-              <FilterButton active={armStateFilter === "DISARMED"} onClick={() => setArmStateFilter("DISARMED")} label="Disarmed" />
-              <FilterButton active={armStateFilter === "UNKNOWN"} onClick={() => setArmStateFilter("UNKNOWN")} label="Unknown" />
-            </div>
           </div>
 
           {loading ? (
@@ -704,21 +720,27 @@ export default function OculusControlIndex() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="min-w-full">
+                <table className="min-w-[1500px]">
                   <thead className="bg-slate-50/80">
                     <tr>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transformer</th>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Location</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Controller health</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Intrusion signals</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Control posture</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Controller</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Motion</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        {secondarySignalColumnLabel(selectedRow?.transformerType)}
+                      </th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Effective control state</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Command target state</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Confirmed telemetry state</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Pending / Confirmed status</th>
                       <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/80 bg-white">
                     {paginatedRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-5 py-14 text-center text-sm text-slate-500">
+                        <td colSpan={10} className="px-5 py-14 text-center text-sm text-slate-500">
                           No Oculus-monitored transformers found for the current filters.
                         </td>
                       </tr>
@@ -753,21 +775,28 @@ export default function OculusControlIndex() {
                                 </span>
                                 <span className="text-xs text-slate-500">{row.controllerCount || 0} Oculus controller(s)</span>
                               </div>
-                              <div className="mt-2 text-xs text-slate-500">{row.activeAlertSummary || "No active intrusion alerts"}</div>
+                              <div className="mt-2">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${activeAlertSummaryTone(row.activeAlertSummary)}`}>
+                                  {row.activeAlertSummary || "No active intrusion alerts"}
+                                </span>
+                              </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="font-medium text-slate-900">{row.depotName}</div>
-                              <div className="mt-1 text-xs text-slate-500">
-                                {row.depotName === "Unassigned Depot" ? "No depot mapping" : "Depot scope"}
+                              <div className="space-y-1">
+                                <div>{row.regionName}</div>
+                                <div>{row.districtName}</div>
+                                <div className="text-xs text-slate-500">{row.depotName}</div>
                               </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
                               <div className="font-medium text-slate-900">{row.controllerName || "No linked controller"}</div>
                               <div className="mt-1 font-mono text-xs text-slate-500">{row.controllerDevEui || "-"}</div>
-                              <div className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
-                                <span className={`h-2 w-2 rounded-full ${controllerStatusDot(row.controllerStatus)}`} />
-                                {controllerStatusLabel(row.controllerStatus)}
+                              <div className="mt-2">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${controllerStatusTone(row.controllerStatus)}`}>
+                                  {controllerStatusLabel(row.controllerStatus)}
+                                </span>
                               </div>
+                              <div className="mt-1 text-xs text-slate-500">{row.controllerType || "Unknown controller type"}</div>
                               <div className="mt-1 text-xs text-slate-500">
                                 {row.minutesSinceLastTelemetry != null
                                   ? `Last keepalive ${row.minutesSinceLastTelemetry} min ago`
@@ -775,41 +804,61 @@ export default function OculusControlIndex() {
                               </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
+                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${signalTone(row.motionDetected)}`}>
+                                {row.motionStatusLabel || "No motion telemetry"}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-sm text-slate-600">
                               <div className="space-y-2">
-                                <div className="inline-flex items-center gap-2 text-xs text-slate-600">
-                                  <span className={`h-2 w-2 rounded-full ${signalDot(row.motionDetected)}`} />
-                                  {row.motionStatusLabel || "No motion telemetry"}
-                                </div>
-                                <div className="inline-flex items-center gap-2 text-xs text-slate-600">
-                                  <span className={`h-2 w-2 rounded-full ${signalDot(row.secondaryAlertDetected)}`} />
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${signalTone(row.secondaryAlertDetected)}`}>
                                   {row.secondaryAlertStatusLabel || "No secondary telemetry"}
-                                </div>
-                                {row.secondaryAlertLabel ? <div className="text-xs text-slate-400">{row.secondaryAlertLabel}</div> : null}
+                                </span>
+                                <div className="text-xs text-slate-500">{row.secondaryAlertLabel || secondarySignalColumnLabel(row.transformerType)}</div>
                               </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
                               <div className="space-y-2">
-                                <div className="inline-flex items-center gap-2 text-xs text-slate-700">
-                                  <span className={`h-2 w-2 rounded-full ${armStateDot(effectiveArmState)}`} />
-                                  {effectiveArmState === "ARMED" ? "Armed now" : effectiveArmState === "DISARMED" ? "Disarmed now" : "Unknown"}
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${armStateTone(effectiveArmState)}`}>
+                                  {armStateLabel(effectiveArmState)} Now
+                                </span>
+                                <div className="text-xs text-slate-500">{effectiveStateSourceLabel(row.effectiveStateSource)}</div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4 text-sm text-slate-600">
+                              <div className="space-y-2">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${armStateTone(targetState)}`}>
+                                  {commandTargetLabel(targetState)}
+                                </span>
+                                <div className="text-xs text-slate-500">
+                                  {row.lastCommandAt ? `At ${formatDateTime(row.lastCommandAt)}` : "No Loriot command sent"}
+                                </div>
+                                <div className="text-xs text-slate-500">{row.lastCommandRequestedBy || "No requester recorded"}</div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4 text-sm text-slate-600">
+                              <div className="space-y-2">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${armStateTone(row.armState)}`}>
+                                  {armStateLabel(row.armState)}
+                                </span>
+                                <div className="text-xs text-slate-500">
+                                  {row.lastTelemetryAt ? formatDateTime(row.lastTelemetryAt) : "No telemetry yet"}
                                 </div>
                                 <div className="text-xs text-slate-500">
-                                  {targetState === "ARMED"
-                                    ? "Target: Arm requested"
-                                    : targetState === "DISARMED"
-                                      ? "Target: Disarm requested"
-                                      : "Target: No command target"}
+                                  {row.lastTelemetryAt ? "Latest `RO1` telemetry confirmed state" : "Latest `RO1` decision not confirmed"}
                                 </div>
-                                <div className="text-xs text-slate-500">
-                                  Telemetry: {row.armState === "ARMED" ? "Armed" : row.armState === "DISARMED" ? "Disarmed" : "Unknown"}
-                                </div>
-                                <div className="inline-flex items-center gap-2 text-xs text-slate-600">
-                                  <span className={`h-2 w-2 rounded-full ${confirmationDot(row)}`} />
+                              </div>
+                            </td>
+                            <td className="px-5 py-4 text-sm text-slate-600">
+                              <div className="space-y-2">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${confirmationTone(row)}`}>
                                   {confirmationStatusLabel}
+                                </span>
+                                <div className="text-xs text-slate-500">
+                                  {row.lastCommandStatus === "SENT" ? "Control ready" : row.availabilityReason || "Control ready"}
                                 </div>
                                 {awaitingConfirmation ? (
                                   <div className="text-xs text-blue-600">
-                                    Waiting for the next keepalive or `RO1` update.
+                                    Waiting for next keepalive
                                   </div>
                                 ) : null}
                               </div>
