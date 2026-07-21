@@ -4,31 +4,41 @@ import com.safalifter.notificationservice.clients.AuthRoutingClient;
 import com.safalifter.notificationservice.enums.NotificationChannel;
 import com.safalifter.notificationservice.enums.NotificationType;
 import com.safalifter.notificationservice.model.Notification;
+import com.safalifter.notificationservice.model.WhatsAppContactState;
 import com.safalifter.notificationservice.payload.NotificationRecipientResponse;
 import com.safalifter.notificationservice.repository.NotificationRepository;
+import com.safalifter.notificationservice.repository.WhatsAppContactStateRepository;
 import com.safalifter.notificationservice.request.SendNotificationRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
     private final NotificationRepository notificationRepository;
+    private final WhatsAppContactStateRepository whatsAppContactStateRepository;
     private final SmsSender smsSender;
     private final SmtpEmailSender smtpEmailSender;
     private final EwsEmailSender ewsEmailSender;
     private final WhatsAppSender whatsAppSender;
     private final AuthRoutingClient authRoutingClient;
+    private final Environment environment;
 
     @Value("${notification.default.sms.to:}")
     private String defaultSmsTo;
@@ -36,15 +46,38 @@ public class NotificationService {
     private String defaultEmailTo;
     @Value("${notification.default.whatsapp.to:}")
     private String defaultWhatsappTo;
+    @Value("${whatsapp.conversation.window-hours:24}")
+    private long whatsappConversationWindowHours;
+    @Value("${whatsapp.template.default.language:en}")
+    private String defaultWhatsappTemplateLanguage;
 
     public void save(SendNotificationRequest request) {
         NotificationType notificationType = request.getNotificationType() != null
                 ? request.getNotificationType()
                 : NotificationType.SYSTEM_NOTICE;
 
-        for (NotificationRecipientResponse recipient : resolveRecipients(request, notificationType)) {
+        List<NotificationRecipientResponse> recipients = resolveRecipients(request, notificationType);
+        // #region debug-point B:recipient-resolution
+        reportDebug("B", "NotificationService.save", "[DEBUG] Resolved notification recipients", Map.of(
+                "notificationType", String.valueOf(notificationType),
+                "supplierCode", String.valueOf(request.getSupplierCode()),
+                "referenceId", String.valueOf(request.getReferenceId()),
+                "recipientCount", recipients.size()
+        ));
+        // #endregion
+
+        for (NotificationRecipientResponse recipient : recipients) {
             for (NotificationChannel channel : resolveChannels(request, recipient)) {
                 ChannelTarget target = resolveTarget(channel, request, recipient);
+                // #region debug-point B:dispatch-target
+                reportDebug("B", "NotificationService.save", "[DEBUG] Dispatch target resolved", Map.of(
+                        "notificationType", String.valueOf(notificationType),
+                        "channel", channel.name(),
+                        "userId", String.valueOf(recipient.getUserId()),
+                        "supplierCode", String.valueOf(firstNonBlank(request.getSupplierCode(), recipient.getSupplierCode())),
+                        "targetPresent", target.address() != null && !target.address().isBlank()
+                ));
+                // #endregion
                 Notification notification = Notification.builder()
                         .id(UUID.randomUUID().toString())
                         .userId(recipient.getUserId() != null ? String.valueOf(recipient.getUserId()) : request.getUserId())
@@ -81,14 +114,27 @@ public class NotificationService {
             return;
         }
 
+        int inboundMessages = 0;
+        int statusUpdates = 0;
         for (JsonNode entry : payload.path("entry")) {
             for (JsonNode change : entry.path("changes")) {
                 JsonNode value = change.path("value");
+                for (JsonNode inboundMessage : value.path("messages")) {
+                    inboundMessages++;
+                    recordInboundWhatsAppMessage(inboundMessage);
+                }
                 for (JsonNode statusNode : value.path("statuses")) {
+                    statusUpdates++;
                     updateNotificationStatus(statusNode);
                 }
             }
         }
+        // #region debug-point D:webhook-payload
+        reportDebug("D", "NotificationService.handleWhatsAppWebhook", "[DEBUG] Processed WhatsApp webhook payload", Map.of(
+                "inboundMessages", inboundMessages,
+                "statusUpdates", statusUpdates
+        ));
+        // #endregion
     }
 
     private List<NotificationRecipientResponse> resolveRecipients(SendNotificationRequest request, NotificationType notificationType) {
@@ -250,18 +296,29 @@ public class NotificationService {
 
         if (result.accepted()) {
             notification.setAcceptedTimestamp(result.statusTimestamp());
+            updateOutboundConversationState(notification.getRecipientAddress(), result);
         } else if ("FAILED".equalsIgnoreCase(result.deliveryStatus())) {
             notification.setFailedTimestamp(result.statusTimestamp());
         }
     }
 
     private WhatsAppSendResult sendWhatsapp(SendNotificationRequest request, String address) {
-        if (usesWhatsAppTemplate(request)) {
+        String templateName = resolveTemplateName(request, address);
+        // #region debug-point C:whatsapp-mode
+        reportDebug("C", "NotificationService.sendWhatsapp", "[DEBUG] Selected WhatsApp payload mode", Map.of(
+                "notificationType", String.valueOf(request.getNotificationType()),
+                "recipient", String.valueOf(normalizeWhatsappContact(address)),
+                "usesTemplate", templateName != null,
+                "templateName", String.valueOf(templateName),
+                "hasOpenConversationWindow", hasOpenConversationWindow(address)
+        ));
+        // #endregion
+        if (templateName != null) {
             return whatsAppSender.sendTemplate(
                     address,
-                    request.getWhatsappTemplateName(),
-                    request.getWhatsappTemplateLanguageCode(),
-                    request.getWhatsappTemplateParameters()
+                    templateName,
+                    resolveTemplateLanguage(request),
+                    resolveTemplateParameters(request)
             );
         }
         return whatsAppSender.sendText(address, request.getMessage());
@@ -269,6 +326,49 @@ public class NotificationService {
 
     private boolean usesWhatsAppTemplate(SendNotificationRequest request) {
         return trimToNull(request.getWhatsappTemplateName()) != null;
+    }
+
+    private String resolveTemplateName(SendNotificationRequest request, String address) {
+        String explicitTemplate = trimToNull(request.getWhatsappTemplateName());
+        if (explicitTemplate != null) {
+            return explicitTemplate;
+        }
+        if (hasOpenConversationWindow(address)) {
+            return null;
+        }
+        return resolveConfiguredTemplateName(request.getNotificationType() != null ? request.getNotificationType() : NotificationType.SYSTEM_NOTICE);
+    }
+
+    private String resolveTemplateLanguage(SendNotificationRequest request) {
+        String explicitLanguage = trimToNull(request.getWhatsappTemplateLanguageCode());
+        if (explicitLanguage != null) {
+            return explicitLanguage;
+        }
+        NotificationType type = request.getNotificationType() != null ? request.getNotificationType() : NotificationType.SYSTEM_NOTICE;
+        String perType = trimToNull(environment.getProperty("whatsapp.template." + toTemplateKey(type) + ".language"));
+        return perType != null ? perType : defaultWhatsappTemplateLanguage;
+    }
+
+    private List<String> resolveTemplateParameters(SendNotificationRequest request) {
+        if (request.getWhatsappTemplateParameters() != null && !request.getWhatsappTemplateParameters().isEmpty()) {
+            return request.getWhatsappTemplateParameters();
+        }
+        List<String> parameters = new ArrayList<>();
+        if (trimToNull(request.getSubject()) != null) {
+            parameters.add(request.getSubject().trim());
+        }
+        if (trimToNull(request.getMessage()) != null) {
+            parameters.add(request.getMessage().trim());
+        }
+        return parameters;
+    }
+
+    private String resolveConfiguredTemplateName(NotificationType notificationType) {
+        String perType = trimToNull(environment.getProperty("whatsapp.template." + toTemplateKey(notificationType) + ".name"));
+        if (perType != null) {
+            return perType;
+        }
+        return trimToNull(environment.getProperty("whatsapp.template.default.name"));
     }
 
     private void updateNotificationStatus(JsonNode statusNode) {
@@ -324,7 +424,97 @@ public class NotificationService {
                     }
 
                     notificationRepository.save(notification);
+                    updateConversationStatus(notification.getRecipientAddress(), providerStatus, conversationId, statusTime);
                 });
+    }
+
+    private void recordInboundWhatsAppMessage(JsonNode inboundMessage) {
+        String from = normalizeWhatsappContact(inboundMessage.path("from").asText(null));
+        if (from == null) {
+            return;
+        }
+        LocalDateTime inboundAt = parseMetaTimestamp(inboundMessage.path("timestamp").asText(null));
+        // #region debug-point E:inbound-state
+        reportDebug("E", "NotificationService.recordInboundWhatsAppMessage", "[DEBUG] Recording inbound WhatsApp activity", Map.of(
+                "from", from,
+                "messageType", String.valueOf(trimToNull(inboundMessage.path("type").asText(null))),
+                "timestamp", String.valueOf(inboundAt)
+        ));
+        // #endregion
+        WhatsAppContactState state = whatsAppContactStateRepository.findById(from)
+                .orElseGet(() -> WhatsAppContactState.builder().waId(from).phoneNumber(from).build());
+        state.setPhoneNumber(from);
+        state.setLastInboundMessageId(trimToNull(inboundMessage.path("id").asText(null)));
+        state.setLastInboundMessageType(trimToNull(inboundMessage.path("type").asText(null)));
+        state.setLastInboundMessageBody(extractInboundBody(inboundMessage));
+        state.setLastInboundMessageAt(inboundAt);
+        state.setLastStatus("inbound");
+        state.setLastStatusAt(inboundAt);
+        whatsAppContactStateRepository.save(state);
+    }
+
+    private String extractInboundBody(JsonNode inboundMessage) {
+        String textBody = trimToNull(inboundMessage.path("text").path("body").asText(null));
+        if (textBody != null) {
+            return textBody;
+        }
+        return trimToNull(inboundMessage.toString());
+    }
+
+    private void updateOutboundConversationState(String recipientAddress, WhatsAppSendResult result) {
+        String normalized = normalizeWhatsappContact(recipientAddress);
+        if (normalized == null || !result.accepted()) {
+            return;
+        }
+        WhatsAppContactState state = whatsAppContactStateRepository.findById(normalized)
+                .orElseGet(() -> WhatsAppContactState.builder().waId(normalized).phoneNumber(normalized).build());
+        state.setPhoneNumber(normalized);
+        state.setLastOutboundAcceptedAt(result.statusTimestamp());
+        state.setLastStatus(result.providerStatus());
+        state.setLastStatusAt(result.statusTimestamp());
+        if (result.providerConversationId() != null) {
+            state.setLastConversationId(result.providerConversationId());
+        }
+        whatsAppContactStateRepository.save(state);
+    }
+
+    private void updateConversationStatus(String recipientAddress, String providerStatus, String conversationId, LocalDateTime statusTime) {
+        String normalized = normalizeWhatsappContact(recipientAddress);
+        if (normalized == null) {
+            return;
+        }
+        WhatsAppContactState state = whatsAppContactStateRepository.findById(normalized)
+                .orElseGet(() -> WhatsAppContactState.builder().waId(normalized).phoneNumber(normalized).build());
+        state.setPhoneNumber(normalized);
+        state.setLastStatus(trimToNull(providerStatus));
+        state.setLastStatusAt(statusTime);
+        if (conversationId != null) {
+            state.setLastConversationId(conversationId);
+        }
+        whatsAppContactStateRepository.save(state);
+    }
+
+    private boolean hasOpenConversationWindow(String recipientAddress) {
+        String normalized = normalizeWhatsappContact(recipientAddress);
+        if (normalized == null) {
+            return false;
+        }
+        return whatsAppContactStateRepository.findById(normalized)
+                .map(state -> state.getLastInboundMessageAt() != null
+                        && state.getLastInboundMessageAt().isAfter(LocalDateTime.now().minusHours(Math.max(1L, whatsappConversationWindowHours))))
+                .orElse(false);
+    }
+
+    private String normalizeWhatsappContact(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.replaceAll("[^0-9]", "");
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private String toTemplateKey(NotificationType notificationType) {
+        return notificationType.name().toLowerCase().replace('_', '-');
     }
 
     private LocalDateTime parseMetaTimestamp(String timestamp) {
@@ -351,6 +541,47 @@ public class NotificationService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void reportDebug(String hypothesisId, String location, String message, Map<String, Object> data) {
+        try {
+            Map<String, String> debugConfig = loadDebugConfig();
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("sessionId", debugConfig.get("sessionId"));
+            payload.put("runId", "pre-fix");
+            payload.put("hypothesisId", hypothesisId);
+            payload.put("location", location);
+            payload.put("msg", message);
+            payload.put("data", data == null ? Map.of() : data);
+            payload.put("ts", System.currentTimeMillis());
+            new RestTemplate().postForEntity(debugConfig.get("url"), payload, Void.class);
+        } catch (Exception ignored) {
+            // Debug reporting must never block notification delivery.
+        }
+    }
+
+    private Map<String, String> loadDebugConfig() {
+        String defaultUrl = "http://host.docker.internal:7777/event";
+        String defaultSessionId = "whatsapp-live-alerts";
+        Path envPath = Path.of(".dbg", "whatsapp-live-alerts.env");
+        if (!Files.exists(envPath)) {
+            return Map.of("url", defaultUrl, "sessionId", defaultSessionId);
+        }
+        try {
+            String content = Files.readString(envPath);
+            String url = defaultUrl;
+            String sessionId = defaultSessionId;
+            for (String line : content.split("\\R")) {
+                if (line.startsWith("DEBUG_SERVER_URL=")) {
+                    url = line.substring("DEBUG_SERVER_URL=".length()).trim();
+                } else if (line.startsWith("DEBUG_SESSION_ID=")) {
+                    sessionId = line.substring("DEBUG_SESSION_ID=".length()).trim();
+                }
+            }
+            return Map.of("url", url, "sessionId", sessionId);
+        } catch (Exception ignored) {
+            return Map.of("url", defaultUrl, "sessionId", defaultSessionId);
+        }
     }
 
     private record ChannelTarget(String name, String address) {
