@@ -1122,7 +1122,7 @@ export default function DashboardHome() {
                   <div>
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.transformer_name}</p>
                     <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                      {item.sensor_name} Â· {item.sensor_type}
+                      {item.sensor_name} - {item.sensor_type}
                     </p>
                   </div>
                   <span
