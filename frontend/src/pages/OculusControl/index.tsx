@@ -244,6 +244,7 @@ export default function OculusControlIndex() {
   const [activeCommand, setActiveCommand] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<EnrichedControlRow | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [showAdvancedAudit, setShowAdvancedAudit] = useState(false);
 
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
 
@@ -381,6 +382,10 @@ export default function OculusControlIndex() {
 
     setSelectedRow(filteredRows[0]);
   }, [filteredRows, selectedRow]);
+
+  useEffect(() => {
+    setShowAdvancedAudit(false);
+  }, [showDetails, selectedRow?.transformerId]);
 
   const applyOptimisticCommandState = useCallback(
     (transformerId: number, action: "arm" | "disarm", data?: OculusControlActionResponse) => {
@@ -891,20 +896,20 @@ export default function OculusControlIndex() {
         onClose={() => setShowDetails(false)}
         variant="center"
         showCloseButton={false}
-        className="max-h-[88vh] max-w-[920px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl"
+        className="flex max-h-[90vh] max-w-[860px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl"
         backdropBlur={true}
       >
-        <div className="flex max-h-[88vh] min-h-0 flex-col bg-white">
-          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5">
+        <div className="flex max-h-[90vh] min-h-0 flex-col bg-white">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
-                  <ShieldCheck className="h-5 w-5" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                  <ShieldCheck className="h-4.5 w-4.5" />
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Control Detail</p>
-                  <h3 className="mt-1 text-lg font-semibold text-slate-950">{selectedRow?.transformerName || "Oculus transformer"}</h3>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <h3 className="mt-1 text-base font-semibold text-slate-950 md:text-lg">{selectedRow?.transformerName || "Oculus transformer"}</h3>
+                  <p className="mt-1 text-xs text-slate-500 md:text-sm">
                     {selectedRow
                       ? `${selectedRow.regionName} / ${selectedRow.districtName} / ${selectedRow.depotName}`
                       : "Centered modal for control, telemetry, and alert posture."}
@@ -921,16 +926,27 @@ export default function OculusControlIndex() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-slate-50/70 px-6 py-6">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 px-5 py-5">
             {selectedRow ? (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="space-y-4">
+                <div className="rounded-[24px] border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Overview</p>
+                      <h4 className="mt-1 text-sm font-semibold text-slate-950">Current control posture</h4>
+                    </div>
+                    <div className="rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                      {selectedRow.controllerName || "No linked controller"}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
                   <StatCard
                     title="Effective posture"
                     valueLabel={selectedEffectiveState}
                     helper={selectedRow.effectiveStateSource === "COMMAND" ? "Derived from latest command" : "Derived from telemetry"}
                     tone="emerald"
                     icon={<ShieldCheck className="h-5 w-5" />}
+                    compact
                   />
                   <StatCard
                     title="Confirmed telemetry"
@@ -938,6 +954,7 @@ export default function OculusControlIndex() {
                     helper={selectedRow.lastTelemetryAt ? formatDateTime(selectedRow.lastTelemetryAt) : "No telemetry yet"}
                     tone="slate"
                     icon={<Radio className="h-5 w-5" />}
+                    compact
                   />
                   <StatCard
                     title="Pending status"
@@ -945,6 +962,7 @@ export default function OculusControlIndex() {
                     helper={selectedRow.lastCommandStatus || "No command"}
                     tone="blue"
                     icon={<Activity className="h-5 w-5" />}
+                    compact
                   />
                   <StatCard
                     title="Controller health"
@@ -956,61 +974,50 @@ export default function OculusControlIndex() {
                     }
                     tone="amber"
                     icon={<MapPinned className="h-5 w-5" />}
+                    compact
                   />
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                  <Button
-                    variant="outline"
-                    startIcon={<Lock className="h-4 w-4" />}
-                    disabled={disableSelectedArm}
-                    isLoading={activeCommand === `${selectedRow.transformerId}:arm`}
-                    onClick={() => void sendCommand(selectedRow.transformerId, "arm")}
-                  >
-                    Arm Transformer
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    startIcon={<Unlock className="h-4 w-4" />}
-                    disabled={disableSelectedDisarm}
-                    isLoading={activeCommand === `${selectedRow.transformerId}:disarm`}
-                    onClick={() => void sendCommand(selectedRow.transformerId, "disarm")}
-                  >
-                    Disarm Transformer
-                  </Button>
-                </div>
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+                  <div className="space-y-4">
+                    <SectionCard
+                      label="Location Mapping"
+                      title="Asset context"
+                      tone="blue"
+                      contentClassName="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                    >
+                      <DetailField label="Region" value={selectedRow.regionName} />
+                      <DetailField label="District" value={selectedRow.districtName} />
+                      <DetailField label="Depot" value={selectedRow.depotName} />
+                      <DetailField label="Transformer type" value={selectedRow.transformerType || "Unspecified"} />
+                      <DetailField label="Supplier" value={selectedRow.supplierName || selectedRow.supplierCode || "Oculus"} />
+                      <DetailField label="Controller type" value={selectedRow.controllerType || "Unavailable"} />
+                    </SectionCard>
 
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-                  <div className="space-y-5">
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Location Mapping</p>
-                      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <DetailField label="Region" value={selectedRow.regionName} />
-                        <DetailField label="District" value={selectedRow.districtName} />
-                        <DetailField label="Depot" value={selectedRow.depotName} />
-                        <DetailField label="Transformer type" value={selectedRow.transformerType || "Unspecified"} />
-                        <DetailField label="Supplier" value={selectedRow.supplierName || selectedRow.supplierCode || "Oculus"} />
-                        <DetailField label="Controller type" value={selectedRow.controllerType || "Unavailable"} />
-                      </div>
-                    </div>
-
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Intrusion Signals</p>
-                      <div className="mt-4 space-y-4">
+                    <SectionCard
+                      label="Intrusion Signals"
+                      title="Field telemetry"
+                      tone="amber"
+                      contentClassName="space-y-3"
+                    >
                         <StatusLine label="Motion" value={selectedRow.motionStatusLabel || "No motion telemetry"} dotClass={signalDot(selectedRow.motionDetected)} />
                         <StatusLine
                           label={secondarySignalColumnLabel(selectedRow.transformerType)}
                           value={selectedRow.secondaryAlertStatusLabel || "No secondary telemetry"}
                           dotClass={signalDot(selectedRow.secondaryAlertDetected)}
                         />
-                        <DetailField label="Signal note" value={selectedRow.secondaryAlertLabel || selectedRow.activeAlertSummary || "No active intrusion alerts"} />
-                      </div>
-                    </div>
+                        <DetailRow label="Signal note" value={selectedRow.secondaryAlertLabel || selectedRow.activeAlertSummary || "No active intrusion alerts"} />
+                    </SectionCard>
                   </div>
 
-                  <div className="rounded-[24px] border border-slate-200 bg-white p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Command Lifecycle</p>
-                    <div className="mt-4 space-y-4">
+                  <SectionCard
+                    label="Command Lifecycle"
+                    title="Control and audit trail"
+                    tone="violet"
+                    contentClassName="space-y-3"
+                  >
+                    <div className="grid grid-cols-1 gap-3">
                       <StatusLine
                         label="Effective control state"
                         value={selectedEffectiveState}
@@ -1026,20 +1033,33 @@ export default function OculusControlIndex() {
                         value={getConfirmationStatusLabel(selectedRow)}
                         dotClass={confirmationDot(selectedRow)}
                       />
-                      <DetailField label="Last command action" value={selectedRow.lastCommandAction || "No command sent"} />
-                      <DetailField label="Last command timestamp" value={formatDateTime(selectedRow.lastCommandAt)} />
-                      <DetailField label="Requested by" value={selectedRow.lastCommandRequestedBy || "Unavailable"} />
-                      <DetailField label="Availability note" value={selectedRow.controlAvailable ? "Control ready" : selectedRow.availabilityReason || "Unavailable"} />
-                      <DetailField
-                        label="Workflow note"
-                        value={
-                          selectedAwaitingConfirmation
-                            ? "Operator posture has updated and is waiting for keepalive confirmation."
-                            : "Telemetry and operator posture are aligned or no command is pending."
-                        }
-                      />
                     </div>
-                  </div>
+                    <div className="mt-4 space-y-2">
+                      <DetailRow label="Last command action" value={selectedRow.lastCommandAction || "No command sent"} />
+                      <DetailRow label="Last command timestamp" value={formatDateTime(selectedRow.lastCommandAt)} />
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedAudit((current) => !current)}
+                        className="w-full rounded-[18px] border border-dashed border-slate-300 px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:border-violet-300 hover:bg-violet-50/60 hover:text-violet-700"
+                      >
+                        {showAdvancedAudit ? "Hide advanced audit" : "Show advanced audit"}
+                      </button>
+                      {showAdvancedAudit ? (
+                        <div className="space-y-2">
+                          <DetailRow label="Requested by" value={selectedRow.lastCommandRequestedBy || "Unavailable"} />
+                          <DetailRow label="Availability note" value={selectedRow.controlAvailable ? "Control ready" : selectedRow.availabilityReason || "Unavailable"} />
+                          <DetailRow
+                            label="Workflow note"
+                            value={
+                              selectedAwaitingConfirmation
+                                ? "Operator posture has updated and is waiting for keepalive confirmation."
+                                : "Telemetry and operator posture are aligned or no command is pending."
+                            }
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </SectionCard>
                 </div>
               </div>
             ) : (
@@ -1048,6 +1068,37 @@ export default function OculusControlIndex() {
               </div>
             )}
           </div>
+          {selectedRow ? (
+            <div className="border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-sm">
+              <div className="flex justify-end">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <Button size="xs" variant="outline" onClick={() => setShowDetails(false)}>
+                    Close
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    startIcon={<Lock className="h-4 w-4" />}
+                    disabled={disableSelectedArm}
+                    isLoading={activeCommand === `${selectedRow.transformerId}:arm`}
+                    onClick={() => void sendCommand(selectedRow.transformerId, "arm")}
+                  >
+                    Arm Transformer
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    startIcon={<Unlock className="h-4 w-4" />}
+                    disabled={disableSelectedDisarm}
+                    isLoading={activeCommand === `${selectedRow.transformerId}:disarm`}
+                    onClick={() => void sendCommand(selectedRow.transformerId, "disarm")}
+                  >
+                    Disarm Transformer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </Modal>
     </div>
@@ -1083,6 +1134,7 @@ function StatCard({
   helper,
   tone,
   icon,
+  compact = false,
 }: {
   title: string;
   value: number;
@@ -1090,6 +1142,7 @@ function StatCard({
   helper?: string;
   tone: "slate" | "emerald" | "amber" | "blue";
   icon: ReactNode;
+  compact?: boolean;
 }) {
   const toneMap: Record<string, string> = {
     slate: "bg-slate-50 text-slate-700",
@@ -1099,14 +1152,16 @@ function StatCard({
   };
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className={`rounded-[28px] border border-slate-200 bg-white shadow-sm ${compact ? "p-4" : "p-5"}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-950">{valueLabel ?? value.toLocaleString()}</p>
-          {helper ? <p className="mt-3 text-xs leading-5 text-slate-500">{helper}</p> : null}
+          <p className={`${compact ? "text-xs" : "text-sm"} font-medium text-slate-500`}>{title}</p>
+          <p className={`mt-2 font-semibold text-slate-950 ${compact ? "text-[18px] leading-6 md:text-[19px]" : "text-3xl"}`}>
+            {valueLabel ?? value.toLocaleString()}
+          </p>
+          {helper ? <p className={`${compact ? "mt-2 text-[11px] leading-4" : "mt-3 text-xs leading-5"} text-slate-500`}>{helper}</p> : null}
         </div>
-        <div className={`rounded-2xl p-3 ${toneMap[tone]}`}>{icon}</div>
+        <div className={`rounded-2xl ${compact ? "p-2.5" : "p-3"} ${toneMap[tone]}`}>{icon}</div>
       </div>
     </div>
   );
@@ -1140,9 +1195,54 @@ function SummaryRow({
 
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3.5 py-3">
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
+      <p className="mt-1.5 text-sm font-semibold leading-5 text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-[18px] border border-slate-200 bg-slate-50 px-3.5 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="max-w-[62%] text-right text-sm font-semibold leading-5 text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function SectionCard({
+  label,
+  title,
+  children,
+  tone = "slate",
+  contentClassName = "",
+}: {
+  label: string;
+  title: string;
+  children: ReactNode;
+  tone?: "slate" | "blue" | "amber" | "violet";
+  contentClassName?: string;
+}) {
+  const toneMap: Record<string, string> = {
+    slate: "bg-slate-100 text-slate-600",
+    blue: "bg-blue-50 text-blue-700",
+    amber: "bg-amber-50 text-amber-700",
+    violet: "bg-violet-50 text-violet-700",
+  };
+
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+          <h4 className="mt-1 text-sm font-semibold text-slate-950">{title}</h4>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${toneMap[tone]}`}>
+          {tone}
+        </span>
+      </div>
+      <div className={`mt-3 ${contentClassName}`}>{children}</div>
     </div>
   );
 }
@@ -1157,9 +1257,9 @@ function StatusLine({
   dotClass: string;
 }) {
   return (
-    <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-3.5 py-3">
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-slate-900">
+      <div className="mt-1.5 inline-flex items-center gap-2 text-sm font-semibold text-slate-900">
         <span className={`h-2 w-2 rounded-full ${dotClass}`} />
         {value}
       </div>
