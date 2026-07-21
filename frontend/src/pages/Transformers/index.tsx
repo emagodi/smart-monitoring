@@ -2022,12 +2022,11 @@ export default function TransformersIndex() {
                   <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
                     <th className="px-3 py-2.5">Timestamp</th>
                     <th className="px-3 py-2.5">Decoded Metrics</th>
-                    <th className="px-3 py-2.5">Raw Payload</th>
                   </tr>
                 </thead>
                 <tbody>
                   {controllerReadings.length === 0 ? (
-                    renderEmptyState('No controller readings found for the selected time window.', 3)
+                    renderEmptyState('No controller readings found for the selected time window.', 2)
                   ) : (
                     controllerReadings.map((reading) => (
                       <tr key={reading.id} className="enterprise-subtle-card">
@@ -2037,16 +2036,8 @@ export default function TransformersIndex() {
                             {new Date(reading.createdAt).toLocaleString()}
                           </div>
                         </td>
-                        <td className="px-3 py-3 min-w-[320px]">
+                        <td className="rounded-r-[22px] px-3 py-3 min-w-[320px]">
                           <AttributeGrid attributes={reading.attributes || {}} />
-                        </td>
-                        <td className="rounded-r-[22px] px-3 py-3 align-top">
-                          <div
-                            className="max-w-xs truncate text-sm text-slate-500 dark:text-slate-400"
-                            title={reading.rawPayload || '—'}
-                          >
-                            {reading.rawPayload || '—'}
-                          </div>
                         </td>
                       </tr>
                     ))
@@ -2353,18 +2344,22 @@ export default function TransformersIndex() {
 function AttributeGrid({ attributes }: { attributes: Record<string, any> }) {
   const entries = flattenAttributes(attributes);
   if (entries.length === 0) {
-    return <span className="text-sm text-slate-400 dark:text-slate-500">No decoded metrics</span>;
+    return <span className="text-xs text-slate-400 dark:text-slate-500">No decoded metrics</span>;
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {entries.map(([key, value]) => (
         <div
           key={key}
-          className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950"
+          className={`rounded-xl border px-2.5 py-1.5 ${getAttributeChipTone(key, value)}`}
         >
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{key}</div>
-          <div className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatAttributeValue(value)}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+            {formatAttributeKey(key)}
+          </div>
+          <div className={`mt-0.5 text-xs font-semibold ${getAttributeValueTone(key, value)}`}>
+            {formatAttributeValue(value)}
+          </div>
         </div>
       ))}
     </div>
@@ -2395,4 +2390,116 @@ function formatAttributeValue(value: any) {
     return '—';
   }
   return String(value);
+}
+
+function formatAttributeKey(key: string) {
+  return key.replaceAll('.', ' ').replaceAll('_', ' ');
+}
+
+function getAttributeChipTone(key: string, value: any) {
+  const normalizedKey = key.toLowerCase();
+  const normalizedValue = typeof value === 'string' ? value.toLowerCase() : value;
+
+  if (
+    normalizedKey.includes('alarm') ||
+    normalizedKey.includes('fault') ||
+    normalizedKey.includes('error') ||
+    normalizedKey.includes('alert') ||
+    normalizedValue === 'alarm' ||
+    normalizedValue === 'fault' ||
+    normalizedValue === 'error'
+  ) {
+    return 'border-rose-200 bg-rose-50/80 dark:border-rose-500/20 dark:bg-rose-500/10';
+  }
+
+  if (typeof value === 'boolean') {
+    return value
+      ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-500/20 dark:bg-emerald-500/10'
+      : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900';
+  }
+
+  if (normalizedKey.includes('mode_name') || normalizedKey.includes('hardware')) {
+    return 'border-fuchsia-200 bg-fuchsia-50/80 dark:border-fuchsia-500/20 dark:bg-fuchsia-500/10';
+  }
+
+  if (normalizedKey.includes('mode')) {
+    return 'border-violet-200 bg-violet-50/80 dark:border-violet-500/20 dark:bg-violet-500/10';
+  }
+
+  if (
+    normalizedKey.includes('voltage') ||
+    normalizedKey.includes('current') ||
+    normalizedKey.includes('battery')
+  ) {
+    return 'border-blue-200 bg-blue-50/80 dark:border-blue-500/20 dark:bg-blue-500/10';
+  }
+
+  if (normalizedKey.includes('rssi') || normalizedKey.includes('snr')) {
+    return 'border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/10';
+  }
+
+  if (typeof value === 'number' && value === 0) {
+    return 'border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900';
+  }
+
+  if (typeof value === 'number' && value > 0) {
+    return 'border-cyan-200 bg-cyan-50/80 dark:border-cyan-500/20 dark:bg-cyan-500/10';
+  }
+
+  return 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950';
+}
+
+function getAttributeValueTone(key: string, value: any) {
+  const normalizedKey = key.toLowerCase();
+  const normalizedValue = typeof value === 'string' ? value.toLowerCase() : value;
+
+  if (
+    normalizedKey.includes('alarm') ||
+    normalizedKey.includes('fault') ||
+    normalizedKey.includes('error') ||
+    normalizedKey.includes('alert') ||
+    normalizedValue === 'alarm' ||
+    normalizedValue === 'fault' ||
+    normalizedValue === 'error'
+  ) {
+    return 'text-rose-700 dark:text-rose-300';
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400';
+  }
+
+  if (normalizedKey.includes('mode_name') || normalizedKey.includes('hardware')) {
+    return 'text-fuchsia-700 dark:text-fuchsia-300';
+  }
+
+  if (normalizedKey.includes('mode')) {
+    return 'text-violet-700 dark:text-violet-300';
+  }
+
+  if (
+    normalizedKey.includes('voltage') ||
+    normalizedKey.includes('current') ||
+    normalizedKey.includes('battery')
+  ) {
+    return typeof value === 'number' && value === 0
+      ? 'text-slate-500 dark:text-slate-400'
+      : 'text-blue-700 dark:text-blue-300';
+  }
+
+  if (normalizedKey.includes('rssi') || normalizedKey.includes('snr')) {
+    return typeof value === 'number' && value === 0
+      ? 'text-slate-500 dark:text-slate-400'
+      : 'text-amber-700 dark:text-amber-300';
+  }
+
+  if (typeof value === 'number' && value === 0) {
+    return 'text-slate-500 dark:text-slate-400';
+  }
+
+  if (typeof value === 'number' && value > 0) {
+    return 'text-cyan-700 dark:text-cyan-300';
+  }
+
+  return 'text-slate-900 dark:text-slate-100';
 }
