@@ -29,6 +29,8 @@ import com.safalifter.authservice.exception.UserNotFoundException;
 import com.safalifter.authservice.payload.request.*;
 import com.safalifter.authservice.payload.response.AuthenticationResponse;
 import com.safalifter.authservice.payload.response.ChatCommandUserResponse;
+import com.safalifter.authservice.payload.response.NotificationDirectoryEntryResponse;
+import com.safalifter.authservice.payload.response.NotificationDirectoryWorkspaceResponse;
 import com.safalifter.authservice.payload.response.NotificationPreferenceResponse;
 import com.safalifter.authservice.payload.response.NotificationRecipientResponse;
 import com.safalifter.authservice.payload.response.RefreshTokenResponse;
@@ -36,6 +38,7 @@ import com.safalifter.authservice.payload.response.UserAccessResponse;
 import com.safalifter.authservice.repository.UserRepository;
 import com.safalifter.authservice.service.AuthenticationService;
 import com.safalifter.authservice.service.ChatCommandAccessService;
+import com.safalifter.authservice.service.NotificationDirectoryService;
 import com.safalifter.authservice.service.NotificationPreferenceService;
 import com.safalifter.authservice.service.RbacAuthorizationService;
 import com.safalifter.authservice.service.EmailService;
@@ -70,6 +73,7 @@ public class AuthenticationController {
     private final UserRepository userRepository;
     private final RbacAuthorizationService rbacAuthorizationService;
     private final NotificationPreferenceService notificationPreferenceService;
+    private final NotificationDirectoryService notificationDirectoryService;
     private final ChatCommandAccessService chatCommandAccessService;
 
     @PostMapping("/register")
@@ -279,6 +283,40 @@ public class AuthenticationController {
     @GetMapping("/internal/chat-command-users/resolve")
     public ResponseEntity<ChatCommandUserResponse> resolveChatCommandUser(@RequestParam String contact) {
         return ResponseEntity.ok(chatCommandAccessService.resolveUserByContact(contact));
+    }
+
+    @GetMapping("/notification-directory")
+    public ResponseEntity<NotificationDirectoryWorkspaceResponse> getNotificationDirectoryWorkspace(
+            Authentication authentication,
+            @RequestParam(required = false) String supplierCode
+    ) {
+        return ResponseEntity.ok(notificationDirectoryService.getWorkspace(authentication, supplierCode));
+    }
+
+    @PostMapping("/notification-directory")
+    public ResponseEntity<NotificationDirectoryEntryResponse> createNotificationDirectoryEntry(
+            Authentication authentication,
+            @RequestBody NotificationDirectoryEntryRequest request
+    ) {
+        return ResponseEntity.ok(notificationDirectoryService.createEntry(authentication, request));
+    }
+
+    @PutMapping("/notification-directory/{entryId}")
+    public ResponseEntity<NotificationDirectoryEntryResponse> updateNotificationDirectoryEntry(
+            Authentication authentication,
+            @PathVariable Long entryId,
+            @RequestBody NotificationDirectoryEntryRequest request
+    ) {
+        return ResponseEntity.ok(notificationDirectoryService.updateEntry(authentication, entryId, request));
+    }
+
+    @DeleteMapping("/notification-directory/{entryId}")
+    public ResponseEntity<Void> deleteNotificationDirectoryEntry(
+            Authentication authentication,
+            @PathVariable Long entryId
+    ) {
+        notificationDirectoryService.deleteEntry(authentication, entryId);
+        return ResponseEntity.noContent().build();
     }
 
     // Extract duplicate entry message using regex

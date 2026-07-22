@@ -7,5 +7,6 @@ import java.util.Optional;
 
 public interface SupplierRepository extends JpaRepository<SupplierEntity, Long> {
     Optional<SupplierEntity> findByCode(String code);
+    Optional<SupplierEntity> findByCodeIgnoreCase(String code);
     Optional<SupplierEntity> findByName(String name);
 }

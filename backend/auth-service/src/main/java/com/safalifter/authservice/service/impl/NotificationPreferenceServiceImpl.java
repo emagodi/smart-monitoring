@@ -9,6 +9,7 @@ import com.safalifter.authservice.payload.response.NotificationPreferenceRespons
 import com.safalifter.authservice.payload.response.NotificationRecipientResponse;
 import com.safalifter.authservice.repository.NotificationPreferenceRepository;
 import com.safalifter.authservice.repository.UserRepository;
+import com.safalifter.authservice.service.NotificationDirectoryService;
 import com.safalifter.authservice.service.NotificationPreferenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
 
     private final UserRepository userRepository;
     private final NotificationPreferenceRepository notificationPreferenceRepository;
+    private final NotificationDirectoryService notificationDirectoryService;
 
     @Override
     @Transactional(readOnly = true)
@@ -86,7 +88,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
     @Transactional(readOnly = true)
     public List<NotificationRecipientResponse> resolveRecipients(NotificationType notificationType, String supplierCode) {
         String normalizedSupplier = normalize(supplierCode);
-        return userRepository.findAllWithIam().stream()
+        List<NotificationRecipientResponse> userRecipients = userRepository.findAllWithIam().stream()
                 .filter(user -> user.isEnabled())
                 .filter(user -> matchesSupplier(user, normalizedSupplier))
                 .map(user -> toRecipientResponse(user, resolveStoredPreference(user.getId(), notificationType)))
@@ -94,6 +96,10 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
                 .filter(response -> response.isAllChannelsEnabled() || response.isEmailEnabled() || response.isSmsEnabled() || response.isWhatsappEnabled())
                 .sorted(Comparator.comparing(NotificationRecipientResponse::getFirstname, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
+
+        List<NotificationRecipientResponse> recipients = new ArrayList<>(userRecipients);
+        recipients.addAll(notificationDirectoryService.resolveDirectoryRecipients(notificationType, normalizedSupplier));
+        return recipients;
     }
 
     private NotificationPreference resolvePreference(User user, NotificationType type, NotificationPreference stored) {
