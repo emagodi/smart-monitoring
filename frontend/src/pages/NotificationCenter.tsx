@@ -75,26 +75,27 @@ type WorkspaceResponse = {
 };
 
 type DirectoryFormState = {
-  id?: number;
   supplierCode: string;
   displayName: string;
-  channel: NotificationChannel;
-  destination: string;
+  entryIds: Partial<Record<NotificationChannel, number>>;
+  whatsappDestination: string;
+  smsDestination: string;
+  emailDestination: string;
   enabled: boolean;
   allNotificationTypes: boolean;
   notificationTypes: NotificationType[];
-  notes: string;
 };
 
 const defaultFormState: DirectoryFormState = {
   supplierCode: "",
   displayName: "",
-  channel: "WHATSAPP",
-  destination: "",
+  entryIds: {},
+  whatsappDestination: "",
+  smsDestination: "",
+  emailDestination: "",
   enabled: true,
   allNotificationTypes: true,
   notificationTypes: [],
-  notes: "",
 };
 
 const channelMeta: Record<NotificationChannel, { label: string; icon: React.ReactNode; tone: string }> = {
@@ -252,16 +253,36 @@ export default function NotificationCenter() {
   };
 
   const openEdit = (entry: DirectoryEntry) => {
+    const relatedEntries = (workspace?.entries ?? []).filter(
+      (candidate) =>
+        candidate.supplierCode === entry.supplierCode &&
+        candidate.displayName === entry.displayName &&
+        candidate.allNotificationTypes === entry.allNotificationTypes &&
+        sameNotificationTypes(candidate.notificationTypes, entry.notificationTypes)
+    );
+
+    const entryIds: Partial<Record<NotificationChannel, number>> = {};
+    let whatsappDestination = "";
+    let smsDestination = "";
+    let emailDestination = "";
+
+    relatedEntries.forEach((item) => {
+      entryIds[item.channel] = item.id;
+      if (item.channel === "WHATSAPP") whatsappDestination = item.destination;
+      if (item.channel === "SMS") smsDestination = item.destination;
+      if (item.channel === "EMAIL") emailDestination = item.destination;
+    });
+
     setFormState({
-      id: entry.id,
       supplierCode: entry.supplierCode,
       displayName: entry.displayName,
-      channel: entry.channel,
-      destination: entry.destination,
+      entryIds,
+      whatsappDestination,
+      smsDestination,
+      emailDestination,
       enabled: entry.enabled,
       allNotificationTypes: entry.allNotificationTypes,
       notificationTypes: entry.notificationTypes || [],
-      notes: entry.notes || "",
     });
     setShowEditor(true);
   };
@@ -272,8 +293,18 @@ export default function NotificationCenter() {
   };
 
   const saveEntry = async () => {
-    if (!formState.displayName.trim() || !formState.destination.trim()) {
-      setFlash("warning", "Validation", "Display name and destination are required.");
+    if (!formState.displayName.trim()) {
+      setFlash("warning", "Validation", "Display name is required.");
+      return;
+    }
+    const channelValues: Array<{ channel: NotificationChannel; destination: string }> = [
+      { channel: "WHATSAPP", destination: formState.whatsappDestination.trim() },
+      { channel: "SMS", destination: formState.smsDestination.trim() },
+      { channel: "EMAIL", destination: formState.emailDestination.trim() },
+    ];
+    const selectedChannels = channelValues.filter((item) => item.destination);
+    if (selectedChannels.length === 0) {
+      setFlash("warning", "Validation", "Enter at least one WhatsApp number, SMS number, or email address.");
       return;
     }
     if (!formState.allNotificationTypes && formState.notificationTypes.length === 0) {
@@ -286,21 +317,33 @@ export default function NotificationCenter() {
       const payload = {
         supplierCode: formState.supplierCode || activeSupplierCode,
         displayName: formState.displayName.trim(),
-        channel: formState.channel,
-        destination: formState.destination.trim(),
         enabled: formState.enabled,
         allNotificationTypes: formState.allNotificationTypes,
         notificationTypes: formState.notificationTypes,
-        notes: formState.notes.trim(),
       };
 
-      if (formState.id) {
-        await axios.put(`${API_BASE_URL}/api/v1/auth/notification-directory/${formState.id}`, payload, { headers });
-        setFlash("success", "Recipient updated", "The notification recipient was updated.");
-      } else {
-        await axios.post(`${API_BASE_URL}/api/v1/auth/notification-directory`, payload, { headers });
-        setFlash("success", "Recipient added", "The notification recipient was added.");
-      }
+      const upserts = selectedChannels.map(({ channel, destination }) => {
+        const requestPayload = {
+          ...payload,
+          channel,
+          destination,
+        };
+        const entryId = formState.entryIds[channel];
+        return entryId
+          ? axios.put(`${API_BASE_URL}/api/v1/auth/notification-directory/${entryId}`, requestPayload, { headers })
+          : axios.post(`${API_BASE_URL}/api/v1/auth/notification-directory`, requestPayload, { headers });
+      });
+
+      const deletions = (Object.entries(formState.entryIds) as Array<[NotificationChannel, number]>)
+        .filter(([channel, entryId]) => Boolean(entryId) && !selectedChannels.some((item) => item.channel === channel))
+        .map(([, entryId]) => axios.delete(`${API_BASE_URL}/api/v1/auth/notification-directory/${entryId}`, { headers }));
+
+      await Promise.all([...upserts, ...deletions]);
+      setFlash(
+        "success",
+        "Recipient saved",
+        "The supplier recipient was saved with the selected WhatsApp, SMS, and email channels."
+      );
       closeEditor();
       await fetchWorkspace(activeSupplierCode);
     } catch (error) {
@@ -664,7 +707,7 @@ export default function NotificationCenter() {
         variant="center"
         showCloseButton={false}
         backdropBlur={true}
-        className="max-w-[1080px] overflow-hidden rounded-[32px] border border-slate-200/90 bg-white p-0 shadow-[0_30px_90px_rgba(15,23,42,0.16)] dark:border-slate-800 dark:bg-slate-950"
+        className="w-[96vw] max-w-[1380px] overflow-hidden rounded-[32px] border border-slate-200/90 bg-white p-0 shadow-[0_30px_90px_rgba(15,23,42,0.16)] dark:border-slate-800 dark:bg-slate-950"
       >
         <div className="flex flex-col bg-white dark:bg-slate-950">
           <div className="relative overflow-hidden border-b border-slate-200/90 bg-gradient-to-r from-blue-50/95 via-white to-slate-50/95 px-5 py-3.5 dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
@@ -677,13 +720,15 @@ export default function NotificationCenter() {
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-                    {formState.id ? "Edit Recipient" : "Add Recipient"}
+                    {Object.keys(formState.entryIds).length > 0 ? "Edit Recipient" : "Add Recipient"}
                   </p>
                   <h3 className="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-                    {formState.id ? "Update supplier notification recipient" : "Create supplier notification recipient"}
+                    {Object.keys(formState.entryIds).length > 0
+                      ? "Update supplier notification recipient"
+                      : "Create supplier notification recipient"}
                   </h3>
                   <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                    Premium supplier alert routing with compact channel and event controls.
+                    Configure one recipient with separate WhatsApp, SMS, and email destinations in a single save flow.
                   </p>
                 </div>
               </div>
@@ -699,14 +744,14 @@ export default function NotificationCenter() {
           </div>
 
           <div className="bg-slate-50/60 px-5 py-4 dark:bg-slate-950">
-            <div className="grid items-start gap-4 lg:grid-cols-[0.94fr_1.06fr]">
+            <div className="grid items-stretch gap-4 lg:grid-cols-[1fr_1fr]">
               <Panel title="Recipient Identity" description="Name the recipient target and choose the supplier scope.">
                 <Field label="Supplier">
                   <select
                     value={formState.supplierCode || activeSupplierCode}
                     onChange={(event) => setFormState((current) => ({ ...current, supplierCode: event.target.value }))}
                     disabled={!workspace?.canManageAllSuppliers}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
                     {(workspace?.suppliers ?? []).map((supplier) => (
                       <option key={supplier.code} value={supplier.code}>
@@ -719,93 +764,116 @@ export default function NotificationCenter() {
                   <input
                     value={formState.displayName}
                     onChange={(event) => setFormState((current) => ({ ...current, displayName: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     placeholder="Oculus Operations Lead"
                   />
                 </Field>
-                <Field label="Channel">
-                  <select
-                    value={formState.channel}
-                    onChange={(event) => setFormState((current) => ({ ...current, channel: event.target.value as NotificationChannel }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                  >
-                    {(workspace?.availableChannels ?? ["EMAIL", "SMS", "WHATSAPP"]).map((channel) => (
-                      <option key={channel} value={channel}>
-                        {channelMeta[channel].label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label={formState.channel === "EMAIL" ? "Email Address" : "Destination"}>
-                  <input
-                    value={formState.destination}
-                    onChange={(event) => setFormState((current) => ({ ...current, destination: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                    placeholder={formState.channel === "EMAIL" ? "alerts@supplier.com" : "+2637..."}
-                  />
-                </Field>
-                <Field label="Notes">
-                  <textarea
-                    value={formState.notes}
-                    onChange={(event) => setFormState((current) => ({ ...current, notes: event.target.value }))}
-                    rows={3}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                    placeholder="Optional routing notes for operations."
-                  />
-                </Field>
+                <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                      <MessageSquareText className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        Channel Destinations
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Add one or more contact points for the same recipient.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 grid gap-2.5 xl:grid-cols-[1fr_1fr_1.35fr]">
+                    <ChannelInput
+                      label="WhatsApp Number"
+                      icon={<MessageSquareText className="h-4 w-4" />}
+                      value={formState.whatsappDestination}
+                      onChange={(value) => setFormState((current) => ({ ...current, whatsappDestination: value }))}
+                      placeholder="+2637..."
+                      tone="green"
+                    />
+                    <ChannelInput
+                      label="SMS Number"
+                      icon={<Smartphone className="h-4 w-4" />}
+                      value={formState.smsDestination}
+                      onChange={(value) => setFormState((current) => ({ ...current, smsDestination: value }))}
+                      placeholder="+2637..."
+                      tone="amber"
+                    />
+                    <ChannelInput
+                      label="Email Address"
+                      icon={<Mail className="h-4 w-4" />}
+                      value={formState.emailDestination}
+                      onChange={(value) => setFormState((current) => ({ ...current, emailDestination: value }))}
+                      placeholder="alerts@supplier.com"
+                      tone="blue"
+                    />
+                  </div>
+                </div>
               </Panel>
 
               <Panel title="Routing Rules" description="Choose which alert events this destination should receive.">
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <ToggleRow
-                    label="Recipient active"
-                    description="Turn this destination on or off without deleting it."
-                    checked={formState.enabled}
-                    onChange={(checked) => setFormState((current) => ({ ...current, enabled: checked }))}
-                  />
-                  <ToggleRow
-                    label="All event types"
-                    description="Use one destination for every transformer and system notification."
-                    checked={formState.allNotificationTypes}
-                    onChange={(checked) =>
-                      setFormState((current) => ({
-                        ...current,
-                        allNotificationTypes: checked,
-                        notificationTypes: checked ? [] : current.notificationTypes,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="mt-3 grid gap-2 grid-cols-3">
-                  {(workspace?.availableNotificationTypes ?? []).map((type) => {
-                    const checked = formState.notificationTypes.includes(type);
-                    return (
-                      <label
-                        key={type}
-                        className={`flex min-h-[46px] items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] leading-4 ${
-                          checked
-                            ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-                            : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                        } ${formState.allNotificationTypes ? "opacity-50" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={formState.allNotificationTypes}
-                          onChange={() =>
-                            setFormState((current) => ({
-                              ...current,
-                              notificationTypes: checked
-                                ? current.notificationTypes.filter((item) => item !== type)
-                                : [...current.notificationTypes, type],
-                            }))
-                          }
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="font-semibold tracking-tight">{prettyType(type)}</span>
-                      </label>
-                    );
-                  })}
+                <div className="flex h-full flex-col">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <ToggleRow
+                      label="Recipient active"
+                      description="Turn this destination on or off without deleting it."
+                      checked={formState.enabled}
+                      onChange={(checked) => setFormState((current) => ({ ...current, enabled: checked }))}
+                    />
+                    <ToggleRow
+                      label="All event types"
+                      description="Use one destination for every transformer and system notification."
+                      checked={formState.allNotificationTypes}
+                      onChange={(checked) =>
+                        setFormState((current) => ({
+                          ...current,
+                          allNotificationTypes: checked,
+                          notificationTypes: checked ? [] : current.notificationTypes,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="mt-2.5 grid gap-1.5 grid-cols-3">
+                    {(workspace?.availableNotificationTypes ?? []).map((type) => {
+                      const checked = formState.notificationTypes.includes(type);
+                      return (
+                        <label
+                          key={type}
+                          className={`flex min-h-[38px] items-center gap-1.5 rounded-xl border px-1.5 py-1.5 text-[10px] leading-3 ${
+                            checked
+                              ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
+                              : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                          } ${formState.allNotificationTypes ? "opacity-50" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={formState.allNotificationTypes}
+                            onChange={() =>
+                              setFormState((current) => ({
+                                ...current,
+                                notificationTypes: checked
+                                  ? current.notificationTypes.filter((item) => item !== type)
+                                  : [...current.notificationTypes, type],
+                              }))
+                            }
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="font-semibold tracking-tight">{prettyType(type)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white px-2.5 py-2 dark:border-blue-500/20 dark:from-blue-500/10 dark:to-slate-900">
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-300">Blue Policy</p>
+                      <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Operational routing profile</p>
+                    </div>
+                    <div className="rounded-xl border border-rose-100 bg-gradient-to-r from-rose-50 to-white px-2.5 py-2 dark:border-rose-500/20 dark:from-rose-500/10 dark:to-slate-900">
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-rose-600 dark:text-rose-300">Red Policy</p>
+                      <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">High-priority incident profile</p>
+                    </div>
+                  </div>
                 </div>
               </Panel>
             </div>
@@ -827,7 +895,7 @@ export default function NotificationCenter() {
                 className="inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />
-                {savingEntry ? "Saving..." : formState.id ? "Save Recipient" : "Create Recipient"}
+                {savingEntry ? "Saving..." : Object.keys(formState.entryIds).length > 0 ? "Save Recipient" : "Create Recipient"}
               </button>
             </div>
           </div>
@@ -875,11 +943,16 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 }
 
 function Panel({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  const compactRouting = title === "Routing Rules";
   return (
-    <section className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">{title}</p>
-      <p className="mt-1 text-[12px] leading-5 text-slate-500 dark:text-gray-400">{description}</p>
-      <div className="mt-4 space-y-3.5">{children}</div>
+    <section className={`flex h-full flex-col rounded-[22px] border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 ${compactRouting ? "p-3.5" : "p-4"}`}>
+      <p className={`${compactRouting ? "text-[9px] tracking-[0.17em]" : "text-[10px] tracking-[0.2em]"} font-semibold uppercase text-blue-600 dark:text-blue-300`}>
+        {title}
+      </p>
+      <p className={`mt-1 text-slate-500 dark:text-gray-400 ${compactRouting ? "text-[11px] leading-4" : "text-[12px] leading-5"}`}>
+        {description}
+      </p>
+      <div className={`${compactRouting ? "mt-3 space-y-3" : "mt-4 space-y-3.5"} flex-1`}>{children}</div>
     </section>
   );
 }
@@ -887,7 +960,7 @@ function Panel({ title, description, children }: { title: string; description: s
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-1.5">
-      <span className="text-[12px] font-medium text-slate-700 dark:text-slate-300">{label}</span>
+      <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">{label}</span>
       {children}
     </label>
   );
@@ -905,14 +978,63 @@ function ToggleRow({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 dark:border-slate-700 dark:bg-slate-950">
-      <div>
-        <p className="text-[13px] font-semibold text-slate-900 dark:text-white">{label}</p>
-        <p className="mt-0.5 text-[11px] leading-4 text-slate-500 dark:text-gray-400">{description}</p>
+    <div className="flex min-h-[64px] items-center justify-between gap-2 rounded-2xl border border-blue-100/80 bg-gradient-to-r from-blue-50/85 via-white to-slate-50/85 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-blue-500/20 dark:from-blue-500/10 dark:via-slate-900 dark:to-slate-900">
+      <div className="flex-1">
+        <p className="text-[11px] font-semibold tracking-tight text-slate-900 dark:text-white">{label}</p>
+        <p className="mt-1 text-[9px] leading-3.5 text-slate-500 dark:text-gray-400">{description}</p>
       </div>
-      <Checkbox checked={checked} onChange={onChange} />
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 shadow-sm ring-1 ring-blue-100 dark:bg-slate-800 dark:ring-blue-500/20">
+        <Checkbox checked={checked} onChange={onChange} />
+      </div>
     </div>
   );
+}
+
+function ChannelInput({
+  className,
+  label,
+  icon,
+  value,
+  onChange,
+  placeholder,
+  tone,
+}: {
+  className?: string;
+  label: string;
+  icon: React.ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  tone: "green" | "amber" | "blue";
+}) {
+  const toneClass =
+    tone === "green"
+      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+      : tone === "amber"
+        ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
+        : "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";
+
+  return (
+    <div className={`rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900 ${className ?? ""}`}>
+      <div className="flex items-center gap-1.5">
+        <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${toneClass}`}>{icon}</div>
+        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+      </div>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+function sameNotificationTypes(left: NotificationType[] = [], right: NotificationType[] = []) {
+  if (left.length !== right.length) return false;
+  const leftSorted = [...left].sort();
+  const rightSorted = [...right].sort();
+  return leftSorted.every((value, index) => value === rightSorted[index]);
 }
 
 function MiniChip({ label, tone }: { label: string; tone: "blue" | "slate" | "green" | "amber" }) {
