@@ -21,7 +21,7 @@ import Button from "../../components/ui/button/Button";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 
-type ControlFilter = "all" | "ARMED" | "DISARMED" | "UNKNOWN" | "ONLINE";
+type ControlFilter = "all" | "ARMED" | "DISARMED" | "UNKNOWN" | "ONLINE" | "OFFLINE";
 
 type OculusTransformerControl = {
   transformerId: number;
@@ -119,16 +119,16 @@ const formatDateTime = (value?: string | null) => {
 };
 
 const statusTone = (armState?: string | null) => {
-  if (armState === "ARMED") return "bg-emerald-100 text-emerald-700";
-  if (armState === "DISARMED") return "bg-amber-100 text-amber-700";
-  return "bg-slate-100 text-slate-700";
+  if (armState === "ARMED") return "border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  if (armState === "DISARMED") return "border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-100 text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  return "border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
 };
 
 const commandTone = (status?: string | null) => {
-  if (status === "SENT") return "bg-emerald-100 text-emerald-700";
-  if (status === "FAILED") return "bg-red-100 text-red-700";
-  if (status === "PENDING") return "bg-blue-100 text-blue-700";
-  return "bg-slate-100 text-slate-700";
+  if (status === "SENT") return "border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  if (status === "FAILED") return "border border-red-200 bg-gradient-to-r from-red-50 to-rose-100 text-red-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  if (status === "PENDING") return "border border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-100 text-blue-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  return "border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
 };
 
 const parseDateValue = (value?: string | null) => {
@@ -173,24 +173,24 @@ const getConfirmationStatusLabel = (row?: OculusTransformerControl | null) => {
 const confirmationTone = (row?: OculusTransformerControl | null) => {
   switch (row?.confirmationStatus) {
     case "CONFIRMED":
-      return "bg-emerald-100 text-emerald-700";
+      return "border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
     case "PENDING_KEEPALIVE":
     case "SENDING_COMMAND":
-      return "bg-blue-100 text-blue-700";
+      return "border border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-100 text-blue-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
     case "KEEPALIVE_OVERDUE":
-      return "bg-amber-100 text-amber-700";
+      return "border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-100 text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
     case "COMMAND_FAILED":
     case "TELEMETRY_MISMATCH":
-      return "bg-red-100 text-red-700";
+      return "border border-red-200 bg-gradient-to-r from-red-50 to-rose-100 text-red-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
   }
-  return "bg-slate-100 text-slate-700";
+  return "border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
 };
 
 const controllerStatusTone = (status?: string | null) => {
-  if (status === "ONLINE") return "bg-emerald-100 text-emerald-700";
-  if (status === "DELAYED") return "bg-amber-100 text-amber-700";
-  if (status === "OFFLINE") return "bg-red-100 text-red-700";
-  return "bg-slate-100 text-slate-700";
+  if (status === "ONLINE") return "border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-[0_6px_16px_rgba(16,185,129,0.08)]";
+  if (status === "DELAYED") return "border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-100 text-amber-700 shadow-[0_6px_16px_rgba(245,158,11,0.08)]";
+  if (status === "OFFLINE") return "border border-red-200 bg-gradient-to-r from-red-50 to-rose-100 text-red-700 shadow-[0_6px_16px_rgba(239,68,68,0.08)]";
+  return "border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 shadow-[0_6px_16px_rgba(100,116,139,0.08)]";
 };
 
 const controllerStatusLabel = (status?: string | null) => {
@@ -207,9 +207,9 @@ const armStateLabel = (state?: string | null) => {
 };
 
 const armStateTone = (state?: string | null) => {
-  if (state === "ARMED") return "bg-emerald-100 text-emerald-700";
-  if (state === "DISARMED") return "bg-amber-100 text-amber-700";
-  return "bg-slate-100 text-slate-700";
+  if (state === "ARMED") return "border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  if (state === "DISARMED") return "border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-100 text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  return "border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
 };
 
 const commandTargetLabel = (state?: "ARMED" | "DISARMED" | null) => {
@@ -225,20 +225,20 @@ const effectiveStateSourceLabel = (source?: "COMMAND" | "TELEMETRY" | null) => {
 };
 
 const transformerTypeTone = (transformerType?: string | null) => {
-  if (transformerType === "GMT") return "bg-indigo-100 text-indigo-700";
-  if (transformerType === "PMT") return "bg-cyan-100 text-cyan-700";
-  return "bg-slate-100 text-slate-700";
+  if (transformerType === "GMT") return "border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-100 text-indigo-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  if (transformerType === "PMT") return "border border-cyan-200 bg-gradient-to-r from-cyan-50 to-sky-100 text-cyan-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  return "border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
 };
 
 const signalTone = (active?: boolean | null) => {
-  if (active == null) return "bg-slate-100 text-slate-700";
-  if (active) return "bg-red-100 text-red-700";
-  return "bg-emerald-100 text-emerald-700";
+  if (active == null) return "border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  if (active) return "border border-red-200 bg-gradient-to-r from-red-50 to-rose-100 text-red-700 shadow-[0_6px_16px_rgba(239,68,68,0.08)]";
+  return "border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-[0_6px_16px_rgba(16,185,129,0.08)]";
 };
 
 const activeAlertSummaryTone = (summary?: string | null) => {
-  if (!summary || summary === "No active intrusion alerts") return "bg-emerald-100 text-emerald-700";
-  return "bg-red-100 text-red-700";
+  if (!summary || summary === "No active intrusion alerts") return "border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-[0_6px_16px_rgba(16,185,129,0.08)]";
+  return "border border-red-200 bg-gradient-to-r from-red-50 to-rose-100 text-red-700 shadow-[0_6px_16px_rgba(239,68,68,0.08)]";
 };
 
 const secondarySignalColumnLabel = (transformerType?: string | null) => {
@@ -350,6 +350,8 @@ export default function OculusControlIndex() {
           ? true
           : armStateFilter === "ONLINE"
             ? row.controllerStatus === "ONLINE"
+            : armStateFilter === "OFFLINE"
+              ? row.controllerStatus === "OFFLINE"
             : getEffectiveArmState(row) === armStateFilter;
       const matchesQuery =
         !query ||
@@ -367,9 +369,10 @@ export default function OculusControlIndex() {
     const unknown = Math.max(total - armed - disarmed, 0);
     const pending = rows.filter(isAwaitingTelemetryConfirmation).length;
     const online = rows.filter((row) => row.controllerStatus === "ONLINE").length;
+    const offline = rows.filter((row) => row.controllerStatus === "OFFLINE").length;
     const unavailable = rows.filter((row) => !row.controlAvailable).length;
     const overdue = rows.filter((row) => row.confirmationStatus === "KEEPALIVE_OVERDUE").length;
-    return { total, armed, disarmed, unknown, pending, online, unavailable, overdue };
+    return { total, armed, disarmed, unknown, pending, online, offline, unavailable, overdue };
   }, [rows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -486,6 +489,7 @@ export default function OculusControlIndex() {
     DISARMED: stats.disarmed,
     UNKNOWN: stats.unknown,
     ONLINE: stats.online,
+    OFFLINE: stats.offline,
   } as const;
   const disableSelectedArm =
     !selectedRow ||
@@ -683,8 +687,9 @@ export default function OculusControlIndex() {
         </div>
 
         {/* Main Table Card */}
-        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
-          <div className="flex flex-col gap-4 border-b border-slate-200/80 px-5 py-4">
+        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden rounded-[30px] border border-slate-200/80 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.10)] ring-1 ring-blue-100/40">
+          <div className="h-1.5 bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400" />
+          <div className="flex flex-col gap-4 border-b border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.08),_transparent_42%),linear-gradient(180deg,rgba(248,250,252,0.98),rgba(255,255,255,0.94))] px-5 py-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <FilterButton active={armStateFilter === "all"} onClick={() => setArmStateFilter("all")} label="All" count={filterCounts.all} tone="slate" />
@@ -692,6 +697,7 @@ export default function OculusControlIndex() {
                 <FilterButton active={armStateFilter === "DISARMED"} onClick={() => setArmStateFilter("DISARMED")} label="Disarmed" count={filterCounts.DISARMED} tone="amber" />
                 <FilterButton active={armStateFilter === "UNKNOWN"} onClick={() => setArmStateFilter("UNKNOWN")} label="Unknown" count={filterCounts.UNKNOWN} tone="slate" />
                 <FilterButton active={armStateFilter === "ONLINE"} onClick={() => setArmStateFilter("ONLINE")} label="Online" count={filterCounts.ONLINE} tone="emerald" />
+                <FilterButton active={armStateFilter === "OFFLINE"} onClick={() => setArmStateFilter("OFFLINE")} label="Offline" count={filterCounts.OFFLINE} tone="amber" />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-[280px]">
@@ -701,13 +707,13 @@ export default function OculusControlIndex() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search transformer, location, controller..."
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-2xl border border-slate-200 bg-white/90 py-2.5 pl-10 pr-4 text-sm text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
                 <select
                   value={pageSize}
                   onChange={(event) => setPageSize(Number(event.target.value))}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:bg-white"
+                  className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition focus:border-blue-400 focus:bg-white"
                 >
                   <option value={10}>10 rows</option>
                   <option value={20}>20 rows</option>
@@ -726,18 +732,18 @@ export default function OculusControlIndex() {
             <>
               <div className="overflow-x-auto">
                 <table className="min-w-[1180px]">
-                  <thead className="bg-slate-50/80">
+                  <thead className="border-b border-slate-200 bg-[linear-gradient(90deg,rgba(15,23,42,0.04),rgba(37,99,235,0.07),rgba(6,182,212,0.05))]">
                     <tr>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transformer</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Controller</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Motion</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Transformer</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Controller</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Motion</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
                         {secondarySignalColumnLabel(selectedRow?.transformerType)}
                       </th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Actions</th>
+                      <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200/80 bg-white">
+                  <tbody className="divide-y divide-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.92))]">
                     {paginatedRows.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-5 py-14 text-center text-sm text-slate-500">
@@ -760,8 +766,10 @@ export default function OculusControlIndex() {
                           <tr
                             key={row.transformerId}
                             onClick={() => setSelectedRow(row)}
-                            className={`cursor-pointer transition hover:bg-slate-50 ${
-                              selectedRow?.transformerId === row.transformerId ? "bg-blue-50/60" : "bg-white"
+                            className={`group cursor-pointer transition-all duration-200 hover:bg-[linear-gradient(90deg,rgba(239,246,255,0.9),rgba(248,250,252,0.96))] hover:shadow-[inset_4px_0_0_rgba(37,99,235,0.55)] ${
+                              selectedRow?.transformerId === row.transformerId
+                                ? "bg-[linear-gradient(90deg,rgba(219,234,254,0.85),rgba(255,255,255,0.98),rgba(236,254,255,0.9))] shadow-[inset_4px_0_0_rgba(37,99,235,1)]"
+                                : "bg-white"
                             }`}
                           >
                             <td className="px-5 py-4">
@@ -780,7 +788,6 @@ export default function OculusControlIndex() {
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
                               <div className="space-y-2">
-                                <div className="font-medium text-slate-900">{row.controllerName || "No linked controller"}</div>
                                 <div className="font-mono text-xs text-slate-500">{row.controllerDevEui || "-"}</div>
                                 <div>
                                   <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${controllerStatusTone(row.controllerStatus)}`}>
@@ -795,7 +802,7 @@ export default function OculusControlIndex() {
                               </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
-                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${signalTone(row.motionDetected)}`}>
+                              <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${signalTone(row.motionDetected)}`}>
                                 {row.motionStatusLabel || "No motion telemetry"}
                               </span>
                             </td>
@@ -816,7 +823,7 @@ export default function OculusControlIndex() {
                                     setSelectedRow(row);
                                     setShowDetails(true);
                                   }}
-                                  className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                  className="inline-flex h-10 items-center gap-2 rounded-full border border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-100 px-3.5 text-xs font-semibold text-blue-700 shadow-[0_10px_24px_rgba(37,99,235,0.16)] transition hover:-translate-y-0.5 hover:border-blue-300 hover:from-blue-100 hover:to-cyan-100 hover:text-blue-800"
                                 >
                                   <Eye className="h-3.5 w-3.5" />
                                   Details
@@ -855,7 +862,7 @@ export default function OculusControlIndex() {
                 </table>
               </div>
 
-              <div className="border-t border-slate-200/80 px-5 py-4">
+              <div className="border-t border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.75),rgba(255,255,255,0.95))] px-5 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-slate-500">
                     Showing <span className="font-medium text-slate-900">{filteredRows.length === 0 ? 0 : (page - 1) * pageSize + 1}</span> to{" "}
@@ -1144,8 +1151,8 @@ function PremiumActionButton({
 }) {
   const toneClass =
     tone === "arm"
-      ? "border-emerald-300 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_12px_26px_rgba(16,185,129,0.28)] hover:from-emerald-600 hover:to-teal-600"
-      : "border-slate-300 bg-white text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.08)] hover:border-slate-400 hover:bg-slate-50";
+      ? "border-blue-300 bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-[0_12px_26px_rgba(37,99,235,0.30)] hover:from-blue-700 hover:to-cyan-600"
+      : "border-red-200 bg-gradient-to-r from-red-50 to-rose-100 text-red-700 shadow-[0_10px_24px_rgba(239,68,68,0.14)] hover:border-red-300 hover:from-red-100 hover:to-rose-100";
 
   return (
     <button
