@@ -737,10 +737,8 @@ export default function OculusControlIndex() {
                       <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Transformer</th>
                       <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Controller</th>
                       <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Motion</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
-                        {secondarySignalColumnLabel(selectedRow?.transformerType)}
-                      </th>
-                      <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Vibration / Door</th>
+                      <th className="px-5 py-3.5 text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.92))]">
@@ -807,11 +805,10 @@ export default function OculusControlIndex() {
                               </span>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="space-y-2">
+                              <div>
                                 <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${signalTone(row.secondaryAlertDetected)}`}>
                                   {row.secondaryAlertStatusLabel || "No secondary telemetry"}
                                 </span>
-                                <div className="text-xs text-slate-500">{row.secondaryAlertLabel || secondarySignalColumnLabel(row.transformerType)}</div>
                               </div>
                             </td>
                             <td className="px-5 py-4">
