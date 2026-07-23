@@ -21,7 +21,7 @@ import Button from "../../components/ui/button/Button";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 
-type ArmStateFilter = "all" | "ARMED" | "DISARMED" | "UNKNOWN";
+type ControlFilter = "all" | "ARMED" | "DISARMED" | "UNKNOWN" | "ONLINE";
 
 type OculusTransformerControl = {
   transformerId: number;
@@ -262,14 +262,12 @@ export default function OculusControlIndex() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [armStateFilter, setArmStateFilter] = useState<ArmStateFilter>("all");
+  const [armStateFilter, setArmStateFilter] = useState<ControlFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [activeCommand, setActiveCommand] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<EnrichedControlRow | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showAdvancedAudit, setShowAdvancedAudit] = useState(false);
-
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
 
   const fetchControlRows = useCallback(async (showLoader = true) => {
@@ -347,7 +345,12 @@ export default function OculusControlIndex() {
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return enrichedRows.filter((row) => {
-      const matchesArmState = armStateFilter === "all" ? true : getEffectiveArmState(row) === armStateFilter;
+      const matchesArmState =
+        armStateFilter === "all"
+          ? true
+          : armStateFilter === "ONLINE"
+            ? row.controllerStatus === "ONLINE"
+            : getEffectiveArmState(row) === armStateFilter;
       const matchesQuery =
         !query ||
         `${row.transformerName || ""} ${row.transformerType || ""} ${row.regionName} ${row.districtName} ${row.depotName} ${row.controllerName || ""} ${row.controllerDevEui || ""}`
@@ -406,10 +409,6 @@ export default function OculusControlIndex() {
 
     setSelectedRow(filteredRows[0]);
   }, [filteredRows, selectedRow]);
-
-  useEffect(() => {
-    setShowAdvancedAudit(false);
-  }, [showDetails, selectedRow?.transformerId]);
 
   const applyOptimisticCommandState = useCallback(
     (transformerId: number, action: "arm" | "disarm", data?: OculusControlActionResponse) => {
@@ -481,6 +480,13 @@ export default function OculusControlIndex() {
   const selectedEffectiveState = getEffectiveArmState(selectedRow || undefined);
   const selectedCommandTarget = selectedRow ? getCommandTargetState(selectedRow) : null;
   const selectedAwaitingConfirmation = selectedRow ? isAwaitingTelemetryConfirmation(selectedRow) : false;
+  const filterCounts = {
+    all: stats.total,
+    ARMED: stats.armed,
+    DISARMED: stats.disarmed,
+    UNKNOWN: stats.unknown,
+    ONLINE: stats.online,
+  } as const;
   const disableSelectedArm =
     !selectedRow ||
     !selectedRow.controlAvailable ||
@@ -626,12 +632,12 @@ export default function OculusControlIndex() {
 
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Location</p>
-                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedRow.districtName}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Transformer Type</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedRow.transformerType || "Unspecified"}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Controller</p>
-                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedRow.controllerName || "None"}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Motion</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedRow.motionStatusLabel || "No motion telemetry"}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
                     <p className="text-xs text-slate-500 dark:text-slate-400">Telemetry</p>
@@ -640,34 +646,32 @@ export default function OculusControlIndex() {
                     </p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Target</p>
-                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedCommandTarget || "None"}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Pending Status</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{getConfirmationStatusLabel(selectedRow)}</p>
                   </div>
                 </div>
 
                 <div className="flex gap-2">
-                  <Button
+                  <PremiumActionButton
                     className="flex-1"
-                    size="sm"
-                    variant="outline"
-                    startIcon={<Lock className="h-4 w-4" />}
+                    tone="arm"
+                    icon={<Lock className="h-4 w-4" />}
                     disabled={disableSelectedArm}
-                    isLoading={activeCommand === `${selectedRow.transformerId}:arm`}
+                    loading={activeCommand === `${selectedRow.transformerId}:arm`}
                     onClick={() => void sendCommand(selectedRow.transformerId, "arm")}
                   >
                     Arm
-                  </Button>
-                  <Button
+                  </PremiumActionButton>
+                  <PremiumActionButton
                     className="flex-1"
-                    size="sm"
-                    variant="secondary"
-                    startIcon={<Unlock className="h-4 w-4" />}
+                    tone="disarm"
+                    icon={<Unlock className="h-4 w-4" />}
                     disabled={disableSelectedDisarm}
-                    isLoading={activeCommand === `${selectedRow.transformerId}:disarm`}
+                    loading={activeCommand === `${selectedRow.transformerId}:disarm`}
                     onClick={() => void sendCommand(selectedRow.transformerId, "disarm")}
                   >
                     Disarm
-                  </Button>
+                  </PremiumActionButton>
                 </div>
               </div>
             ) : (
@@ -683,10 +687,11 @@ export default function OculusControlIndex() {
           <div className="flex flex-col gap-4 border-b border-slate-200/80 px-5 py-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-wrap items-center gap-2">
-                <FilterButton active={armStateFilter === "all"} onClick={() => setArmStateFilter("all")} label="All" />
-                <FilterButton active={armStateFilter === "ARMED"} onClick={() => setArmStateFilter("ARMED")} label="Armed" />
-                <FilterButton active={armStateFilter === "DISARMED"} onClick={() => setArmStateFilter("DISARMED")} label="Disarmed" />
-                <FilterButton active={armStateFilter === "UNKNOWN"} onClick={() => setArmStateFilter("UNKNOWN")} label="Unknown" />
+                <FilterButton active={armStateFilter === "all"} onClick={() => setArmStateFilter("all")} label="All" count={filterCounts.all} tone="slate" />
+                <FilterButton active={armStateFilter === "ARMED"} onClick={() => setArmStateFilter("ARMED")} label="Armed" count={filterCounts.ARMED} tone="emerald" />
+                <FilterButton active={armStateFilter === "DISARMED"} onClick={() => setArmStateFilter("DISARMED")} label="Disarmed" count={filterCounts.DISARMED} tone="amber" />
+                <FilterButton active={armStateFilter === "UNKNOWN"} onClick={() => setArmStateFilter("UNKNOWN")} label="Unknown" count={filterCounts.UNKNOWN} tone="slate" />
+                <FilterButton active={armStateFilter === "ONLINE"} onClick={() => setArmStateFilter("ONLINE")} label="Online" count={filterCounts.ONLINE} tone="emerald" />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-[280px]">
@@ -720,35 +725,27 @@ export default function OculusControlIndex() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="min-w-[1500px]">
+                <table className="min-w-[1180px]">
                   <thead className="bg-slate-50/80">
                     <tr>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transformer</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Location</th>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Controller</th>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Motion</th>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                         {secondarySignalColumnLabel(selectedRow?.transformerType)}
                       </th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Effective control state</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Command target state</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Confirmed telemetry state</th>
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Pending / Confirmed status</th>
                       <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/80 bg-white">
                     {paginatedRows.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="px-5 py-14 text-center text-sm text-slate-500">
+                        <td colSpan={5} className="px-5 py-14 text-center text-sm text-slate-500">
                           No Oculus-monitored transformers found for the current filters.
                         </td>
                       </tr>
                     ) : (
                       paginatedRows.map((row) => {
-                        const awaitingConfirmation = isAwaitingTelemetryConfirmation(row);
-                        const targetState = getCommandTargetState(row);
-                        const confirmationStatusLabel = getConfirmationStatusLabel(row);
                         const effectiveArmState = getEffectiveArmState(row);
                         const disableArm =
                           !row.controlAvailable ||
@@ -782,25 +779,19 @@ export default function OculusControlIndex() {
                               </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="space-y-1">
-                                <div>{row.regionName}</div>
-                                <div>{row.districtName}</div>
-                                <div className="text-xs text-slate-500">{row.depotName}</div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="font-medium text-slate-900">{row.controllerName || "No linked controller"}</div>
-                              <div className="mt-1 font-mono text-xs text-slate-500">{row.controllerDevEui || "-"}</div>
-                              <div className="mt-2">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${controllerStatusTone(row.controllerStatus)}`}>
-                                  {controllerStatusLabel(row.controllerStatus)}
-                                </span>
-                              </div>
-                              <div className="mt-1 text-xs text-slate-500">{row.controllerType || "Unknown controller type"}</div>
-                              <div className="mt-1 text-xs text-slate-500">
-                                {row.minutesSinceLastTelemetry != null
-                                  ? `Last keepalive ${row.minutesSinceLastTelemetry} min ago`
-                                  : "No keepalive received yet"}
+                              <div className="space-y-2">
+                                <div className="font-medium text-slate-900">{row.controllerName || "No linked controller"}</div>
+                                <div className="font-mono text-xs text-slate-500">{row.controllerDevEui || "-"}</div>
+                                <div>
+                                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${controllerStatusTone(row.controllerStatus)}`}>
+                                    {controllerStatusLabel(row.controllerStatus)}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                  {row.minutesSinceLastTelemetry != null
+                                    ? `Last keepalive ${row.minutesSinceLastTelemetry} min ago`
+                                    : "No keepalive received yet"}
+                                </div>
                               </div>
                             </td>
                             <td className="px-5 py-4 text-sm text-slate-600">
@@ -816,53 +807,6 @@ export default function OculusControlIndex() {
                                 <div className="text-xs text-slate-500">{row.secondaryAlertLabel || secondarySignalColumnLabel(row.transformerType)}</div>
                               </div>
                             </td>
-                            <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="space-y-2">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${armStateTone(effectiveArmState)}`}>
-                                  {armStateLabel(effectiveArmState)} Now
-                                </span>
-                                <div className="text-xs text-slate-500">{effectiveStateSourceLabel(row.effectiveStateSource)}</div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="space-y-2">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${armStateTone(targetState)}`}>
-                                  {commandTargetLabel(targetState)}
-                                </span>
-                                <div className="text-xs text-slate-500">
-                                  {row.lastCommandAt ? `At ${formatDateTime(row.lastCommandAt)}` : "No Loriot command sent"}
-                                </div>
-                                <div className="text-xs text-slate-500">{row.lastCommandRequestedBy || "No requester recorded"}</div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="space-y-2">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${armStateTone(row.armState)}`}>
-                                  {armStateLabel(row.armState)}
-                                </span>
-                                <div className="text-xs text-slate-500">
-                                  {row.lastTelemetryAt ? formatDateTime(row.lastTelemetryAt) : "No telemetry yet"}
-                                </div>
-                                <div className="text-xs text-slate-500">
-                                  {row.lastTelemetryAt ? "Latest `RO1` telemetry confirmed state" : "Latest `RO1` decision not confirmed"}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 text-sm text-slate-600">
-                              <div className="space-y-2">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${confirmationTone(row)}`}>
-                                  {confirmationStatusLabel}
-                                </span>
-                                <div className="text-xs text-slate-500">
-                                  {row.lastCommandStatus === "SENT" ? "Control ready" : row.availabilityReason || "Control ready"}
-                                </div>
-                                {awaitingConfirmation ? (
-                                  <div className="text-xs text-blue-600">
-                                    Waiting for next keepalive
-                                  </div>
-                                ) : null}
-                              </div>
-                            </td>
                             <td className="px-5 py-4">
                               <div className="flex items-center justify-end gap-2">
                                 <button
@@ -872,37 +816,35 @@ export default function OculusControlIndex() {
                                     setSelectedRow(row);
                                     setShowDetails(true);
                                   }}
-                                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                  className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                                 >
                                   <Eye className="h-3.5 w-3.5" />
                                   Details
                                 </button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  startIcon={<Lock className="h-4 w-4" />}
+                                <PremiumActionButton
+                                  tone="arm"
+                                  icon={<Lock className="h-4 w-4" />}
                                   disabled={disableArm}
-                                  isLoading={activeCommand === `${row.transformerId}:arm`}
+                                  loading={activeCommand === `${row.transformerId}:arm`}
                                   onClick={() => {
                                     setSelectedRow(row);
                                     void sendCommand(row.transformerId, "arm");
                                   }}
                                 >
                                   Arm
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  startIcon={<Unlock className="h-4 w-4" />}
+                                </PremiumActionButton>
+                                <PremiumActionButton
+                                  tone="disarm"
+                                  icon={<Unlock className="h-4 w-4" />}
                                   disabled={disableDisarm}
-                                  isLoading={activeCommand === `${row.transformerId}:disarm`}
+                                  loading={activeCommand === `${row.transformerId}:disarm`}
                                   onClick={() => {
                                     setSelectedRow(row);
                                     void sendCommand(row.transformerId, "disarm");
                                   }}
                                 >
                                   Disarm
-                                </Button>
+                                </PremiumActionButton>
                               </div>
                             </td>
                           </tr>
@@ -1040,6 +982,8 @@ export default function OculusControlIndex() {
                       <DetailField label="Region" value={selectedRow.regionName} />
                       <DetailField label="District" value={selectedRow.districtName} />
                       <DetailField label="Depot" value={selectedRow.depotName} />
+                      <DetailField label="Controller" value={selectedRow.controllerName || "No linked controller"} />
+                      <DetailField label="Controller DevEUI" value={selectedRow.controllerDevEui || "Unavailable"} />
                       <DetailField label="Transformer type" value={selectedRow.transformerType || "Unspecified"} />
                       <DetailField label="Supplier" value={selectedRow.supplierName || selectedRow.supplierCode || "Oculus"} />
                       <DetailField label="Controller type" value={selectedRow.controllerType || "Unavailable"} />
@@ -1087,27 +1031,16 @@ export default function OculusControlIndex() {
                     <div className="mt-4 space-y-2">
                       <DetailRow label="Last command action" value={selectedRow.lastCommandAction || "No command sent"} />
                       <DetailRow label="Last command timestamp" value={formatDateTime(selectedRow.lastCommandAt)} />
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvancedAudit((current) => !current)}
-                        className="w-full rounded-[18px] border border-dashed border-slate-300 px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:border-violet-300 hover:bg-violet-50/60 hover:text-violet-700"
-                      >
-                        {showAdvancedAudit ? "Hide advanced audit" : "Show advanced audit"}
-                      </button>
-                      {showAdvancedAudit ? (
-                        <div className="space-y-2">
-                          <DetailRow label="Requested by" value={selectedRow.lastCommandRequestedBy || "Unavailable"} />
-                          <DetailRow label="Availability note" value={selectedRow.controlAvailable ? "Control ready" : selectedRow.availabilityReason || "Unavailable"} />
-                          <DetailRow
-                            label="Workflow note"
-                            value={
-                              selectedAwaitingConfirmation
-                                ? "Operator posture has updated and is waiting for keepalive confirmation."
-                                : "Telemetry and operator posture are aligned or no command is pending."
-                            }
-                          />
-                        </div>
-                      ) : null}
+                      <DetailRow label="Requested by" value={selectedRow.lastCommandRequestedBy || "Unavailable"} />
+                      <DetailRow label="Availability note" value={selectedRow.controlAvailable ? "Control ready" : selectedRow.availabilityReason || "Unavailable"} />
+                      <DetailRow
+                        label="Workflow note"
+                        value={
+                          selectedAwaitingConfirmation
+                            ? "Operator posture has updated and is waiting for keepalive confirmation."
+                            : "Telemetry and operator posture are aligned or no command is pending."
+                        }
+                      />
                     </div>
                   </SectionCard>
                 </div>
@@ -1125,26 +1058,24 @@ export default function OculusControlIndex() {
                   <Button size="xs" variant="outline" onClick={() => setShowDetails(false)}>
                     Close
                   </Button>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    startIcon={<Lock className="h-4 w-4" />}
+                  <PremiumActionButton
+                    tone="arm"
+                    icon={<Lock className="h-4 w-4" />}
                     disabled={disableSelectedArm}
-                    isLoading={activeCommand === `${selectedRow.transformerId}:arm`}
+                    loading={activeCommand === `${selectedRow.transformerId}:arm`}
                     onClick={() => void sendCommand(selectedRow.transformerId, "arm")}
                   >
                     Arm Transformer
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="secondary"
-                    startIcon={<Unlock className="h-4 w-4" />}
+                  </PremiumActionButton>
+                  <PremiumActionButton
+                    tone="disarm"
+                    icon={<Unlock className="h-4 w-4" />}
                     disabled={disableSelectedDisarm}
-                    isLoading={activeCommand === `${selectedRow.transformerId}:disarm`}
+                    loading={activeCommand === `${selectedRow.transformerId}:disarm`}
                     onClick={() => void sendCommand(selectedRow.transformerId, "disarm")}
                   >
                     Disarm Transformer
-                  </Button>
+                  </PremiumActionButton>
                 </div>
               </div>
             </div>
@@ -1158,21 +1089,79 @@ export default function OculusControlIndex() {
 function FilterButton({
   active,
   label,
+  count,
+  tone = "slate",
   onClick,
 }: {
   active: boolean;
   label: string;
+  count?: number;
+  tone?: "slate" | "emerald" | "amber";
   onClick: () => void;
 }) {
+  const activeToneMap = {
+    slate: "border-blue-500 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)]",
+    emerald: "border-emerald-500 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_10px_24px_rgba(16,185,129,0.28)]",
+    amber: "border-amber-400 bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 shadow-[0_10px_24px_rgba(245,158,11,0.28)]",
+  } as const;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-        active ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+      className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-semibold transition ${
+        active
+          ? activeToneMap[tone]
+          : "border-slate-200 bg-white text-slate-600 shadow-[0_4px_12px_rgba(15,23,42,0.05)] hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50"
       }`}
     >
       {label}
+      {typeof count === "number" ? (
+        <span className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${active ? "bg-white/20 text-inherit" : "bg-slate-100 text-slate-600"}`}>
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function PremiumActionButton({
+  children,
+  icon,
+  onClick,
+  disabled = false,
+  loading = false,
+  tone,
+  className = "",
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  tone: "arm" | "disarm";
+  className?: string;
+}) {
+  const toneClass =
+    tone === "arm"
+      ? "border-emerald-300 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_12px_26px_rgba(16,185,129,0.28)] hover:from-emerald-600 hover:to-teal-600"
+      : "border-slate-300 bg-white text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.08)] hover:border-slate-400 hover:bg-slate-50";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${
+        disabled || loading ? "cursor-not-allowed opacity-50" : `hover:-translate-y-0.5 ${toneClass}`
+      } ${className}`}
+    >
+      {loading ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <span className="flex items-center">{icon}</span>
+      )}
+      {children}
     </button>
   );
 }
