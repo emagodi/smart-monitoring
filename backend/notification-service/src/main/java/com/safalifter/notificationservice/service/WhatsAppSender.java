@@ -46,10 +46,10 @@ public class WhatsAppSender {
         String resolvedUrl = resolveApiUrl();
         String resolvedToken = resolveAccessToken();
         if (resolvedUrl == null || resolvedUrl.isBlank() || resolvedToken == null || resolvedToken.isBlank()) {
-            return WhatsAppSendResult.failed("CONFIGURATION_MISSING", "WhatsApp API configuration is incomplete", LocalDateTime.now());
+            return WhatsAppSendResult.failed("CONFIGURATION_MISSING", "WhatsApp API configuration is incomplete", LocalDateTime.now(), "TEXT", null, "configuration missing");
         }
         if (to == null || to.isBlank() || message == null || message.isBlank()) {
-            return WhatsAppSendResult.failed("INVALID_ARGUMENT", "Recipient and message are required for WhatsApp text sends", LocalDateTime.now());
+            return WhatsAppSendResult.failed("INVALID_ARGUMENT", "Recipient and message are required for WhatsApp text sends", LocalDateTime.now(), "TEXT", null, "invalid text arguments");
         }
 
         Map<String, Object> body = new HashMap<>();
@@ -61,17 +61,17 @@ public class WhatsAppSender {
                 "preview_url", false,
                 "body", message
         ));
-        return sendPayload(body, resolvedUrl, resolvedToken);
+        return sendPayload(body, resolvedUrl, resolvedToken, "TEXT", null, "free-form window open");
     }
 
     public WhatsAppSendResult sendTemplate(String to, String templateName, String languageCode, List<String> parameters) {
         String resolvedUrl = resolveApiUrl();
         String resolvedToken = resolveAccessToken();
         if (resolvedUrl == null || resolvedUrl.isBlank() || resolvedToken == null || resolvedToken.isBlank()) {
-            return WhatsAppSendResult.failed("CONFIGURATION_MISSING", "WhatsApp API configuration is incomplete", LocalDateTime.now());
+            return WhatsAppSendResult.failed("CONFIGURATION_MISSING", "WhatsApp API configuration is incomplete", LocalDateTime.now(), "TEMPLATE", templateName, "configuration missing");
         }
         if (to == null || to.isBlank() || templateName == null || templateName.isBlank()) {
-            return WhatsAppSendResult.failed("INVALID_ARGUMENT", "Recipient and template name are required for WhatsApp template sends", LocalDateTime.now());
+            return WhatsAppSendResult.failed("INVALID_ARGUMENT", "Recipient and template name are required for WhatsApp template sends", LocalDateTime.now(), "TEMPLATE", templateName, "invalid template arguments");
         }
 
         Map<String, Object> body = new HashMap<>();
@@ -80,7 +80,7 @@ public class WhatsAppSender {
         body.put("to", normalizeRecipient(to));
         body.put("type", "template");
         body.put("template", buildTemplatePayload(templateName, languageCode, parameters));
-        return sendPayload(body, resolvedUrl, resolvedToken);
+        return sendPayload(body, resolvedUrl, resolvedToken, "TEMPLATE", templateName.trim(), "template required");
     }
 
     private String resolveApiUrl() {
@@ -107,7 +107,14 @@ public class WhatsAppSender {
     }
 
     @SuppressWarnings("unchecked")
-    private WhatsAppSendResult sendPayload(Map<String, Object> body, String resolvedUrl, String resolvedToken) {
+    private WhatsAppSendResult sendPayload(
+            Map<String, Object> body,
+            String resolvedUrl,
+            String resolvedToken,
+            String payloadType,
+            String templateName,
+            String decisionReason
+    ) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -117,11 +124,11 @@ public class WhatsAppSender {
             ResponseEntity<Map> response = restTemplate.postForEntity(resolvedUrl, request, Map.class);
             Map<String, Object> responseBody = response.getBody();
             String providerMessageId = extractMessageId(responseBody);
-            return WhatsAppSendResult.accepted(providerMessageId, LocalDateTime.now());
+            return WhatsAppSendResult.accepted(providerMessageId, LocalDateTime.now(), payloadType, templateName, decisionReason);
         } catch (HttpStatusCodeException ex) {
-            return toFailureResult(ex.getResponseBodyAsString(), LocalDateTime.now());
+            return toFailureResult(ex.getResponseBodyAsString(), LocalDateTime.now(), payloadType, templateName, decisionReason);
         } catch (Exception ex) {
-            return WhatsAppSendResult.failed("UNEXPECTED_ERROR", ex.getMessage(), LocalDateTime.now());
+            return WhatsAppSendResult.failed("UNEXPECTED_ERROR", ex.getMessage(), LocalDateTime.now(), payloadType, templateName, decisionReason);
         }
     }
 
@@ -173,9 +180,15 @@ public class WhatsAppSender {
     }
 
     @SuppressWarnings("unchecked")
-    private WhatsAppSendResult toFailureResult(String responseBody, LocalDateTime fallbackTime) {
+    private WhatsAppSendResult toFailureResult(
+            String responseBody,
+            LocalDateTime fallbackTime,
+            String payloadType,
+            String templateName,
+            String decisionReason
+    ) {
         if (responseBody == null || responseBody.isBlank()) {
-            return WhatsAppSendResult.failed("HTTP_ERROR", "WhatsApp API request failed", fallbackTime);
+            return WhatsAppSendResult.failed("HTTP_ERROR", "WhatsApp API request failed", fallbackTime, payloadType, templateName, decisionReason);
         }
         try {
             Map<String, Object> parsed = parsedFallback(responseBody);
@@ -184,9 +197,9 @@ public class WhatsAppSender {
                     : Collections.emptyMap();
             String errorCode = error.get("code") != null ? String.valueOf(error.get("code")) : "HTTP_ERROR";
             String errorTitle = error.get("message") != null ? String.valueOf(error.get("message")) : "WhatsApp API request failed";
-            return WhatsAppSendResult.failed(errorCode, errorTitle, fallbackTime);
+            return WhatsAppSendResult.failed(errorCode, errorTitle, fallbackTime, payloadType, templateName, decisionReason);
         } catch (Exception ignored) {
-            return WhatsAppSendResult.failed("HTTP_ERROR", responseBody, fallbackTime);
+            return WhatsAppSendResult.failed("HTTP_ERROR", responseBody, fallbackTime, payloadType, templateName, decisionReason);
         }
     }
 

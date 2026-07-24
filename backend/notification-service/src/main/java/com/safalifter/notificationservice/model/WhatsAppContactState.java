@@ -32,10 +32,18 @@ public class WhatsAppContactState {
     private String lastInboundMessageBody;
 
     private LocalDateTime lastInboundMessageAt;
+    private LocalDateTime conversationWindowOpenUntil;
+    private Boolean freeFormEligible;
+    private Boolean optedIn;
+    private LocalDateTime optInAt;
+    private String optInSource;
     private String lastConversationId;
     private String lastStatus;
     private LocalDateTime lastStatusAt;
     private LocalDateTime lastOutboundAcceptedAt;
+    private String lastOutboundMode;
+    private String lastTemplateName;
+    private String lastDecisionReason;
 
     @CreationTimestamp
     private LocalDateTime creationTimestamp;

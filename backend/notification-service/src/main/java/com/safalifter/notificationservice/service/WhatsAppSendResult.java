@@ -10,13 +10,61 @@ public record WhatsAppSendResult(
         String providerStatus,
         String providerErrorCode,
         String providerErrorTitle,
-        LocalDateTime statusTimestamp
+        LocalDateTime statusTimestamp,
+        String payloadType,
+        String templateName,
+        String decisionReason
 ) {
     public static WhatsAppSendResult accepted(String providerMessageId, LocalDateTime statusTimestamp) {
-        return new WhatsAppSendResult(true, "ACCEPTED", providerMessageId, null, "accepted", null, null, statusTimestamp);
+        return accepted(providerMessageId, statusTimestamp, "TEXT", null, "free-form window open");
     }
 
     public static WhatsAppSendResult failed(String errorCode, String errorTitle, LocalDateTime statusTimestamp) {
-        return new WhatsAppSendResult(false, "FAILED", null, null, "failed", errorCode, errorTitle, statusTimestamp);
+        return failed(errorCode, errorTitle, statusTimestamp, null, null, null);
+    }
+
+    public static WhatsAppSendResult accepted(
+            String providerMessageId,
+            LocalDateTime statusTimestamp,
+            String payloadType,
+            String templateName,
+            String decisionReason
+    ) {
+        return new WhatsAppSendResult(
+                true,
+                "ACCEPTED",
+                providerMessageId,
+                null,
+                "accepted",
+                null,
+                null,
+                statusTimestamp,
+                payloadType,
+                templateName,
+                decisionReason
+        );
+    }
+
+    public static WhatsAppSendResult failed(
+            String errorCode,
+            String errorTitle,
+            LocalDateTime statusTimestamp,
+            String payloadType,
+            String templateName,
+            String decisionReason
+    ) {
+        return new WhatsAppSendResult(
+                false,
+                "FAILED",
+                null,
+                null,
+                "failed",
+                errorCode,
+                errorTitle,
+                statusTimestamp,
+                payloadType,
+                templateName,
+                decisionReason
+        );
     }
 }

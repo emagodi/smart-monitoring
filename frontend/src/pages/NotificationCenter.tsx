@@ -74,6 +74,48 @@ type WorkspaceResponse = {
   availableChannels: NotificationChannel[];
 };
 
+type WhatsAppEligibility = {
+  waId: string;
+  phoneNumber: string;
+  optedIn: boolean;
+  optInAt?: string | null;
+  optInSource?: string | null;
+  freeFormEligible: boolean;
+  conversationWindowOpenUntil?: string | null;
+  lastInboundMessageType?: string | null;
+  lastInboundMessageBody?: string | null;
+  lastInboundMessageAt?: string | null;
+  lastOutboundMode?: string | null;
+  lastTemplateName?: string | null;
+  lastOutboundAcceptedAt?: string | null;
+  lastStatus?: string | null;
+  lastStatusAt?: string | null;
+  lastDecisionReason?: string | null;
+  lastConversationId?: string | null;
+};
+
+type WhatsAppTemplateCatalogEntry = {
+  id: number;
+  notificationType: NotificationType;
+  templateName: string;
+  languageCode: string;
+  enabled: boolean;
+  defaultTemplate: boolean;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type TemplateFormState = {
+  id?: number;
+  notificationType: NotificationType;
+  templateName: string;
+  languageCode: string;
+  enabled: boolean;
+  defaultTemplate: boolean;
+  notes: string;
+};
+
 type DirectoryFormState = {
   supplierCode: string;
   displayName: string;
@@ -96,6 +138,15 @@ const defaultFormState: DirectoryFormState = {
   enabled: true,
   allNotificationTypes: true,
   notificationTypes: [],
+};
+
+const defaultTemplateFormState: TemplateFormState = {
+  notificationType: "SYSTEM_NOTICE",
+  templateName: "",
+  languageCode: "en",
+  enabled: true,
+  defaultTemplate: false,
+  notes: "",
 };
 
 const channelMeta: Record<NotificationChannel, { label: string; icon: React.ReactNode; tone: string }> = {
@@ -131,6 +182,13 @@ export default function NotificationCenter() {
   const [deletingEntryId, setDeletingEntryId] = useState<number | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [formState, setFormState] = useState<DirectoryFormState>(defaultFormState);
+  const [whatsAppEligibility, setWhatsAppEligibility] = useState<WhatsAppEligibility[]>([]);
+  const [whatsAppTemplates, setWhatsAppTemplates] = useState<WhatsAppTemplateCatalogEntry[]>([]);
+  const [loadingWhatsAppAdmin, setLoadingWhatsAppAdmin] = useState(false);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<number | null>(null);
+  const [templateFormState, setTemplateFormState] = useState<TemplateFormState>(defaultTemplateFormState);
   const [notice, setNotice] = useState<{ variant: "success" | "error" | "info" | "warning"; title: string; message: string } | null>(null);
 
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
@@ -179,9 +237,26 @@ export default function NotificationCenter() {
     }
   };
 
+  const fetchWhatsAppAdmin = async () => {
+    try {
+      setLoadingWhatsAppAdmin(true);
+      const [eligibilityResponse, templatesResponse] = await Promise.all([
+        axios.get<WhatsAppEligibility[]>(`${API_BASE_URL}/v1/notification/whatsapp/eligibility`, { headers }),
+        axios.get<WhatsAppTemplateCatalogEntry[]>(`${API_BASE_URL}/v1/notification/whatsapp/templates`, { headers }),
+      ]);
+      setWhatsAppEligibility(Array.isArray(eligibilityResponse.data) ? eligibilityResponse.data : []);
+      setWhatsAppTemplates(Array.isArray(templatesResponse.data) ? templatesResponse.data : []);
+    } catch (error) {
+      console.error(error);
+      setFlash("error", "WhatsApp admin load failed", "Eligibility telemetry or template catalog could not be loaded.");
+    } finally {
+      setLoadingWhatsAppAdmin(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
-    void Promise.all([fetchWorkspace(user?.supplierCode || undefined), fetchPreferences()]);
+    void Promise.all([fetchWorkspace(user?.supplierCode || undefined), fetchPreferences(), fetchWhatsAppAdmin()]);
   }, [token]);
 
   const orderedPreferences = useMemo(
@@ -207,6 +282,15 @@ export default function NotificationCenter() {
       email: entries.filter((entry) => entry.channel === "EMAIL").length,
     };
   }, [workspace?.entries]);
+
+  const whatsappAdminTotals = useMemo(() => {
+    return {
+      contacts: whatsAppEligibility.length,
+      openWindow: whatsAppEligibility.filter((item) => item.freeFormEligible).length,
+      templateOnly: whatsAppEligibility.filter((item) => !item.freeFormEligible).length,
+      templates: whatsAppTemplates.length,
+    };
+  }, [whatsAppEligibility, whatsAppTemplates]);
 
   const updatePreference = (notificationType: NotificationType, changes: Partial<NotificationPreference>) => {
     setPreferences((current) =>
@@ -292,6 +376,29 @@ export default function NotificationCenter() {
     setFormState(defaultFormState);
   };
 
+  const openTemplateCreate = () => {
+    setTemplateFormState(defaultTemplateFormState);
+    setShowTemplateEditor(true);
+  };
+
+  const openTemplateEdit = (template: WhatsAppTemplateCatalogEntry) => {
+    setTemplateFormState({
+      id: template.id,
+      notificationType: template.notificationType,
+      templateName: template.templateName,
+      languageCode: template.languageCode || "en",
+      enabled: template.enabled,
+      defaultTemplate: template.defaultTemplate,
+      notes: template.notes || "",
+    });
+    setShowTemplateEditor(true);
+  };
+
+  const closeTemplateEditor = () => {
+    setShowTemplateEditor(false);
+    setTemplateFormState(defaultTemplateFormState);
+  };
+
   const saveEntry = async () => {
     if (!formState.displayName.trim()) {
       setFlash("warning", "Validation", "Display name is required.");
@@ -365,6 +472,51 @@ export default function NotificationCenter() {
       setFlash("error", "Delete failed", "The notification recipient could not be removed.");
     } finally {
       setDeletingEntryId(null);
+    }
+  };
+
+  const saveTemplate = async () => {
+    if (!templateFormState.templateName.trim()) {
+      setFlash("warning", "Validation", "Template name is required.");
+      return;
+    }
+    try {
+      setSavingTemplate(true);
+      const payload = {
+        notificationType: templateFormState.notificationType,
+        templateName: templateFormState.templateName.trim(),
+        languageCode: templateFormState.languageCode.trim() || "en",
+        enabled: templateFormState.enabled,
+        defaultTemplate: templateFormState.defaultTemplate,
+        notes: templateFormState.notes.trim() || null,
+      };
+      if (templateFormState.id) {
+        await axios.put(`${API_BASE_URL}/v1/notification/whatsapp/templates/${templateFormState.id}`, payload, { headers });
+      } else {
+        await axios.post(`${API_BASE_URL}/v1/notification/whatsapp/templates`, payload, { headers });
+      }
+      setFlash("success", "Template saved", "The WhatsApp template catalog entry was saved.");
+      closeTemplateEditor();
+      await fetchWhatsAppAdmin();
+    } catch (error) {
+      console.error(error);
+      setFlash("error", "Template save failed", "The WhatsApp template catalog entry could not be saved.");
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const deleteTemplate = async (templateId: number) => {
+    try {
+      setDeletingTemplateId(templateId);
+      await axios.delete(`${API_BASE_URL}/v1/notification/whatsapp/templates/${templateId}`, { headers });
+      setFlash("success", "Template removed", "The WhatsApp template catalog entry was removed.");
+      await fetchWhatsAppAdmin();
+    } catch (error) {
+      console.error(error);
+      setFlash("error", "Template delete failed", "The WhatsApp template catalog entry could not be removed.");
+    } finally {
+      setDeletingTemplateId(null);
     }
   };
 
@@ -699,6 +851,173 @@ export default function NotificationCenter() {
             </div>
           </div>
         </DataCard>
+
+        <DataCard>
+          <div className="p-4 lg:p-5">
+            <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 dark:border-gray-800 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <MessageSquareText className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
+                    WhatsApp Governance
+                  </p>
+                  <h3 className="mt-1 text-base font-semibold tracking-tight text-slate-900 dark:text-white">
+                    Eligibility registry and template control
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
+                    Review who is inside the 24-hour free-form window, what template was used last, and which managed templates are active.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void fetchWhatsAppAdmin()}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-600 dark:border-gray-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:text-blue-300"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Refresh WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={openTemplateCreate}
+                  className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Template
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <SummaryBadge icon={<MessageSquareText className="h-4 w-4" />} label="Tracked Contacts" value={`${whatsappAdminTotals.contacts}`} tone="green" />
+              <SummaryBadge icon={<BellRing className="h-4 w-4" />} label="Open Windows" value={`${whatsappAdminTotals.openWindow}`} tone="blue" />
+              <SummaryBadge icon={<X className="h-4 w-4" />} label="Template Only" value={`${whatsappAdminTotals.templateOnly}`} tone="amber" />
+              <SummaryBadge icon={<Save className="h-4 w-4" />} label="Managed Templates" value={`${whatsappAdminTotals.templates}`} tone="violet" />
+            </div>
+
+            <div className="mt-5 grid gap-5 xl:grid-cols-[1.3fr_1fr]">
+              <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-gray-800">
+                <table className="min-w-full border-separate border-spacing-y-0">
+                  <thead className="bg-slate-50 dark:bg-slate-950">
+                    <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
+                      <th className="px-4 py-3">WhatsApp Number</th>
+                      <th className="px-4 py-3">Eligibility</th>
+                      <th className="px-4 py-3">Window</th>
+                      <th className="px-4 py-3">Last Mode</th>
+                      <th className="px-4 py-3">Last Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingWhatsAppAdmin ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-sm text-slate-500 dark:text-gray-400">
+                          Loading WhatsApp eligibility...
+                        </td>
+                      </tr>
+                    ) : whatsAppEligibility.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-sm text-slate-500 dark:text-gray-400">
+                          No WhatsApp contact state recorded yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      whatsAppEligibility.map((item) => (
+                        <tr key={item.waId} className="border-t border-slate-200 bg-white dark:border-gray-800 dark:bg-slate-900">
+                          <td className="px-4 py-3 align-top">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">{item.phoneNumber || item.waId}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">{item.optInSource || "No opt-in source"}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <MiniChip label={item.freeFormEligible ? "Free-form open" : "Template only"} tone={item.freeFormEligible ? "green" : "amber"} />
+                            <p className="mt-2 text-xs text-slate-500 dark:text-gray-400">{item.lastDecisionReason || "No decision yet"}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top text-sm text-slate-700 dark:text-gray-200">
+                            {formatDateTime(item.conversationWindowOpenUntil)}
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <MiniChip label={item.lastOutboundMode || "Unknown"} tone={item.lastOutboundMode === "TEXT" ? "blue" : item.lastOutboundMode === "TEMPLATE" ? "green" : "slate"} />
+                            <p className="mt-2 text-xs text-slate-500 dark:text-gray-400">{item.lastTemplateName || "No template tracked"}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <MiniChip label={item.lastStatus || "Unknown"} tone={resolveStatusTone(item.lastStatus)} />
+                            <p className="mt-2 text-xs text-slate-500 dark:text-gray-400">{formatDateTime(item.lastStatusAt)}</p>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-gray-800">
+                <table className="min-w-full border-separate border-spacing-y-0">
+                  <thead className="bg-slate-50 dark:bg-slate-950">
+                    <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
+                      <th className="px-4 py-3">Template</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingWhatsAppAdmin ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-sm text-slate-500 dark:text-gray-400">
+                          Loading template catalog...
+                        </td>
+                      </tr>
+                    ) : whatsAppTemplates.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-sm text-slate-500 dark:text-gray-400">
+                          No managed WhatsApp templates configured yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      whatsAppTemplates.map((template) => (
+                        <tr key={template.id} className="border-t border-slate-200 bg-white dark:border-gray-800 dark:bg-slate-900">
+                          <td className="px-4 py-3 align-top">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">{template.templateName}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">{template.languageCode || "en"}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top text-sm text-slate-700 dark:text-gray-200">{prettyType(template.notificationType)}</td>
+                          <td className="px-4 py-3 align-top">
+                            <div className="flex flex-wrap gap-2">
+                              <MiniChip label={template.enabled ? "Enabled" : "Disabled"} tone={template.enabled ? "green" : "amber"} />
+                              {template.defaultTemplate ? <MiniChip label="Default" tone="blue" /> : null}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 align-top text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openTemplateEdit(template)}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-600 dark:border-gray-700 dark:bg-slate-950 dark:text-gray-200 dark:hover:border-blue-500/40 dark:hover:text-blue-300"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deleteTemplate(template.id)}
+                                disabled={deletingTemplateId === template.id}
+                                className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                {deletingTemplateId === template.id ? "Removing..." : "Remove"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </DataCard>
       </AdminShell>
 
       <Modal
@@ -901,6 +1220,124 @@ export default function NotificationCenter() {
           </div>
         </div>
       </Modal>
+
+      <Modal
+        isOpen={showTemplateEditor}
+        onClose={closeTemplateEditor}
+        variant="center"
+        showCloseButton={false}
+        backdropBlur={true}
+        className="w-[92vw] max-w-[880px] overflow-hidden rounded-[32px] border border-slate-200/90 bg-white p-0 shadow-[0_30px_90px_rgba(15,23,42,0.16)] dark:border-slate-800 dark:bg-slate-950"
+      >
+        <div className="flex flex-col bg-white dark:bg-slate-950">
+          <div className="border-b border-slate-200/90 bg-gradient-to-r from-emerald-50/95 via-white to-slate-50/95 px-5 py-4 dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-600/20">
+                  <MessageSquareText className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
+                    {templateFormState.id ? "Edit Template" : "Add Template"}
+                  </p>
+                  <h3 className="mt-1 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                    Managed WhatsApp template catalog
+                  </h3>
+                  <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+                    Maintain the approved template that should be used when free-form messaging is not allowed.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeTemplateEditor}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/90 bg-white/90 text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 bg-slate-50/60 px-5 py-4 dark:bg-slate-950 lg:grid-cols-2">
+            <Field label="Notification Type">
+              <select
+                value={templateFormState.notificationType}
+                onChange={(event) =>
+                  setTemplateFormState((current) => ({ ...current, notificationType: event.target.value as NotificationType }))
+                }
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              >
+                {(workspace?.availableNotificationTypes ?? []).map((type) => (
+                  <option key={type} value={type}>
+                    {prettyType(type)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Language Code">
+              <input
+                value={templateFormState.languageCode}
+                onChange={(event) => setTemplateFormState((current) => ({ ...current, languageCode: event.target.value }))}
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                placeholder="en"
+              />
+            </Field>
+            <Field label="Template Name">
+              <input
+                value={templateFormState.templateName}
+                onChange={(event) => setTemplateFormState((current) => ({ ...current, templateName: event.target.value }))}
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                placeholder="critical_alert_template"
+              />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ToggleRow
+                label="Enabled"
+                description="Use this template for live WhatsApp delivery."
+                checked={templateFormState.enabled}
+                onChange={(checked) => setTemplateFormState((current) => ({ ...current, enabled: checked }))}
+              />
+              <ToggleRow
+                label="Default"
+                description="Fallback template when no event-specific template exists."
+                checked={templateFormState.defaultTemplate}
+                onChange={(checked) => setTemplateFormState((current) => ({ ...current, defaultTemplate: checked }))}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <Field label="Notes">
+                <textarea
+                  value={templateFormState.notes}
+                  onChange={(event) => setTemplateFormState((current) => ({ ...current, notes: event.target.value }))}
+                  className="min-h-[110px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  placeholder="Approved Meta utility template for controller trigger alerts."
+                />
+              </Field>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 bg-white px-5 py-3.5 dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeTemplateEditor}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveTemplate()}
+                disabled={savingTemplate}
+                className="inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                {savingTemplate ? "Saving..." : templateFormState.id ? "Save Template" : "Create Template"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }
@@ -1051,4 +1488,25 @@ function MiniChip({ label, tone }: { label: string; tone: "blue" | "slate" | "gr
 
 function PreferenceCell({ children }: { children: React.ReactNode }) {
   return <div className="flex items-center justify-center bg-white px-3 py-3 dark:bg-slate-900">{children}</div>;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function resolveStatusTone(status?: string | null): "blue" | "slate" | "green" | "amber" {
+  const normalized = (status || "").toLowerCase();
+  if (normalized === "read" || normalized === "delivered" || normalized === "sent" || normalized === "accepted" || normalized === "inbound") {
+    return "green";
+  }
+  if (normalized === "failed") {
+    return "amber";
+  }
+  if (normalized === "unknown") {
+    return "slate";
+  }
+  return "blue";
 }
