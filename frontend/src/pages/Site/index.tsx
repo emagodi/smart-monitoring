@@ -13,9 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 import { Modal } from "../../components/ui/modal";
+import GoogleAssetMap from "../../components/maps/GoogleAssetMap";
 
 interface Transformer {
   id: number;
@@ -107,6 +106,7 @@ export default function SiteIndex() {
   const [page, setPage] = useState(1);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
 
   useEffect(() => {
@@ -497,7 +497,7 @@ export default function SiteIndex() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Network Map</p>
               <h3 className="mt-1 text-sm font-semibold text-slate-950 md:text-base">Geographic transformer footprint</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Circle markers keep existing location logic and highlight the current filtered map coverage.
+                Google Maps now renders the filtered transformer estate with a richer base map and quick asset inspection.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -507,49 +507,45 @@ export default function SiteIndex() {
           </div>
 
           <div className="mt-4 overflow-hidden rounded-[28px] border border-white/70 bg-white/70 shadow-inner">
-            <MapContainer center={[-19.015, 29.154]} zoom={6} scrollWheelZoom style={{ height: 560, width: "100%" }}>
-              <TileLayer
-                attribution="&copy; OpenStreetMap contributors"
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {mapSites.map((site) => (
-                <CircleMarker
-                  key={site.id}
-                  center={[site.lat as number, site.lng as number]}
-                  radius={6}
-                  color={site.isActive ? "#16a34a" : "#dc2626"}
-                  fillColor={site.isActive ? "#22c55e" : "#ef4444"}
-                  fillOpacity={0.85}
-                  eventHandlers={{ click: () => setSelected(site) }}
-                >
-                  <Popup>
-                    <div className="space-y-1.5">
-                      <div className="font-semibold text-slate-900">{site.name}</div>
-                      <div className="text-sm text-slate-600">Region: {site.regionName}</div>
-                      <div className="text-sm text-slate-600">District: {site.districtName}</div>
-                      <div className="text-sm text-slate-600">Depot: {site.depotName}</div>
-                      <div className="text-sm text-slate-600">
-                        Capacity: {typeof site.capacity === "number" ? `${site.capacity.toLocaleString()} kVA` : "Unavailable"}
-                      </div>
-                      <div className="flex items-center gap-2 pt-1 text-sm text-slate-600">
-                        <span className={`h-2 w-2 rounded-full ${site.isActive ? "bg-emerald-500" : "bg-red-500"}`} />
-                        {site.isActive ? "Active" : "Inactive"}
-                      </div>
-                      {isSupplierUser ? <div className="text-sm text-slate-600">Organisation: {user?.supplierName || "Supplier"}</div> : null}
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => void openDetails(site)}
-                          className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
-                        >
-                          View sensors
-                        </button>
-                      </div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
-            </MapContainer>
+            <GoogleAssetMap
+              apiKey={GOOGLE_MAPS_API_KEY}
+              className="h-[560px]"
+              points={mapSites}
+              selectedPointId={selected?.id ?? null}
+              onPointSelect={setSelected}
+              onPointAction={(site) => void openDetails(site)}
+              actionLabel="View sensors"
+              emptyLabel="No transformer coordinates match the current search filter."
+              getMarkerColors={(site) =>
+                site.isActive
+                  ? { fillColor: "#22c55e", strokeColor: "#15803d" }
+                  : { fillColor: "#ef4444", strokeColor: "#b91c1c" }
+              }
+              renderDetails={(site) => (
+                <div className="space-y-1.5 text-sm text-slate-600">
+                  <p>
+                    Region: <span className="font-medium text-slate-900">{site.regionName}</span>
+                  </p>
+                  <p>
+                    District: <span className="font-medium text-slate-900">{site.districtName}</span>
+                  </p>
+                  <p>
+                    Depot: <span className="font-medium text-slate-900">{site.depotName}</span>
+                  </p>
+                  <p>
+                    Capacity:{" "}
+                    <span className="font-medium text-slate-900">
+                      {typeof site.capacity === "number" ? `${site.capacity.toLocaleString()} kVA` : "Unavailable"}
+                    </span>
+                  </p>
+                  {isSupplierUser ? (
+                    <p>
+                      Organisation: <span className="font-medium text-slate-900">{user?.supplierName || "Supplier"}</span>
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            />
           </div>
         </div>
 

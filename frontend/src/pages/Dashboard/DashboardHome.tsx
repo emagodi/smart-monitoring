@@ -16,12 +16,11 @@ import axios from "axios";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { Link } from "react-router-dom";
-import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useUserAccess } from "../../hooks/useUserAccess";
 import { useRealtimeUpdates } from "../../services/realtimeService";
+import GoogleAssetMap from "../../components/maps/GoogleAssetMap";
 
 interface DashboardStats {
   totalRegions: number;
@@ -363,6 +362,7 @@ export default function DashboardHome() {
   const { hasNationalAccess, hasRegionAccess, hasDepotAccess, loading: accessLoading } = useUserAccess();
   const { realtimeData } = useRealtimeUpdates(token);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
 
   const [stats, setStats] = useState<DashboardStats>({
@@ -812,40 +812,31 @@ export default function DashboardHome() {
           </div>
 
           <div className="overflow-hidden rounded-[22px] border border-slate-200/80 dark:border-slate-800">
-            <div className="h-[460px]">
-              <MapContainer
-                center={[-19.0154, 29.1549]}
-                zoom={6}
-                scrollWheelZoom
-                className="h-full w-full"
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                {mapPoints.map((item) => (
-                  <CircleMarker
-                    key={item.id}
-                    center={[item.lat as number, item.lng as number]}
-                    radius={8}
-                    pathOptions={{
-                      color: item.isActive === false ? "#EF4444" : "#2563EB",
-                      fillColor: item.isActive === false ? "#F87171" : "#3B82F6",
-                      fillOpacity: 0.9,
-                    }}
-                  >
-                    <Popup>
-                      <div className="min-w-[180px]">
-                        <p className="font-semibold text-slate-900">{item.name}</p>
-                        <p className="mt-1 text-sm text-slate-600">
-                          Status: {item.isActive === false ? "Offline" : "Online"}
-                        </p>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                ))}
-              </MapContainer>
-            </div>
+            <GoogleAssetMap
+              apiKey={GOOGLE_MAPS_API_KEY}
+              className="h-[460px]"
+              points={mapPoints}
+              emptyLabel="No transformer coordinates are available for the current dashboard scope."
+              renderDetails={(item) => (
+                <div className="space-y-1.5 text-sm text-slate-600">
+                  <p>
+                    Status: <span className="font-medium text-slate-900">{item.isActive === false ? "Offline" : "Online"}</span>
+                  </p>
+                  <p>
+                    Supplier:{" "}
+                    <span className="font-medium text-slate-900">
+                      {getSupplierLabel(item.supplierName, item.supplierCode)}
+                    </span>
+                  </p>
+                  <p>
+                    Coordinates:{" "}
+                    <span className="font-medium text-slate-900">
+                      {item.lat?.toFixed(4)}, {item.lng?.toFixed(4)}
+                    </span>
+                  </p>
+                </div>
+              )}
+            />
           </div>
         </div>
 
