@@ -7,6 +7,7 @@ import {
   Building2,
   Gauge,
   MapPinned,
+  Search,
   ShieldCheck,
   Waves,
   Warehouse,
@@ -65,6 +66,8 @@ interface Transformer {
   supplierName?: string;
   lat?: number;
   lng?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Sensor {
@@ -110,6 +113,19 @@ type ExecutiveChartCardProps = {
   icon: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
+};
+
+type DashboardTransformerRow = Transformer & {
+  depotName: string;
+  districtName: string;
+  regionName: string;
+  supplierLabel: string;
+  armState: "ARMED" | "DISARMED" | "UNKNOWN";
+  onlineLabel: string;
+  onlineTone: string;
+  armTone: string;
+  latestAlertLabel: string;
+  latestAlertTime?: string;
 };
 
 const normalizeList = <T,>(payload: unknown): T[] => {
@@ -354,7 +370,39 @@ const getSupplierLabel = (supplierName?: string | null, supplierCode?: string | 
   return "Internal";
 };
 
-const getControlArmState = (row: OculusControlSummaryRow) => row.effectiveArmState || row.armState || "UNKNOWN";
+const getControlArmState = (row?: OculusControlSummaryRow | null) => row?.effectiveArmState || row?.armState || "UNKNOWN";
+
+const controllerStatusTone = (status?: string | null) => {
+  if (status === "ONLINE") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "DELAYED") return "border border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "OFFLINE") return "border border-red-200 bg-red-50 text-red-700";
+  return "border border-slate-200 bg-slate-50 text-slate-700";
+};
+
+const controllerStatusLabel = (status?: string | null, isActive?: boolean) => {
+  if (status === "ONLINE") return "Online";
+  if (status === "DELAYED") return "Delayed";
+  if (status === "OFFLINE") return "Offline";
+  return isActive === false ? "Offline" : "Online";
+};
+
+const armStateLabel = (state?: string | null) => {
+  if (state === "ARMED") return "Armed";
+  if (state === "DISARMED") return "Disarmed";
+  return "Unknown";
+};
+
+const armStateTone = (state?: string | null) => {
+  if (state === "ARMED") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (state === "DISARMED") return "border border-amber-200 bg-amber-50 text-amber-700";
+  return "border border-slate-200 bg-slate-50 text-slate-700";
+};
+
+const compactAlertLabel = (message?: string) => {
+  if (!message?.trim()) return "No alert history";
+  if (message.length <= 54) return message;
+  return `${message.slice(0, 51)}...`;
+};
 
 export default function DashboardHome() {
   const { token, user, hasPermission } = useAuth();
@@ -382,6 +430,8 @@ export default function DashboardHome() {
   const [controlRows, setControlRows] = useState<OculusControlSummaryRow[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<AlertItem[]>([]);
+  const [selectedTransformerId, setSelectedTransformerId] = useState<number | null>(null);
+  const [transformerSearch, setTransformerSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -397,12 +447,6 @@ export default function DashboardHome() {
     () => realtimeData.filter((item: SensorUpdate) => item.is_alert).length,
     [realtimeData]
   );
-
-  const latestRealtime = useMemo(() => {
-    return [...realtimeData]
-      .sort((a: SensorUpdate, b: SensorUpdate) => b.timestamp - a.timestamp)
-      .slice(0, 6);
-  }, [realtimeData]);
 
   useEffect(() => {
     if (!token) return;
@@ -602,8 +646,82 @@ export default function DashboardHome() {
 
   const topRegionalCoverage = useMemo(() => regionalSummary.slice(0, 5), [regionalSummary]);
 
+  const depotById = useMemo(() => new Map(depots.map((depot) => [depot.id, depot])), [depots]);
+
+  const latestAlertByTransformerId = useMemo(() => {
+    const latest = new Map<number, AlertItem>();
+    [...alerts]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || b.timestamp || 0).getTime() -
+          new Date(a.createdAt || a.timestamp || 0).getTime()
+      )
+      .forEach((alert) => {
+        if (!alert.transformerId || latest.has(alert.transformerId)) return;
+        latest.set(alert.transformerId, alert);
+      });
+    return latest;
+  }, [alerts]);
+
+  const controlRowByTransformerId = useMemo(() => {
+    return new Map(controlRows.map((row) => [row.transformerId, row]));
+  }, [controlRows]);
+
+  const transformerOperations = useMemo<DashboardTransformerRow[]>(() => {
+    return [...transformers]
+      .sort((a, b) => b.id - a.id)
+      .map((transformer) => {
+        const depot = depotById.get(transformer.depotId ?? transformer.depot_id ?? -1);
+        const districtId = depot?.districtId ?? depot?.district_id ?? null;
+        const regionId = districtId != null ? districtToRegion.get(districtId) : null;
+        const region = regions.find((item) => item.id === regionId);
+        const district = districts.find((item) => item.id === districtId);
+        const controlRow = controlRowByTransformerId.get(transformer.id);
+        const latestAlert = latestAlertByTransformerId.get(transformer.id);
+        const armState = getControlArmState(controlRow);
+        const onlineLabel = controllerStatusLabel(controlRow?.controllerStatus, transformer.isActive ?? transformer.active);
+
+        return {
+          ...transformer,
+          depotName: depot?.name || "Unassigned Depot",
+          districtName: district?.name || "Unassigned District",
+          regionName: region?.name || "Unassigned Region",
+          supplierLabel: getSupplierLabel(
+            controlRow?.supplierName ?? transformer.supplierName,
+            controlRow?.supplierCode ?? transformer.supplierCode
+          ),
+          armState,
+          onlineLabel,
+          onlineTone: controllerStatusTone(controlRow?.controllerStatus ?? (onlineLabel === "Offline" ? "OFFLINE" : "ONLINE")),
+          armTone: armStateTone(armState),
+          latestAlertLabel: compactAlertLabel(latestAlert?.message),
+          latestAlertTime: latestAlert?.createdAt || latestAlert?.timestamp,
+        };
+      });
+  }, [alerts, controlRowByTransformerId, depotById, districtToRegion, districts, latestAlertByTransformerId, regions, transformers]);
+
+  const filteredTransformerOperations = useMemo(() => {
+    const query = transformerSearch.trim().toLowerCase();
+    if (!query) return transformerOperations;
+    return transformerOperations.filter((item) =>
+      [
+        item.name,
+        item.depotName,
+        item.districtName,
+        item.regionName,
+        item.supplierLabel,
+        item.latestAlertLabel,
+        item.onlineLabel,
+        armStateLabel(item.armState),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [transformerOperations, transformerSearch]);
+
   const mapPoints = useMemo(() => {
-    return transformers
+    return transformerOperations
       .filter(
         (item) =>
           typeof item.lat === "number" &&
@@ -612,7 +730,19 @@ export default function DashboardHome() {
           Number.isFinite(item.lng)
       )
       .slice(0, 60);
-  }, [transformers]);
+  }, [transformerOperations]);
+
+  const selectedTransformer = useMemo(() => {
+    if (selectedTransformerId == null) return null;
+    return transformerOperations.find((item) => item.id === selectedTransformerId) || null;
+  }, [selectedTransformerId, transformerOperations]);
+
+  useEffect(() => {
+    if (selectedTransformerId == null) return;
+    if (!transformerOperations.some((item) => item.id === selectedTransformerId)) {
+      setSelectedTransformerId(null);
+    }
+  }, [selectedTransformerId, transformerOperations]);
 
   if (loading || accessLoading) {
     return <div className="enterprise-card px-5 py-10 text-sm text-slate-500 dark:text-slate-300">Loading dashboard...</div>;
@@ -816,23 +946,31 @@ export default function DashboardHome() {
               apiKey={GOOGLE_MAPS_API_KEY}
               className="h-[460px]"
               points={mapPoints}
+              selectedPointId={selectedTransformerId}
+              onPointSelect={(item) => setSelectedTransformerId(Number(item.id))}
               emptyLabel="No transformer coordinates are available for the current dashboard scope."
               renderDetails={(item) => (
                 <div className="space-y-1.5 text-sm text-slate-600">
                   <p>
-                    Status: <span className="font-medium text-slate-900">{item.isActive === false ? "Offline" : "Online"}</span>
+                    Depot: <span className="font-medium text-slate-900">{item.depotName}</span>
                   </p>
                   <p>
                     Supplier:{" "}
                     <span className="font-medium text-slate-900">
-                      {getSupplierLabel(item.supplierName, item.supplierCode)}
+                      {item.supplierLabel}
                     </span>
                   </p>
                   <p>
-                    Coordinates:{" "}
-                    <span className="font-medium text-slate-900">
-                      {item.lat?.toFixed(4)}, {item.lng?.toFixed(4)}
-                    </span>
+                    Status: <span className="font-medium text-slate-900">{item.onlineLabel}</span>
+                  </p>
+                  <p>
+                    Armed: <span className="font-medium text-slate-900">{armStateLabel(item.armState)}</span>
+                  </p>
+                  <p>
+                    Last alert: <span className="font-medium text-slate-900">{item.latestAlertLabel}</span>
+                  </p>
+                  <p>
+                    Alert time: <span className="font-medium text-slate-900">{formatTime(item.latestAlertTime)}</span>
                   </p>
                 </div>
               )}
@@ -840,113 +978,6 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
-                  Regional Snapshot
-                </p>
-                <h3 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50">
-                  Transformers by region
-                </h3>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <Warehouse className="h-4.5 w-4.5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {regionalSummary.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  Region analytics become available after asset and district data loads.
-                </div>
-              ) : (
-                regionalSummary.map((region) => {
-                  const width = Math.max(
-                    14,
-                    stats.totalTransformers ? (region.transformers / stats.totalTransformers) * 100 : 0
-                  );
-
-                  return (
-                    <div key={region.id} className="enterprise-subtle-card p-3.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{region.name}</p>
-                          <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                            {region.districts} districts, {region.depots} depots
-                          </p>
-                        </div>
-                        <div className="powertel-red-chip rounded-full px-3 py-1 text-xs font-semibold">
-                          {region.alerts} alerts
-                        </div>
-                      </div>
-                      <div className="mt-3.5 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-blue-600 via-blue-500 to-red-500"
-                          style={{ width: `${width}%` }}
-                        />
-                      </div>
-                      <div className="mt-2.5 flex items-center justify-between text-sm">
-                        <span className="text-[12px] text-slate-500 dark:text-slate-400">Transformers</span>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                          {region.transformers}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
-                  Incident Feed
-                </p>
-                <h3 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50">
-                  Latest alerts
-                </h3>
-              </div>
-              {hasPermission("alerts.read") && (
-                <Link to="/alerts" className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300">
-                  View all
-                </Link>
-              )}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {recentAlerts.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No alerts recorded yet.
-                </div>
-              ) : (
-                recentAlerts.map((alert) => (
-                  <div key={alert.id} className="enterprise-subtle-card p-3.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                          {alert.message || "Monitoring alert"}
-                        </p>
-                        <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                          {alert.transformerName || "Transformer event"}
-                        </p>
-                      </div>
-                      <span className="powertel-red-chip rounded-full px-2.5 py-1 text-xs font-semibold">
-                        {alert.severity || "Alert"}
-                      </span>
-                    </div>
-                    <p className="mt-2.5 text-xs text-slate-400 dark:text-slate-500">
-                      {formatTime(alert.createdAt || alert.timestamp)}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-4">
@@ -1100,52 +1131,94 @@ export default function DashboardHome() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
-              Live Telemetry
+              Transformer Watchlist
             </p>
             <h3 className="mt-0.5 text-lg font-semibold text-slate-950 dark:text-slate-50">
-              Recent sensor stream
+              Searchable transformer operations list
             </h3>
+            <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+              Newest assets first, with supplier monitoring, online status, last alert, and armed state.
+            </p>
           </div>
-          <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
-            <Activity className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-            {latestRealtime.length} recent events captured
+          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+            <div className="relative min-w-[280px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={transformerSearch}
+                onChange={(event) => setTransformerSearch(event.target.value)}
+                placeholder="Search by transformer, depot, supplier, alert, or arm state"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
+              <Activity className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+              {filteredTransformerOperations.length} transformers shown
+            </div>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
-          {latestRealtime.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 xl:col-span-3">
-              Waiting for live telemetry from connected field devices.
+        <div className="mt-4 space-y-3">
+          {filteredTransformerOperations.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              No transformers match the current search.
             </div>
           ) : (
-            latestRealtime.map((item, index) => (
-              <div key={`${item.transformer_id}-${item.sensor_name}-${index}`} className="enterprise-subtle-card p-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.transformer_name}</p>
+            filteredTransformerOperations.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSelectedTransformerId(item.id)}
+                className={`enterprise-subtle-card w-full p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/40 ${
+                  selectedTransformer?.id === item.id ? "border-blue-200 bg-blue-50/60" : ""
+                }`}
+              >
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.name}</p>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.onlineTone}`}>
+                        {item.onlineLabel}
+                      </span>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.armTone}`}>
+                        {armStateLabel(item.armState)}
+                      </span>
+                    </div>
                     <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                      {item.sensor_name} - {item.sensor_type}
+                      {item.depotName} • {item.districtName} • {item.regionName}
                     </p>
                   </div>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      item.is_alert
-                        ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
-                        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                    }`}
-                  >
-                    {item.is_alert ? "Alert" : "Normal"}
-                  </span>
+                  <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300">
+                    <MapPinned className="h-3.5 w-3.5 text-blue-600 dark:text-blue-300" />
+                    {selectedTransformer?.id === item.id ? "Focused on map" : "Click to focus on map"}
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-sm">
-                  <span className="font-semibold text-blue-600 dark:text-blue-300">
-                    {String(item.value)}
-                  </span>
-                  <span className="text-slate-400 dark:text-slate-500">
-                    {formatTime(item.timestamp)}
-                  </span>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Supplier Monitoring</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{item.supplierLabel}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{item.depotName}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Last Alert</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{item.latestAlertLabel}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Alert Time</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatTime(item.latestAlertTime)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Asset Notes</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {item.type || "Transformer"}{typeof item.capacity === "number" ? ` • ${item.capacity.toLocaleString()} kVA` : ""}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>

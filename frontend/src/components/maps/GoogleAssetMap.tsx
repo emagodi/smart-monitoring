@@ -20,6 +20,9 @@ type MarkerColors = {
   strokeColor: string;
 };
 
+const MAP_PIN_PATH =
+  "M12 2C8.13 2 5 5.13 5 9c0 5.4 7 13 7 13s7-7.6 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z";
+
 type GoogleAssetMapProps<T extends GoogleAssetMapPoint> = {
   apiKey?: string;
   points: T[];
@@ -101,13 +104,15 @@ const defaultMarkerColors = <T extends GoogleAssetMapPoint>(point: T): MarkerCol
     : { fillColor: "#2563eb", strokeColor: "#1d4ed8" };
 
 const buildMarkerIcon = (googleMaps: any, colors: MarkerColors, isSelected: boolean) => ({
-  path: googleMaps.SymbolPath.CIRCLE,
+  path: MAP_PIN_PATH,
   fillColor: colors.fillColor,
   fillOpacity: 0.96,
   strokeColor: colors.strokeColor,
   strokeOpacity: 1,
   strokeWeight: isSelected ? 4 : 2,
-  scale: isSelected ? 9 : 7,
+  scale: isSelected ? 1.45 : 1.2,
+  anchor: new googleMaps.Point(12, 24),
+  labelOrigin: new googleMaps.Point(12, 9),
 });
 
 export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
@@ -133,7 +138,7 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
 
   const pointMap = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
   const activeSelectedId = selectedPointId ?? internalSelectedId;
-  const selectedPoint = (activeSelectedId != null ? pointMap.get(activeSelectedId) : undefined) ?? points[0] ?? null;
+  const selectedPoint = activeSelectedId != null ? pointMap.get(activeSelectedId) ?? null : null;
 
   useEffect(() => {
     if (selectedPointId !== undefined) {
@@ -141,13 +146,8 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
       return;
     }
 
-    if (!points.length) {
+    if (!points.length || (internalSelectedId != null && !pointMap.has(internalSelectedId))) {
       setInternalSelectedId(null);
-      return;
-    }
-
-    if (internalSelectedId == null || !pointMap.has(internalSelectedId)) {
-      setInternalSelectedId(points[0].id);
     }
   }, [internalSelectedId, pointMap, points, selectedPointId]);
 
