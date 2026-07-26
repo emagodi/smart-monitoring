@@ -1,4 +1,4 @@
-package com.safalifter.transformerservice.payload.response;
+package com.safalifter.notificationservice.payload.chat;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,9 +9,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ChatCommandResponse {
+public class ChatCommandBridgeResponse {
     private String status;
-    private String result;
     private String action;
     private Long transformerId;
     private String transformerName;
@@ -19,6 +18,4 @@ public class ChatCommandResponse {
     private String operatorName;
     private String providerStatus;
     private String message;
-    private String statusMessage;
-    private String detail;
 }

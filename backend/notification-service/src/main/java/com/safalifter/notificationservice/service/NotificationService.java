@@ -1,11 +1,18 @@
 package com.safalifter.notificationservice.service;
 
+import feign.FeignException;
 import com.safalifter.notificationservice.clients.AuthRoutingClient;
+import com.safalifter.notificationservice.clients.TransformerChatBridgeClient;
 import com.safalifter.notificationservice.enums.NotificationChannel;
 import com.safalifter.notificationservice.enums.NotificationType;
 import com.safalifter.notificationservice.model.Notification;
 import com.safalifter.notificationservice.model.WhatsAppContactState;
 import com.safalifter.notificationservice.model.WhatsAppTemplateCatalog;
+import com.safalifter.notificationservice.payload.chat.ChatCommandBridgeRequest;
+import com.safalifter.notificationservice.payload.chat.ChatCommandBridgeResponse;
+import com.safalifter.notificationservice.payload.chat.ChatCommandSearchBridgeRequest;
+import com.safalifter.notificationservice.payload.chat.ChatCommandSearchBridgeResponse;
+import com.safalifter.notificationservice.payload.chat.ChatCommandTransformerOption;
 import com.safalifter.notificationservice.payload.NotificationRecipientResponse;
 import com.safalifter.notificationservice.payload.WhatsAppEligibilityResponse;
 import com.safalifter.notificationservice.payload.WhatsAppTemplateCatalogRequest;
@@ -14,13 +21,16 @@ import com.safalifter.notificationservice.repository.NotificationRepository;
 import com.safalifter.notificationservice.repository.WhatsAppContactStateRepository;
 import com.safalifter.notificationservice.repository.WhatsAppTemplateCatalogRepository;
 import com.safalifter.notificationservice.request.SendNotificationRequest;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +38,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -35,10 +46,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
+    private static final String CHAT_STATE_IDLE = "IDLE";
+    private static final String CHAT_STATE_AWAITING_QUERY = "AWAITING_QUERY";
+    private static final String CHAT_STATE_AWAITING_SELECTION = "AWAITING_SELECTION";
+    private static final String CHAT_STATE_AWAITING_CONFIRMATION = "AWAITING_CONFIRMATION";
+
     private final NotificationRepository notificationRepository;
     private final WhatsAppContactStateRepository whatsAppContactStateRepository;
     private final SmsSender smsSender;
@@ -46,8 +63,10 @@ public class NotificationService {
     private final EwsEmailSender ewsEmailSender;
     private final WhatsAppSender whatsAppSender;
     private final AuthRoutingClient authRoutingClient;
+    private final TransformerChatBridgeClient transformerChatBridgeClient;
     private final WhatsAppTemplateCatalogRepository whatsAppTemplateCatalogRepository;
     private final Environment environment;
+    private final ObjectMapper objectMapper;
 
     @Value("${notification.default.sms.to:}")
     private String defaultSmsTo;
@@ -63,6 +82,8 @@ public class NotificationService {
     private long whatsappWindowRefreshMs;
     @Value("${whatsapp.webhook.app-secret:}")
     private String whatsappWebhookAppSecret;
+    @Value("${chat.command.bridge-key:}")
+    private String chatCommandBridgeKey;
 
     public void save(SendNotificationRequest request) {
         NotificationType notificationType = request.getNotificationType() != null
@@ -214,6 +235,7 @@ public class NotificationService {
                 for (JsonNode inboundMessage : value.path("messages")) {
                     inboundMessages++;
                     recordInboundWhatsAppMessage(inboundMessage);
+                    handleInboundWhatsAppCommand(inboundMessage);
                 }
                 for (JsonNode statusNode : value.path("statuses")) {
                     statusUpdates++;
@@ -716,10 +738,173 @@ public class NotificationService {
         whatsAppContactStateRepository.save(state);
     }
 
+    private void handleInboundWhatsAppCommand(JsonNode inboundMessage) {
+        String from = normalizeWhatsappContact(inboundMessage.path("from").asText(null));
+        String body = trimToNull(extractCommandText(inboundMessage));
+        if (from == null || body == null) {
+            return;
+        }
+
+        WhatsAppContactState state = whatsAppContactStateRepository.findById(from)
+                .orElseGet(() -> WhatsAppContactState.builder().waId(from).phoneNumber(from).build());
+        state.setPhoneNumber(from);
+
+        String normalized = body.trim();
+        ParsedCommandStart start = parseCommandStart(normalized);
+
+        if (isResetCommand(normalized)) {
+            clearCommandSession(state);
+            whatsAppContactStateRepository.save(state);
+            sendChatReply(from, "Control session cleared. Reply with Arm transformer or Disarm transformer to start again.");
+            return;
+        }
+
+        if (start != null) {
+            state.setPendingCommandAction(start.action());
+            state.setPendingSearchQuery(trimToNull(start.query()));
+            state.setCommandSessionUpdatedAt(LocalDateTime.now());
+            if (trimToNull(start.query()) == null) {
+                state.setCommandSessionState(CHAT_STATE_AWAITING_QUERY);
+                state.setPendingSearchOptions(null);
+                state.setPendingTransformerId(null);
+                state.setPendingTransformerName(null);
+                whatsAppContactStateRepository.save(state);
+                sendChatReply(from, "Okay. Reply with the transformer name you want to " + start.action().toLowerCase(Locale.ROOT) + ".");
+                return;
+            }
+            searchAndPromptForSelection(state, from, start.action(), start.query());
+            return;
+        }
+
+        String sessionState = firstNonBlank(state.getCommandSessionState(), CHAT_STATE_IDLE);
+        if (CHAT_STATE_AWAITING_QUERY.equalsIgnoreCase(sessionState)) {
+            searchAndPromptForSelection(state, from, requirePendingAction(state), normalized);
+            return;
+        }
+        if (CHAT_STATE_AWAITING_SELECTION.equalsIgnoreCase(sessionState)) {
+            handleSelectionReply(state, from, normalized);
+            return;
+        }
+        if (CHAT_STATE_AWAITING_CONFIRMATION.equalsIgnoreCase(sessionState)) {
+            handleConfirmationReply(state, from, normalized);
+            return;
+        }
+
+        if (isHelpCommand(normalized)) {
+            sendChatReply(from, buildHelpMessage());
+        }
+    }
+
+    private void searchAndPromptForSelection(WhatsAppContactState state, String from, String action, String query) {
+        try {
+            ChatCommandSearchBridgeResponse response = transformerChatBridgeClient.searchOculusTransformers(
+                    requiredBridgeKey(),
+                    ChatCommandSearchBridgeRequest.builder()
+                            .sender(from)
+                            .action(action)
+                            .query(query)
+                            .source("WHATSAPP")
+                            .build()
+            );
+            List<ChatCommandTransformerOption> options = response != null && response.getOptions() != null
+                    ? response.getOptions()
+                    : List.of();
+            state.setPendingCommandAction(action);
+            state.setPendingSearchQuery(trimToNull(query));
+            state.setCommandSessionUpdatedAt(LocalDateTime.now());
+            state.setPendingTransformerId(null);
+            state.setPendingTransformerName(null);
+            if (options.isEmpty()) {
+                state.setCommandSessionState(CHAT_STATE_AWAITING_QUERY);
+                state.setPendingSearchOptions(null);
+                whatsAppContactStateRepository.save(state);
+                sendChatReply(from, "I could not find a controllable transformer matching \"" + query + "\". Reply with another transformer name or type Cancel.");
+                return;
+            }
+
+            state.setCommandSessionState(CHAT_STATE_AWAITING_SELECTION);
+            state.setPendingSearchOptions(writePendingOptions(options));
+            whatsAppContactStateRepository.save(state);
+            sendChatReply(from, formatSelectionPrompt(action, query, options));
+        } catch (Exception ex) {
+            state.setCommandSessionUpdatedAt(LocalDateTime.now());
+            whatsAppContactStateRepository.save(state);
+            sendChatReply(from, "I could not search transformers right now. Please try again in a moment.");
+        }
+    }
+
+    private void handleSelectionReply(WhatsAppContactState state, String from, String input) {
+        List<ChatCommandTransformerOption> options = readPendingOptions(state.getPendingSearchOptions());
+        if (options.isEmpty()) {
+            state.setCommandSessionState(CHAT_STATE_AWAITING_QUERY);
+            state.setCommandSessionUpdatedAt(LocalDateTime.now());
+            whatsAppContactStateRepository.save(state);
+            sendChatReply(from, "Your previous search expired. Reply with the transformer name again.");
+            return;
+        }
+
+        ChatCommandTransformerOption selected = selectOption(options, input);
+        if (selected == null) {
+            sendChatReply(from, "I did not understand that selection. Reply with the option number or exact transformer name.");
+            return;
+        }
+
+        state.setPendingTransformerId(selected.getTransformerId());
+        state.setPendingTransformerName(selected.getTransformerName());
+        state.setCommandSessionState(CHAT_STATE_AWAITING_CONFIRMATION);
+        state.setCommandSessionUpdatedAt(LocalDateTime.now());
+        whatsAppContactStateRepository.save(state);
+        sendChatReply(from, "You selected " + selected.getTransformerName() + ". Reply with " + confirmPhrase(requirePendingAction(state)) + " to continue, or type Cancel.");
+    }
+
+    private void handleConfirmationReply(WhatsAppContactState state, String from, String input) {
+        String action = requirePendingAction(state);
+        if (!isConfirmation(input, action)) {
+            sendChatReply(from, "Confirmation not received. Reply with " + confirmPhrase(action) + " to continue, or type Cancel.");
+            return;
+        }
+
+        Long transformerId = state.getPendingTransformerId();
+        if (transformerId == null) {
+            clearCommandSession(state);
+            whatsAppContactStateRepository.save(state);
+            sendChatReply(from, "The selected transformer is no longer available. Start again with Arm transformer or Disarm transformer.");
+            return;
+        }
+
+        try {
+            ChatCommandBridgeResponse response = transformerChatBridgeClient.handleOculusCommand(
+                    requiredBridgeKey(),
+                    ChatCommandBridgeRequest.builder()
+                            .sender(from)
+                            .transformerId(transformerId)
+                            .action(action)
+                            .source("WHATSAPP")
+                            .commandText(action + " " + firstNonBlank(state.getPendingTransformerName(), String.valueOf(transformerId)))
+                            .build()
+            );
+            clearCommandSession(state);
+            state.setCommandSessionUpdatedAt(LocalDateTime.now());
+            whatsAppContactStateRepository.save(state);
+            sendChatReply(from, firstNonBlank(
+                    response != null ? response.getMessage() : null,
+                    action + " command accepted for " + firstNonBlank(state.getPendingTransformerName(), "the selected transformer") + "."
+            ));
+        } catch (Exception ex) {
+            clearCommandSession(state);
+            state.setCommandSessionUpdatedAt(LocalDateTime.now());
+            whatsAppContactStateRepository.save(state);
+            String failureReason = extractChatCommandFailureReason(ex);
+            sendChatReply(from, failureReason != null
+                    ? "I could not complete that " + action.toLowerCase(Locale.ROOT) + " request: " + failureReason
+                    : "I could not complete that " + action.toLowerCase(Locale.ROOT) + " request. Please try again or contact the control room.");
+        }
+    }
+
     private String extractInboundBody(JsonNode inboundMessage) {
-        String textBody = trimToNull(inboundMessage.path("text").path("body").asText(null));
-        if (textBody != null) {
-            return textBody;
+        String commandText = trimToNull(extractCommandText(inboundMessage));
+        if (commandText != null) {
+            return commandText;
         }
         return trimToNull(inboundMessage.toString());
     }
@@ -804,6 +989,185 @@ public class NotificationService {
         }
         return !java.util.Objects.equals(previousWindow, state.getConversationWindowOpenUntil())
                 || !java.util.Objects.equals(previousEligible, state.getFreeFormEligible());
+    }
+
+    private String extractCommandText(JsonNode inboundMessage) {
+        String textBody = trimToNull(inboundMessage.path("text").path("body").asText(null));
+        if (textBody != null) {
+            return textBody;
+        }
+        String buttonText = trimToNull(inboundMessage.path("button").path("text").asText(null));
+        if (buttonText != null) {
+            return buttonText;
+        }
+        JsonNode interactive = inboundMessage.path("interactive");
+        String replyTitle = trimToNull(interactive.path("button_reply").path("title").asText(null));
+        if (replyTitle != null) {
+            return replyTitle;
+        }
+        String listReply = trimToNull(interactive.path("list_reply").path("title").asText(null));
+        if (listReply != null) {
+            return listReply;
+        }
+        return null;
+    }
+
+    private ParsedCommandStart parseCommandStart(String input) {
+        String normalized = normalizeForComparison(input);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.equals("arm transformer") || normalized.equals("arm")) {
+            return new ParsedCommandStart("ARM", null);
+        }
+        if (normalized.equals("disarm transformer") || normalized.equals("disarm")) {
+            return new ParsedCommandStart("DISARM", null);
+        }
+        if (normalized.startsWith("arm ")) {
+            return new ParsedCommandStart("ARM", input.substring(4).trim());
+        }
+        if (normalized.startsWith("disarm ")) {
+            return new ParsedCommandStart("DISARM", input.substring(7).trim());
+        }
+        return null;
+    }
+
+    private boolean isHelpCommand(String input) {
+        String normalized = normalizeForComparison(input);
+        return normalized != null && (normalized.equals("help") || normalized.equals("hi") || normalized.equals("hello") || normalized.equals("menu"));
+    }
+
+    private boolean isResetCommand(String input) {
+        String normalized = normalizeForComparison(input);
+        return normalized != null && (normalized.equals("cancel") || normalized.equals("reset") || normalized.equals("stop") || normalized.equals("start over"));
+    }
+
+    private String normalizeForComparison(String value) {
+        String trimmed = trimToNull(value);
+        return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    }
+
+    private String buildHelpMessage() {
+        return "Reply with Arm transformer or Disarm transformer, then send the transformer name. I will show the matching transformers before any control action is sent.";
+    }
+
+    private void sendChatReply(String recipient, String message) {
+        if (trimToNull(recipient) == null || trimToNull(message) == null) {
+            return;
+        }
+        save(SendNotificationRequest.builder()
+                .notificationType(NotificationType.SYSTEM_NOTICE)
+                .channels(List.of(NotificationChannel.WHATSAPP))
+                .sourceSystem("whatsapp-chat")
+                .referenceId("wa-chat-" + System.currentTimeMillis())
+                .whatsappNumber(recipient)
+                .message(message)
+                .build());
+    }
+
+    private String requiredBridgeKey() {
+        String bridgeKey = trimToNull(chatCommandBridgeKey);
+        if (bridgeKey == null) {
+            throw new IllegalStateException("Chat command bridge key is not configured");
+        }
+        return bridgeKey;
+    }
+
+    private String writePendingOptions(List<ChatCommandTransformerOption> options) {
+        try {
+            return objectMapper.writeValueAsString(options == null ? List.of() : options);
+        } catch (Exception ignored) {
+            return "[]";
+        }
+    }
+
+    private List<ChatCommandTransformerOption> readPendingOptions(String json) {
+        String value = trimToNull(json);
+        if (value == null) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(value, new TypeReference<List<ChatCommandTransformerOption>>() { });
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private String formatSelectionPrompt(String action, String query, List<ChatCommandTransformerOption> options) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("I found ").append(options.size()).append(" controllable transformer");
+        if (options.size() != 1) {
+            builder.append("s");
+        }
+        builder.append(" for ").append(action).append(" matching \"").append(query).append("\":");
+        for (int index = 0; index < options.size(); index++) {
+            ChatCommandTransformerOption option = options.get(index);
+            builder.append("\n")
+                    .append(index + 1)
+                    .append(". ")
+                    .append(firstNonBlank(option.getTransformerName(), "Unnamed transformer"));
+            String supplier = firstNonBlank(option.getSupplierName(), option.getSupplierCode());
+            if (supplier != null) {
+                builder.append(" - ").append(supplier);
+            }
+            if (option.getDepotId() != null) {
+                builder.append(" (Depot ").append(option.getDepotId()).append(")");
+            }
+        }
+        builder.append("\nReply with the option number or the exact transformer name.");
+        return builder.toString();
+    }
+
+    private ChatCommandTransformerOption selectOption(List<ChatCommandTransformerOption> options, String input) {
+        String normalized = trimToNull(input);
+        if (normalized == null || options == null || options.isEmpty()) {
+            return null;
+        }
+        try {
+            int selectedIndex = Integer.parseInt(normalized);
+            if (selectedIndex >= 1 && selectedIndex <= options.size()) {
+                return options.get(selectedIndex - 1);
+            }
+        } catch (NumberFormatException ignored) {
+        }
+
+        String comparison = normalizeForComparison(normalized);
+        for (ChatCommandTransformerOption option : options) {
+            if (comparison.equals(normalizeForComparison(option.getTransformerName()))) {
+                return option;
+            }
+        }
+        List<ChatCommandTransformerOption> partialMatches = options.stream()
+                .filter(option -> normalizeForComparison(option.getTransformerName()) != null
+                        && normalizeForComparison(option.getTransformerName()).contains(comparison))
+                .toList();
+        return partialMatches.size() == 1 ? partialMatches.get(0) : null;
+    }
+
+    private String confirmPhrase(String action) {
+        return "CONFIRM " + action;
+    }
+
+    private boolean isConfirmation(String input, String action) {
+        String normalized = normalizeForComparison(input);
+        if (normalized == null) {
+            return false;
+        }
+        return normalized.equals(normalizeForComparison(confirmPhrase(action)));
+    }
+
+    private void clearCommandSession(WhatsAppContactState state) {
+        state.setCommandSessionState(CHAT_STATE_IDLE);
+        state.setPendingCommandAction(null);
+        state.setPendingSearchQuery(null);
+        state.setPendingSearchOptions(null);
+        state.setPendingTransformerId(null);
+        state.setPendingTransformerName(null);
+    }
+
+    private String requirePendingAction(WhatsAppContactState state) {
+        String action = trimToNull(state.getPendingCommandAction());
+        return action != null ? action.toUpperCase(Locale.ROOT) : "ARM";
     }
 
     private Optional<WhatsAppTemplateCatalog> resolveConfiguredTemplate(NotificationType notificationType) {
@@ -921,6 +1285,37 @@ public class NotificationService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private String extractChatCommandFailureReason(Exception ex) {
+        if (ex == null) {
+            return null;
+        }
+
+        if (ex instanceof FeignException feignException) {
+            String content = trimToNull(feignException.contentUTF8());
+            if (content != null) {
+                try {
+                    JsonNode jsonNode = objectMapper.readTree(content);
+                    String message = trimToNull(jsonNode.path("message").asText(null));
+                    if (message != null) {
+                        return message;
+                    }
+                    String error = trimToNull(jsonNode.path("error").asText(null));
+                    if (error != null) {
+                        return error;
+                    }
+                } catch (Exception ignored) {
+                    return content;
+                }
+            }
+        }
+
+        if (ex instanceof ResponseStatusException responseStatusException) {
+            return trimToNull(responseStatusException.getReason());
+        }
+
+        return trimToNull(ex.getMessage());
+    }
+
     private void reportDebug(String hypothesisId, String location, String message, Map<String, Object> data) {
         try {
             Map<String, String> debugConfig = loadDebugConfig();
@@ -963,6 +1358,9 @@ public class NotificationService {
     }
 
     private record ChannelTarget(String name, String address) {
+    }
+
+    private record ParsedCommandStart(String action, String query) {
     }
 
     private record WhatsAppDeliveryDecision(

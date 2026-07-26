@@ -269,7 +269,11 @@ public class OculusControlServiceImpl implements OculusControlService {
     }
 
     private void validateLoriotConfiguration() {
-        if (isBlank(loriotApiUrl) || isBlank(loriotAppId) || isBlank(loriotApiKey)) {
+        // The current downlink implementation posts to the provider REST endpoint
+        // using the configured base URL and bearer token. appId is retained in
+        // configuration for compatibility with provider variants, but it is not
+        // used by this request path.
+        if (isBlank(loriotApiUrl) || isBlank(loriotApiKey)) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Loriot downlink configuration is incomplete");
         }
     }

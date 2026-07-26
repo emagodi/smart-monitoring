@@ -9,16 +9,15 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ChatCommandResponse {
-    private String status;
-    private String result;
-    private String action;
+public class ChatCommandTransformerOption {
     private Long transformerId;
+    private Long id;
     private String transformerName;
+    private String name;
+    private Long depotId;
     private String supplierCode;
-    private String operatorName;
-    private String providerStatus;
-    private String message;
-    private String statusMessage;
-    private String detail;
+    private String supplierName;
+    private boolean controllable;
+    private String controllerName;
+    private String controllerDevEui;
 }

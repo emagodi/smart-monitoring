@@ -119,7 +119,7 @@ public class ChatCommandAccessServiceImpl implements ChatCommandAccessService {
         if (trimmed.isBlank()) {
             return null;
         }
-        String normalized = trimmed.replaceAll("[^0-9+]", "");
+        String normalized = trimmed.replaceAll("[^0-9]", "");
         return normalized.isBlank() ? trimmed.toLowerCase(Locale.ROOT) : normalized;
     }
 

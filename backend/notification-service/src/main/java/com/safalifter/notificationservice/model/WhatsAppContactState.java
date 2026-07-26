@@ -44,6 +44,16 @@ public class WhatsAppContactState {
     private String lastOutboundMode;
     private String lastTemplateName;
     private String lastDecisionReason;
+    private String commandSessionState;
+    private String pendingCommandAction;
+    private String pendingSearchQuery;
+
+    @Lob
+    private String pendingSearchOptions;
+
+    private Long pendingTransformerId;
+    private String pendingTransformerName;
+    private LocalDateTime commandSessionUpdatedAt;
 
     @CreationTimestamp
     private LocalDateTime creationTimestamp;

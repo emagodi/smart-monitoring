@@ -3,6 +3,8 @@ package com.safalifter.transformerservice.payload.client;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 @Builder
 public class SendNotificationRequest {
@@ -18,4 +20,7 @@ public class SendNotificationRequest {
     private String whatsappNumber;
     private String email;
     private String subject;
+    private String whatsappTemplateName;
+    private String whatsappTemplateLanguageCode;
+    private List<String> whatsappTemplateParameters;
 }

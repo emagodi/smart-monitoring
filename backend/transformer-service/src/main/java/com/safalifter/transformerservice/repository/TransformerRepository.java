@@ -13,4 +13,6 @@ public interface TransformerRepository extends JpaRepository<Transformer, Long> 
     Optional<Transformer> findByIdAndSupplierCode(Long id, String supplierCode);
     List<Transformer> findByDepotIdAndSupplierCode(Long depotId, String supplierCode);
     Optional<Transformer> findBySupplierCodeAndName(String supplierCode, String name);
+    List<Transformer> findTop10ByNameContainingIgnoreCaseOrderByNameAsc(String name);
+    List<Transformer> findTop10BySupplierCodeAndNameContainingIgnoreCaseOrderByNameAsc(String supplierCode, String name);
 }
