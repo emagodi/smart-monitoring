@@ -11,7 +11,7 @@ services:
     volumes:
       - ./backend/config:/config:ro
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
 
   eureka-server:
     build: ./backend/eureka-server
@@ -21,7 +21,7 @@ services:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
     ports:
-      - "8761:8761"
+      - "127.0.0.1:8761:8761"
     depends_on:
       - config-server
 
@@ -41,7 +41,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       AUTH_DB_NAME: ${AUTH_DB_NAME}
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     volumes:
       - "./uploads:/uploads/monitor"
     depends_on:
@@ -73,7 +73,7 @@ services:
       CHAT_COMMAND_BRIDGE_KEY: ${CHAT_COMMAND_BRIDGE_KEY:-}
       REMOTE_TRANSFORMER_LOOKUP_URL: ${REMOTE_TRANSFORMER_LOOKUP_URL:-http://68.183.126.109:3001/api/transformer/details}
     ports:
-      - "8083:8083"
+      - "127.0.0.1:8083:8083"
     volumes:
       - "./uploads:/app/uploads"
     depends_on:
@@ -123,7 +123,7 @@ services:
       - eureka-server
       - config-server
     ports:
-      - "8085:8085"
+      - "127.0.0.1:8085:8085"
 
   gateway:
     build: ./backend/gateway
@@ -136,7 +136,7 @@ services:
       TZ: Africa/Harare
       JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
     ports:
-      - "8087:8080"
+      - "127.0.0.1:8087:8080"
     depends_on:
       - eureka-server
       - config-server
@@ -146,6 +146,6 @@ services:
     container_name: transformer-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       - gateway
