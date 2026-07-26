@@ -28,10 +28,18 @@ import com.safalifter.authservice.exception.AuthenticationException;
 import com.safalifter.authservice.exception.UserNotFoundException;
 import com.safalifter.authservice.payload.request.*;
 import com.safalifter.authservice.payload.response.AuthenticationResponse;
+import com.safalifter.authservice.payload.response.ChatCommandUserResponse;
+import com.safalifter.authservice.payload.response.NotificationDirectoryEntryResponse;
+import com.safalifter.authservice.payload.response.NotificationDirectoryWorkspaceResponse;
+import com.safalifter.authservice.payload.response.NotificationPreferenceResponse;
+import com.safalifter.authservice.payload.response.NotificationRecipientResponse;
 import com.safalifter.authservice.payload.response.RefreshTokenResponse;
 import com.safalifter.authservice.payload.response.UserAccessResponse;
 import com.safalifter.authservice.repository.UserRepository;
 import com.safalifter.authservice.service.AuthenticationService;
+import com.safalifter.authservice.service.ChatCommandAccessService;
+import com.safalifter.authservice.service.NotificationDirectoryService;
+import com.safalifter.authservice.service.NotificationPreferenceService;
 import com.safalifter.authservice.service.RbacAuthorizationService;
 import com.safalifter.authservice.service.EmailService;
 import com.safalifter.authservice.service.JwtService;
@@ -64,6 +72,9 @@ public class AuthenticationController {
 
     private final UserRepository userRepository;
     private final RbacAuthorizationService rbacAuthorizationService;
+    private final NotificationPreferenceService notificationPreferenceService;
+    private final NotificationDirectoryService notificationDirectoryService;
+    private final ChatCommandAccessService chatCommandAccessService;
 
     @PostMapping("/register")
     @Operation(summary = "Register New User",
@@ -246,6 +257,68 @@ public class AuthenticationController {
         return ResponseEntity.ok(users);
     }
 
+    @GetMapping("/me/notification-preferences")
+    public ResponseEntity<List<NotificationPreferenceResponse>> getMyNotificationPreferences(Authentication authentication) {
+        Long userId = resolveCurrentUserId(authentication);
+        return ResponseEntity.ok(notificationPreferenceService.getPreferencesForUser(userId));
+    }
+
+    @PutMapping("/me/notification-preferences")
+    public ResponseEntity<List<NotificationPreferenceResponse>> updateMyNotificationPreferences(
+            Authentication authentication,
+            @RequestBody NotificationPreferenceUpdateRequest request
+    ) {
+        Long userId = resolveCurrentUserId(authentication);
+        return ResponseEntity.ok(notificationPreferenceService.updatePreferencesForUser(userId, request));
+    }
+
+    @GetMapping("/internal/notification-routing/users")
+    public ResponseEntity<List<NotificationRecipientResponse>> getNotificationRecipients(
+            @RequestParam com.safalifter.authservice.enums.NotificationType notificationType,
+            @RequestParam(required = false) String supplierCode
+    ) {
+        return ResponseEntity.ok(notificationPreferenceService.resolveRecipients(notificationType, supplierCode));
+    }
+
+    @GetMapping("/internal/chat-command-users/resolve")
+    public ResponseEntity<ChatCommandUserResponse> resolveChatCommandUser(@RequestParam String contact) {
+        return ResponseEntity.ok(chatCommandAccessService.resolveUserByContact(contact));
+    }
+
+    @GetMapping("/notification-directory")
+    public ResponseEntity<NotificationDirectoryWorkspaceResponse> getNotificationDirectoryWorkspace(
+            Authentication authentication,
+            @RequestParam(required = false) String supplierCode
+    ) {
+        return ResponseEntity.ok(notificationDirectoryService.getWorkspace(authentication, supplierCode));
+    }
+
+    @PostMapping("/notification-directory")
+    public ResponseEntity<NotificationDirectoryEntryResponse> createNotificationDirectoryEntry(
+            Authentication authentication,
+            @RequestBody NotificationDirectoryEntryRequest request
+    ) {
+        return ResponseEntity.ok(notificationDirectoryService.createEntry(authentication, request));
+    }
+
+    @PutMapping("/notification-directory/{entryId}")
+    public ResponseEntity<NotificationDirectoryEntryResponse> updateNotificationDirectoryEntry(
+            Authentication authentication,
+            @PathVariable Long entryId,
+            @RequestBody NotificationDirectoryEntryRequest request
+    ) {
+        return ResponseEntity.ok(notificationDirectoryService.updateEntry(authentication, entryId, request));
+    }
+
+    @DeleteMapping("/notification-directory/{entryId}")
+    public ResponseEntity<Void> deleteNotificationDirectoryEntry(
+            Authentication authentication,
+            @PathVariable Long entryId
+    ) {
+        notificationDirectoryService.deleteEntry(authentication, entryId);
+        return ResponseEntity.noContent().build();
+    }
+
     // Extract duplicate entry message using regex
     private String extractDuplicateEntryMessage(String errorMessage) {
         String regex = "Duplicate entry '([^']+)'";
@@ -277,5 +350,15 @@ public class AuthenticationController {
     }
 
     // OTP flow removed: authenticate now returns tokens directly
+
+    private Long resolveCurrentUserId(Authentication authentication) {
+        String email = authentication != null ? authentication.getName() : null;
+        if (email == null || email.isBlank()) {
+            throw new UserNotFoundException("Current user could not be resolved");
+        }
+        return userRepository.findDetailedByEmail(email)
+                .map(User::getId)
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
+    }
 
 }

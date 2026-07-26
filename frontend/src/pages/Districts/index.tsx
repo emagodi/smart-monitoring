@@ -440,7 +440,81 @@ export default function DistrictsIndex() {
         ))}
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr_0.75fr]">
+      <section className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="enterprise-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                  District Summary
+                </p>
+                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
+                  Filter and coverage overview
+                </h3>
+              </div>
+              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+              {[
+                ['Current region', selectedRegionName],
+                ['Visible coverage', `${visibleMetrics.regionCoverage} region${visibleMetrics.regionCoverage === 1 ? '' : 's'}`],
+                ['Assigned on screen', visibleMetrics.assignedCount],
+                ['Unassigned on screen', visibleMetrics.unassignedCount],
+              ].map(([label, value]) => (
+                <div
+                  key={String(label)}
+                  className="enterprise-subtle-card flex items-center justify-between px-3 py-3"
+                >
+                  <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="enterprise-card p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                Region Mix
+              </p>
+              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
+                Strongest district concentration
+              </h3>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {topRegionMix.length === 0 ? (
+                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  No district-to-region mix is available yet.
+                </div>
+              ) : (
+                topRegionMix.map(([label, count]) => {
+                  const denominator = Math.max(regionFilter ? districts.length : paginated.length, 1);
+                  const width = (count / denominator) * 100;
+
+                  return (
+                    <div key={label}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{label}</span>
+                        <span className="text-slate-500 dark:text-slate-400">{count} district{count === 1 ? '' : 's'}</span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
+                          style={{ width: `${Math.max(width, 8)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="enterprise-card overflow-hidden">
           <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -657,80 +731,6 @@ export default function DistrictsIndex() {
                   Next
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  District Summary
-                </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Filter and coverage overview
-                </h3>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              {[
-                ['Current region', selectedRegionName],
-                ['Visible coverage', `${visibleMetrics.regionCoverage} region${visibleMetrics.regionCoverage === 1 ? '' : 's'}`],
-                ['Assigned on screen', visibleMetrics.assignedCount],
-                ['Unassigned on screen', visibleMetrics.unassignedCount],
-              ].map(([label, value]) => (
-                <div
-                  key={String(label)}
-                  className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5"
-                >
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Region Mix
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Strongest district concentration
-              </h3>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {topRegionMix.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No district-to-region mix is available yet.
-                </div>
-              ) : (
-                topRegionMix.map(([label, count]) => {
-                  const denominator = Math.max(regionFilter ? districts.length : paginated.length, 1);
-                  const width = (count / denominator) * 100;
-
-                  return (
-                    <div key={label}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{label}</span>
-                        <span className="text-slate-500 dark:text-slate-400">{count} district{count === 1 ? '' : 's'}</span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                          style={{ width: `${Math.max(width, 8)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
             </div>
           </div>
         </div>

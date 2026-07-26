@@ -1,0 +1,151 @@
+services:
+  config-server:
+    build: ./backend/config-server
+    container_name: config-server
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: native
+      SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
+    volumes:
+      - ./backend/config:/config:ro
+    ports:
+      - "8888:8888"
+
+  eureka-server:
+    build: ./backend/eureka-server
+    container_name: eureka-server
+    restart: unless-stopped
+    environment:
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
+    ports:
+      - "8761:8761"
+    depends_on:
+      - config-server
+
+  auth-service:
+    build: ./backend/auth-service
+    container_name: auth-service
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USERNAME: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      AUTH_DB_NAME: ${AUTH_DB_NAME}
+    ports:
+      - "8082:8082"
+    volumes:
+      - "./uploads:/uploads/monitor"
+    depends_on:
+      - eureka-server
+      - config-server
+
+  transformer-service:
+    build: ./backend/transformer-service
+    container_name: transformer-service
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
+      APP_IMAGE_STORAGE_DIR: /app/uploads
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USERNAME: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TRANSFORMER_DB_NAME: ${TRANSFORMER_DB_NAME}
+      LORIOT_API_URL: ${LORIOT_API_URL:-}
+      LORIOT_APP_ID: ${LORIOT_APP_ID:-}
+      LORIOT_API_KEY: ${LORIOT_API_KEY:-}
+      LORIOT_DOWNLINK_PORT: ${LORIOT_DOWNLINK_PORT:-2}
+      LORIOT_DOWNLINK_CONFIRMED: ${LORIOT_DOWNLINK_CONFIRMED:-false}
+      LORIOT_INSECURE_SSL: ${LORIOT_INSECURE_SSL:-true}
+      CHAT_COMMAND_BRIDGE_KEY: ${CHAT_COMMAND_BRIDGE_KEY:-}
+      REMOTE_TRANSFORMER_LOOKUP_URL: ${REMOTE_TRANSFORMER_LOOKUP_URL:-http://68.183.126.109:3001/api/transformer/details}
+    ports:
+      - "8083:8083"
+    volumes:
+      - "./uploads:/app/uploads"
+    depends_on:
+      - eureka-server
+      - config-server
+
+  notification-service:
+    build: ./backend/notification-service
+    container_name: notification-service
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      SERVER_PORT: 8085
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888/
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USERNAME: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME}
+      ZESA_MAIL_HOST: ${ZESA_MAIL_HOST:-}
+      ZESA_MAIL_PORT: ${ZESA_MAIL_PORT:-587}
+      ZESA_MAIL_USERNAME: ${ZESA_MAIL_USERNAME:-}
+      ZESA_MAIL_PASSWORD: ${ZESA_MAIL_PASSWORD:-}
+      WHATSAPP_API_URL: ${WHATSAPP_API_URL:-}
+      WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
+      WHATSAPP_BUSINESS_NUMBER: ${WHATSAPP_BUSINESS_NUMBER:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v25.0}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_CONVERSATION_WINDOW_HOURS: ${WHATSAPP_CONVERSATION_WINDOW_HOURS:-24}
+      WHATSAPP_TEMPLATE_DEFAULT_NAME: ${WHATSAPP_TEMPLATE_DEFAULT_NAME:-}
+      WHATSAPP_TEMPLATE_DEFAULT_LANGUAGE: ${WHATSAPP_TEMPLATE_DEFAULT_LANGUAGE:-en}
+      WHATSAPP_TEMPLATE_CONTROLLER_TRIGGER_NAME: ${WHATSAPP_TEMPLATE_CONTROLLER_TRIGGER_NAME:-}
+      WHATSAPP_TEMPLATE_CRITICAL_ALERT_NAME: ${WHATSAPP_TEMPLATE_CRITICAL_ALERT_NAME:-}
+      WHATSAPP_TEMPLATE_SYSTEM_NOTICE_NAME: ${WHATSAPP_TEMPLATE_SYSTEM_NOTICE_NAME:-}
+      WHATSAPP_TEMPLATE_ARM_SUCCESS_NAME: ${WHATSAPP_TEMPLATE_ARM_SUCCESS_NAME:-}
+      WHATSAPP_TEMPLATE_DISARM_SUCCESS_NAME: ${WHATSAPP_TEMPLATE_DISARM_SUCCESS_NAME:-}
+      WHATSAPP_TEMPLATE_ARM_FAILED_NAME: ${WHATSAPP_TEMPLATE_ARM_FAILED_NAME:-}
+      WHATSAPP_TEMPLATE_DISARM_FAILED_NAME: ${WHATSAPP_TEMPLATE_DISARM_FAILED_NAME:-}
+      CHAT_COMMAND_BRIDGE_KEY: ${CHAT_COMMAND_BRIDGE_KEY:-}
+    depends_on:
+      - eureka-server
+      - config-server
+    ports:
+      - "8085:8085"
+
+  gateway:
+    build: ./backend/gateway
+    container_name: api-gateway
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      EUREKA_URI: http://eureka-server:8761/eureka
+      EUREKA_CLIENT_SERVICE_URL_DEFAULT_ZONE: http://eureka-server:8761/eureka
+      TZ: Africa/Harare
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Africa/Harare -Deureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/
+    ports:
+      - "8087:8080"
+    depends_on:
+      - eureka-server
+      - config-server
+
+  transformer-frontend:
+    build: ./frontend
+    container_name: transformer-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway

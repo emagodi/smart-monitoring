@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.safalifter.transformerservice.payload.request.TransformerRequest;
+import com.safalifter.transformerservice.payload.response.ExternalTransformerLookupResponse;
 import com.safalifter.transformerservice.payload.response.TransformerResponse;
 import com.safalifter.transformerservice.service.TransformerService;
 
@@ -30,6 +31,13 @@ public class TransformerController {
     public ResponseEntity<TransformerResponse> create(@Valid @RequestBody TransformerRequest request) {
         TransformerResponse response = transformerService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/remote-details")
+    @Operation(summary = "Lookup remote transformer details by controller EUI")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<ExternalTransformerLookupResponse> lookupRemoteTransformer(@RequestParam String eui) {
+        return ResponseEntity.ok(transformerService.lookupRemoteByEui(eui));
     }
 
     @GetMapping("/{id}")

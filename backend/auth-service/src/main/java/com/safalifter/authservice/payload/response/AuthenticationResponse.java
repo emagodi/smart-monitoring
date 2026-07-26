@@ -26,6 +26,9 @@ public class AuthenticationResponse {
 
     private String phone;
 
+    @JsonProperty("whatsapp_number")
+    private String whatsappNumber;
+
     private String employeeNumber;
 
     private String status;

@@ -104,6 +104,15 @@ interface Controller {
   transformer?: { id: number; name: string };
 }
 
+interface RemoteTransformerLookup {
+  eui: string;
+  transformerName?: string | null;
+  rawTransformerType?: string | null;
+  transformerType?: TransformerTypeOption | null;
+  lat?: number | null;
+  lng?: number | null;
+}
+
 type ViewMode = 'REGIONS' | 'DISTRICTS' | 'DEPOTS' | 'TRANSFORMERS' | 'SENSORS' | 'READINGS' | 'CONTROLLERS' | 'CONTROLLER_READINGS';
 type TransformerTypeOption = 'GROUND_MOUNTED' | 'POLE_MOUNTED';
 
@@ -180,6 +189,13 @@ export default function TransformersIndex() {
   const [createDepotInput, setCreateDepotInput] = useState<number | ''>('');
   const [createLatInput, setCreateLatInput] = useState<number | ''>('');
   const [createLngInput, setCreateLngInput] = useState<number | ''>('');
+  const [createControllerEuiInput, setCreateControllerEuiInput] = useState('');
+  const [lookingUpCreateTransformer, setLookingUpCreateTransformer] = useState(false);
+  const [createLookupNotice, setCreateLookupNotice] = useState<{
+    variant: 'success' | 'error' | 'info' | 'warning';
+    title: string;
+    message: string;
+  } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editNameInput, setEditNameInput] = useState('');
@@ -614,8 +630,58 @@ export default function TransformersIndex() {
       setCreateDepotInput(selectedDepot?.id ?? '');
       setCreateLatInput('');
       setCreateLngInput('');
+      setCreateControllerEuiInput('');
+      setCreateLookupNotice(null);
       setCreateError(null);
       setShowCreate(true);
+  };
+
+  const handleLookupRemoteTransformer = async () => {
+    const eui = createControllerEuiInput.trim();
+    if (!eui) {
+      setCreateLookupNotice({
+        variant: 'warning',
+        title: 'Controller EUI required',
+        message: 'Enter a controller EUI first so the remote transformer details can be loaded.',
+      });
+      return;
+    }
+
+    try {
+      setLookingUpCreateTransformer(true);
+      setCreateLookupNotice(null);
+      const response = await axios.get<RemoteTransformerLookup>(`${API_BASE_URL}/api/v1/transformers/remote-details`, {
+        headers,
+        params: { eui },
+      });
+      const data = response.data;
+      if (data.transformerName) {
+        setCreateNameInput(data.transformerName);
+      }
+      if (data.transformerType === 'GROUND_MOUNTED' || data.transformerType === 'POLE_MOUNTED') {
+        setCreateTypeInput(data.transformerType);
+      }
+      if (typeof data.lat === 'number' && Number.isFinite(data.lat)) {
+        setCreateLatInput(data.lat);
+      }
+      if (typeof data.lng === 'number' && Number.isFinite(data.lng)) {
+        setCreateLngInput(data.lng);
+      }
+      setCreateLookupNotice({
+        variant: 'success',
+        title: 'Transformer details loaded',
+        message: `Loaded ${data.transformerName || eui} with ${data.rawTransformerType || 'mapped'} type, latitude, and longitude.`,
+      });
+    } catch (err: any) {
+      console.error(err);
+      setCreateLookupNotice({
+        variant: 'error',
+        title: 'Lookup failed',
+        message: err.response?.data?.message || 'The remote transformer details could not be loaded for that EUI.',
+      });
+    } finally {
+      setLookingUpCreateTransformer(false);
+    }
   };
 
   const openEditModal = (t: Transformer) => {
@@ -666,6 +732,7 @@ export default function TransformersIndex() {
           depotId: isSupplierUser ? null : Number(createDepotInput),
           lat: createLatInput === '' ? 0 : Number(createLatInput),
           lng: createLngInput === '' ? 0 : Number(createLngInput),
+          controllerEui: createControllerEuiInput.trim() || null,
         },
         { headers }
       );
@@ -674,7 +741,9 @@ export default function TransformersIndex() {
       setNotice({
         variant: 'success',
         title: 'Transformer created',
-        message: 'The transformer was created successfully.',
+        message: createControllerEuiInput.trim()
+          ? `The transformer was created. Controller ${createControllerEuiInput.trim()} was auto-linked when a matching unassigned local controller existed.`
+          : 'The transformer was created successfully.',
       });
 
       if (viewMode === 'TRANSFORMERS' && selectedDepot && Number(createDepotInput) === selectedDepot.id) {
@@ -2203,8 +2272,70 @@ export default function TransformersIndex() {
 
           <form onSubmit={handleCreateTransformer} className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
             {createError && <Alert variant="error" title="Error" message={createError} />}
+            {createLookupNotice && (
+              <Alert
+                variant={createLookupNotice.variant}
+                title={createLookupNotice.title}
+                message={createLookupNotice.message}
+              />
+            )}
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="md:col-span-2 rounded-[24px] border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-violet-50 px-4 py-4 dark:border-blue-500/20 dark:from-blue-500/10 dark:via-slate-950 dark:to-violet-500/10">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                      Controller EUI Lookup
+                    </label>
+                    <input
+                      type="text"
+                      value={createControllerEuiInput}
+                      onChange={(e) => setCreateControllerEuiInput(e.target.value.toUpperCase())}
+                      placeholder="e.g. A8404116E25E19E0"
+                      className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium tracking-[0.08em] text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleLookupRemoteTransformer()}
+                    disabled={lookingUpCreateTransformer}
+                    className="inline-flex h-[50px] min-w-[180px] items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {lookingUpCreateTransformer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    {lookingUpCreateTransformer ? 'Loading...' : 'Load From EUI'}
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-emerald-100 bg-white/90 px-3 py-3 dark:border-emerald-500/20 dark:bg-slate-900/80">
+                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-300">
+                      <Cpu className="h-4 w-4" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Controller</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {createControllerEuiInput || 'Awaiting EUI'}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-blue-100 bg-white/90 px-3 py-3 dark:border-blue-500/20 dark:bg-slate-900/80">
+                    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-300">
+                      <Zap className="h-4 w-4" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Mapped Type</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {createTypeInput === 'GROUND_MOUNTED' ? 'GMT' : createTypeInput === 'POLE_MOUNTED' ? 'PMT' : 'Not loaded'}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-violet-100 bg-white/90 px-3 py-3 dark:border-violet-500/20 dark:bg-slate-900/80">
+                    <div className="flex items-center gap-2 text-violet-600 dark:text-violet-300">
+                      <MapPin className="h-4 w-4" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Coordinates</span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {createLatInput !== '' && createLngInput !== '' ? `${createLatInput}, ${createLngInput}` : 'Not loaded'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                   Transformer Name

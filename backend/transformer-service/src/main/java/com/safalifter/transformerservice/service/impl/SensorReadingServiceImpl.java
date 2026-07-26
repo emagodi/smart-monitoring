@@ -21,15 +21,20 @@ import com.safalifter.transformerservice.service.SensorReadingService;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.clients.NotificationClient;
+import com.safalifter.transformerservice.payload.client.NotificationType;
 import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class SensorReadingServiceImpl implements SensorReadingService {
+    private static final DateTimeFormatter ALERT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final SensorReadingRepository sensorReadingRepository;
     private final SensorRepository sensorRepository;
@@ -262,20 +267,24 @@ public class SensorReadingServiceImpl implements SensorReadingService {
         Object val = extractValue(reading, type);
         if (val == null) return;
         boolean trigger = false;
+        String eventLabel;
         String message;
         if ("contact".equals(type)) {
             String v = String.valueOf(normalizeContact(type, val));
             trigger = "open".equalsIgnoreCase(v);
+            eventLabel = "Door open";
             message = sensor.getName() + " contact " + v;
         } else if ("temperature".equals(type)) {
             double d;
             try { d = Double.parseDouble(String.valueOf(val)); } catch (Exception e) { d = Double.NaN; }
             trigger = !Double.isNaN(d) && d >= 20.0;
+            eventLabel = "High temperature detected";
             message = sensor.getName() + " temperature " + String.valueOf(val);
         } else if ("suspicious_till".equals(type)) {
             String v = String.valueOf(val);
             boolean b = "true".equalsIgnoreCase(v) || "1".equals(v);
             trigger = b;
+            eventLabel = "Suspicious tilt detected";
             message = sensor.getName() + " suspicious_till " + v;
         } else {
             return;
@@ -296,19 +305,65 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                     .transformerName(tf != null ? tf.getName() : null)
                     .transformerCapacity(tf != null ? tf.getCapacity() : null)
                     .depotId(tf != null ? tf.getDepotId() : null)
+                    .depotName(resolveAlertLocation(tf))
                     .lat(tf != null ? tf.getLat() : null)
                     .lng(tf != null ? tf.getLng() : null)
                     .devEui(sensor.getDevEui())
                     .deviceId(sensor.getDeviceId())
                     .deviceName(sensor.getName())
                     .sensorType(sensor.getType())
+                    .supplierCode(tf != null ? tf.getSupplierCode() : null)
+                    .supplierName(tf != null ? tf.getSupplierName() : null)
                     .build();
             try { alertService.create(ar); } catch (Exception ignored) {}
             try {
                 notificationClient.send(SendNotificationRequest.builder()
+                        .notificationType(NotificationType.CRITICAL_ALERT)
+                        .supplierCode(tf != null ? tf.getSupplierCode() : null)
+                        .sourceSystem("transformer-service")
+                        .referenceId(reading.getId() != null ? String.valueOf(reading.getId()) : null)
+                        .subject("Sensor trigger detected")
                         .message(message)
+                        .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(tf, eventLabel, reading.getCreatedAt()))
                         .build());
             } catch (Exception ignored) {}
         }
+    }
+
+    private List<String> buildSecurityAlertTemplateParameters(Transformer transformer, String eventLabel, LocalDateTime detectedAt) {
+        return List.of(
+                resolveTransformerLabel(transformer),
+                eventLabel == null || eventLabel.isBlank() ? "Security event detected" : eventLabel,
+                resolveAlertLocation(transformer),
+                formatAlertTime(detectedAt)
+        );
+    }
+
+    private String resolveTransformerLabel(Transformer transformer) {
+        if (transformer == null || transformer.getName() == null || transformer.getName().isBlank()) {
+            return "Unknown transformer";
+        }
+        return transformer.getName().trim();
+    }
+
+    private String resolveAlertLocation(Transformer transformer) {
+        if (transformer == null) {
+            return "Unknown location";
+        }
+        if (transformer.getDepotId() != null) {
+            return "Depot " + transformer.getDepotId();
+        }
+        if (transformer.getSupplierName() != null && !transformer.getSupplierName().isBlank()) {
+            return transformer.getSupplierName().trim();
+        }
+        if (transformer.getSupplierCode() != null && !transformer.getSupplierCode().isBlank()) {
+            return transformer.getSupplierCode().trim().toUpperCase(Locale.ROOT);
+        }
+        return "Unknown location";
+    }
+
+    private String formatAlertTime(LocalDateTime detectedAt) {
+        LocalDateTime effectiveTime = detectedAt != null ? detectedAt : LocalDateTime.now();
+        return ALERT_TIME_FORMATTER.format(effectiveTime);
     }
 }

@@ -4,6 +4,9 @@ import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.ControllerReading;
 import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.entities.TransformerType;
+import com.safalifter.transformerservice.clients.NotificationClient;
+import com.safalifter.transformerservice.payload.client.NotificationType;
+import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.payload.response.ControllerReadingDetailResponse;
 import com.safalifter.transformerservice.repository.ControllerReadingRepository;
@@ -20,21 +23,26 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.Locale;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
 @Slf4j
 public class ControllerReadingServiceImpl implements ControllerReadingService {
+    private static final DateTimeFormatter ALERT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final ControllerReadingRepository repository;
     private final ControllerRepository controllerRepository;
     private final TransformerRepository transformerRepository;
     private final AlertService alertService;
+    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -62,6 +70,7 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                 .transformerName(transformer.getName())
                 .transformerCapacity(transformer.getCapacity())
                 .depotId(transformer.getDepotId())
+                .depotName(resolveAlertLocation(transformer))
                 .lat(transformer.getLat())
                 .lng(transformer.getLng())
                 .deviceId(controller.getDeviceId())
@@ -75,6 +84,55 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                 .build();
         log.info("Creating controller trigger alert for transformer {} from controller {}", transformer.getId(), controller.getId());
         alertService.create(alert);
+        try {
+            notificationClient.send(SendNotificationRequest.builder()
+                    .notificationType(NotificationType.CONTROLLER_TRIGGER)
+                    .supplierCode(alert.getSupplierCode())
+                    .sourceSystem("transformer-service")
+                    .referenceId(reading.getId() != null ? String.valueOf(reading.getId()) : null)
+                    .subject("Controller trigger detected")
+                    .message(alert.getMessage())
+                    .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(transformer, triggerSummary, reading.getCreatedAt()))
+                    .build());
+        } catch (Exception ignored) {
+        }
+    }
+
+    private List<String> buildSecurityAlertTemplateParameters(Transformer transformer, String triggerSummary, LocalDateTime detectedAt) {
+        return List.of(
+                resolveTransformerLabel(transformer),
+                triggerSummary == null || triggerSummary.isBlank() ? "Security event detected" : triggerSummary,
+                resolveAlertLocation(transformer),
+                formatAlertTime(detectedAt)
+        );
+    }
+
+    private String resolveTransformerLabel(Transformer transformer) {
+        if (transformer == null || transformer.getName() == null || transformer.getName().isBlank()) {
+            return "Unknown transformer";
+        }
+        return transformer.getName().trim();
+    }
+
+    private String resolveAlertLocation(Transformer transformer) {
+        if (transformer == null) {
+            return "Unknown location";
+        }
+        if (transformer.getDepotId() != null) {
+            return "Depot " + transformer.getDepotId();
+        }
+        if (transformer.getSupplierName() != null && !transformer.getSupplierName().isBlank()) {
+            return transformer.getSupplierName().trim();
+        }
+        if (transformer.getSupplierCode() != null && !transformer.getSupplierCode().isBlank()) {
+            return transformer.getSupplierCode().trim().toUpperCase(Locale.ROOT);
+        }
+        return "Unknown location";
+    }
+
+    private String formatAlertTime(LocalDateTime detectedAt) {
+        LocalDateTime effectiveTime = detectedAt != null ? detectedAt : LocalDateTime.now();
+        return ALERT_TIME_FORMATTER.format(effectiveTime);
     }
 
     private String buildTriggerSummary(TransformerType transformerType, ControllerReading reading) {

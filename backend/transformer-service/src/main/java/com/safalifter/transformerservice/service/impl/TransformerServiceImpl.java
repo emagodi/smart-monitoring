@@ -1,15 +1,21 @@
 package com.safalifter.transformerservice.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.payload.request.TransformerRequest;
 import com.safalifter.transformerservice.payload.response.SensorResponse;
 import com.safalifter.transformerservice.payload.response.ControllerResponse;
+import com.safalifter.transformerservice.payload.response.ExternalTransformerLookupResponse;
 import com.safalifter.transformerservice.payload.response.TransformerResponse;
 import com.safalifter.transformerservice.config.AccessScopeService;
 import com.safalifter.transformerservice.repository.SensorRepository;
@@ -18,8 +24,11 @@ import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.TransformerService;
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -34,6 +43,10 @@ public class TransformerServiceImpl implements TransformerService {
     private final SensorRepository sensorRepository;
     private final ControllerRepository controllerRepository;
     private final AccessScopeService accessScopeService;
+    private final RestTemplate restTemplate;
+
+    @Value("${remote.transformer.lookup.url:http://68.183.126.109:3001/api/transformer/details}")
+    private String remoteTransformerLookupUrl;
 
     @Override
     public TransformerResponse create(TransformerRequest request) {
@@ -61,6 +74,7 @@ public class TransformerServiceImpl implements TransformerService {
                 .lng(request.getLng())
                 .build();
         Transformer saved = transformerRepository.save(transformer);
+        assignControllerByEui(saved, request.getControllerEui());
         return toResponse(saved);
     }
 
@@ -68,6 +82,42 @@ public class TransformerServiceImpl implements TransformerService {
     public TransformerResponse getById(Long id) {
         Transformer transformer = findTransformerOrThrow(id);
         return toResponse(transformer);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ExternalTransformerLookupResponse lookupRemoteByEui(String eui) {
+        String normalizedEui = trimToNull(eui);
+        if (normalizedEui == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EUI is required");
+        }
+
+        try {
+            JsonNode root = restTemplate.getForObject(
+                    remoteTransformerLookupUrl + "?eui={eui}",
+                    JsonNode.class,
+                    normalizedEui
+            );
+            JsonNode transformerNode = root != null ? root.path("transformers").path(0) : null;
+            if (transformerNode == null || transformerNode.isMissingNode()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No remote transformer details found for EUI " + normalizedEui);
+            }
+
+            JsonNode locationNode = transformerNode.path("location");
+            return ExternalTransformerLookupResponse.builder()
+                    .eui(normalizedEui)
+                    .transformerName(trimToNull(transformerNode.path("transformerName").asText(null)))
+                    .rawTransformerType(trimToNull(transformerNode.path("transformerType").asText(null)))
+                    .transformerType(mapRemoteTransformerType(transformerNode.path("transformerType").asText(null)))
+                    .lat(readDecimal(locationNode, "latitude"))
+                    .lng(readDecimal(locationNode, "longitude"))
+                    .build();
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RestClientException exception) {
+            log.error("Failed to lookup remote transformer details for EUI {}", normalizedEui, exception);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Failed to load remote transformer details");
+        }
     }
 
     @Override
@@ -188,6 +238,108 @@ public class TransformerServiceImpl implements TransformerService {
             log.warn("Ignoring unsupported transformer type value '{}'", typeValue);
         }
         return parsed;
+    }
+
+    private void assignControllerByEui(Transformer transformer, String controllerEui) {
+        String normalizedEui = trimToNull(controllerEui);
+        if (normalizedEui == null || transformer == null || transformer.getId() == null) {
+            return;
+        }
+
+        Controller controller = resolveAssignableController(transformer, normalizedEui);
+        if (controller == null) {
+            log.info("No unambiguous local controller found for auto-assignment using EUI {}", normalizedEui);
+            return;
+        }
+        if (controller.getTransformerId() != null && !controller.getTransformerId().equals(transformer.getId())) {
+            log.info(
+                    "Skipping auto-assignment for controller {} because it is already linked to transformer {}",
+                    normalizedEui,
+                    controller.getTransformerId()
+            );
+            return;
+        }
+
+        controller.setTransformerId(transformer.getId());
+        if (transformer.getSupplierCode() != null && !transformer.getSupplierCode().isBlank()) {
+            controller.setSupplierCode(transformer.getSupplierCode());
+            controller.setSupplierName(transformer.getSupplierName());
+        }
+        controllerRepository.save(controller);
+        log.info("Auto-assigned controller {} to transformer {}", normalizedEui, transformer.getId());
+    }
+
+    private Controller resolveAssignableController(Transformer transformer, String normalizedEui) {
+        LinkedHashMap<Long, Controller> candidates = new LinkedHashMap<>();
+        controllerRepository.findAllByDevEuiIgnoreCase(normalizedEui).forEach(controller -> candidates.put(controller.getId(), controller));
+        controllerRepository.findAllByDeviceIdIgnoreCase(normalizedEui).forEach(controller -> candidates.put(controller.getId(), controller));
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        List<Controller> ranked = candidates.values().stream()
+                .sorted(Comparator
+                        .comparing((Controller controller) -> controller.getTransformerId() != null)
+                        .thenComparing((Controller controller) -> !matchesPreferredSupplier(transformer, controller))
+                        .thenComparing((Controller controller) -> controller.getSupplierCode() == null)
+                        .thenComparing(Controller::getId))
+                .toList();
+
+        Controller best = ranked.get(0);
+        long bestRankCount = ranked.stream()
+                .filter(controller -> sameControllerRank(transformer, best, controller))
+                .count();
+        if (bestRankCount > 1 && best.getTransformerId() == null) {
+            log.warn("Multiple controller candidates share the same best rank for EUI {}. Skipping auto-assignment.", normalizedEui);
+            return null;
+        }
+        return best;
+    }
+
+    private boolean matchesPreferredSupplier(Transformer transformer, Controller controller) {
+        String transformerSupplier = transformer != null ? trimToNull(transformer.getSupplierCode()) : null;
+        String controllerSupplier = controller != null ? trimToNull(controller.getSupplierCode()) : null;
+        if (transformerSupplier != null) {
+            return transformerSupplier.equalsIgnoreCase(String.valueOf(controllerSupplier));
+        }
+        return "oculus".equalsIgnoreCase(String.valueOf(controllerSupplier));
+    }
+
+    private boolean sameControllerRank(Transformer transformer, Controller left, Controller right) {
+        return (left.getTransformerId() != null) == (right.getTransformerId() != null)
+                && matchesPreferredSupplier(transformer, left) == matchesPreferredSupplier(transformer, right)
+                && (left.getSupplierCode() == null) == (right.getSupplierCode() == null);
+    }
+
+    private String mapRemoteTransformerType(String remoteType) {
+        String normalized = trimToNull(remoteType);
+        if (normalized == null) {
+            return null;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if (lower.contains("ground")) {
+            return TransformerType.GROUND_MOUNTED.name();
+        }
+        if (lower.contains("pole")) {
+            return TransformerType.POLE_MOUNTED.name();
+        }
+        return null;
+    }
+
+    private BigDecimal readDecimal(JsonNode parent, String fieldName) {
+        if (parent == null) {
+            return null;
+        }
+        JsonNode field = parent.path(fieldName);
+        return field.isNumber() ? field.decimalValue() : null;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private TransformerResponse toResponse(Transformer transformer) {

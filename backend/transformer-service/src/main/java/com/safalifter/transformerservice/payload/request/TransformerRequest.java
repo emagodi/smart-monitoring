@@ -23,4 +23,5 @@ public class TransformerRequest {
     private String type;
     private BigDecimal lat;
     private BigDecimal lng;
+    private String controllerEui;
 }

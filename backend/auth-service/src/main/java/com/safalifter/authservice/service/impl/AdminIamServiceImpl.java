@@ -180,6 +180,7 @@ public class AdminIamServiceImpl implements AdminIamService {
         user.setLastname(normalizeRequired(request.getLastname()));
         user.setEmail(normalizeRequired(request.getEmail()));
         user.setPhone(normalizeOptional(request.getPhone()));
+        user.setWhatsappNumber(normalizeOptional(request.getWhatsappNumber()));
         user.setEmployeeNumber(normalizeOptional(request.getEmployeeNumber()));
         user.setStatus(request.getStatus() == null || request.getStatus().isBlank() ? "ACTIVE" : request.getStatus().toUpperCase());
         user.setRegion(normalizeOptional(request.getRegion()));
@@ -288,6 +289,7 @@ public class AdminIamServiceImpl implements AdminIamService {
                 .lastname(user.getLastname())
                 .email(user.getEmail())
                 .phone(user.getPhone())
+                .whatsappNumber(user.getWhatsappNumber())
                 .employeeNumber(user.getEmployeeNumber())
                 .status(user.getStatus())
                 .userType(user.getUserType() != null ? user.getUserType().getName() : null)

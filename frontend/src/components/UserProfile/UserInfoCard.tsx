@@ -17,6 +17,7 @@ export default function UserInfoCard() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
   const [fullUserData, setFullUserData] = useState<any>(null);
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
@@ -39,6 +40,7 @@ export default function UserInfoCard() {
       setLastName(user.last_name || "");
       setEmail(user.email || "");
       setPhone(user.phone || "");
+      setWhatsappNumber(user.whatsappNumber || "");
     }
   }, [user]);
 
@@ -58,6 +60,7 @@ export default function UserInfoCard() {
             setLastName(currentUser.lastname || currentUser.last_name || "");
             setEmail(currentUser.email || "");
             setPhone(currentUser.phone || "");
+            setWhatsappNumber(currentUser.whatsappNumber || currentUser.whatsapp_number || "");
           }
         } catch (err) {
           console.error("Failed to fetch user details", err);
@@ -92,6 +95,8 @@ export default function UserInfoCard() {
         email: email.trim(),
         // Ensure these keys match what the backend expects (from Users.tsx)
         phone: phone.trim(),
+        whatsappNumber: whatsappNumber.trim(),
+        employeeNumber: fullUserData?.employeeNumber || fullUserData?.employee_number || "",
         role: fullUserData?.role || "",
         region: fullUserData?.region || "",
         district: fullUserData?.district || "",
@@ -105,7 +110,8 @@ export default function UserInfoCard() {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         email: email.trim(),
-        phone: phone.trim()
+        phone: phone.trim(),
+        whatsappNumber: whatsappNumber.trim()
       });
 
       setProfileSuccess("Profile updated successfully.");
@@ -213,6 +219,15 @@ export default function UserInfoCard() {
                 {user?.phone ?? "—"}
               </p>
             </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] leading-normal text-gray-500 dark:text-gray-400">
+                WhatsApp
+              </p>
+              <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                {user?.whatsappNumber ?? "—"}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -316,6 +331,16 @@ export default function UserInfoCard() {
                     value={phone} 
                     onChange={(e) => setPhone(e.target.value)}
                     className="bg-white dark:bg-gray-900" 
+                  />
+                </div>
+
+                <div className="col-span-2 lg:col-span-1">
+                  <Label>WhatsApp Number</Label>
+                  <Input
+                    type="text"
+                    value={whatsappNumber}
+                    onChange={(e) => setWhatsappNumber(e.target.value)}
+                    className="bg-white dark:bg-gray-900"
                   />
                 </div>
               </div>

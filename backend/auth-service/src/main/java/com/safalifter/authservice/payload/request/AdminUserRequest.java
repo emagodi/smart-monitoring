@@ -17,6 +17,7 @@ public class AdminUserRequest {
     private String email;
     private String password;
     private String phone;
+    private String whatsappNumber;
     private String employeeNumber;
     private String status;
     private Long userTypeId;

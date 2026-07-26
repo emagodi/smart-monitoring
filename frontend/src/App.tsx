@@ -27,6 +27,7 @@ import EditTransformer from "./pages/Transformers/EditTransformer";
 import AlertsIndex from "./pages/Alerts";
 import SiteIndex from "./pages/Site";
 import OculusControlIndex from "./pages/OculusControl";
+import NotificationCenter from "./pages/NotificationCenter";
 
 const AppRoutes = () => {
   const { isAuthenticated, user } = useAuth();
@@ -58,6 +59,7 @@ const AppRoutes = () => {
         <Route path="signin" element={<Navigate to="/" replace />} />
         <Route path="signup" element={<Navigate to="/" replace />} />
         <Route path="profile" element={<UserProfiles />} />
+        <Route path="notification-settings" element={<NotificationCenter />} />
         <Route path="calendar" element={<Calendar />} />
         <Route path="blank" element={<Blank />} />
         <Route
