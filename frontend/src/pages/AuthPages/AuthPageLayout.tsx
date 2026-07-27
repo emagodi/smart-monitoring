@@ -34,7 +34,11 @@ export default function AuthLayout({
             </div>
 
             <div className="relative">
-              <img src="/images/powertel.png" alt="Powertel" className="h-12 w-auto object-contain" />
+              <img
+                src="/images/powertel.png"
+                alt="Powertel"
+                className="mx-auto h-12 w-auto object-contain"
+              />
 
               <h1 className="mt-10 max-w-md text-[30px] font-semibold tracking-tight text-white">
                 Transformer Monitoring
