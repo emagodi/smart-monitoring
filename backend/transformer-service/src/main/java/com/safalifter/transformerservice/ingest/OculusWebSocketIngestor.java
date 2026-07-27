@@ -186,7 +186,7 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
 
             String cmd = root.path("cmd").asText();
 
-            if (!("rx".equals(cmd) || "gw".equals(cmd))) return;
+            if (!"gw".equals(cmd)) return;
 
             if (!root.has("data")) return;
 
@@ -224,6 +224,11 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
 
             int rssi = root.path("rssi").asInt(0);
             int snr = root.path("snr").asInt(0);
+            if (root.has("gws") && root.path("gws").isArray() && root.path("gws").size() > 0) {
+                JsonNode gw0 = root.path("gws").get(0);
+                rssi = gw0.path("rssi").asInt(rssi);
+                snr = gw0.path("snr").asInt(snr);
+            }
 
             ControllerReading reading = ControllerReading.builder()
                     .controllerId(controller.getId())
