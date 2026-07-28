@@ -66,6 +66,42 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
             return;
         }
 
+        // #region debug-point A:ws-config
+        try {
+            java.nio.file.Path dbgEnv = java.nio.file.Paths.get(".dbg", "live-loriot-offline.env");
+            String debugServerUrl = "http://127.0.0.1:7777/event";
+            String debugSessionId = "live-loriot-offline";
+            if (java.nio.file.Files.exists(dbgEnv)) {
+                for (String line : java.nio.file.Files.readAllLines(dbgEnv)) {
+                    if (line.startsWith("DEBUG_SERVER_URL=")) debugServerUrl = line.substring("DEBUG_SERVER_URL=".length()).trim();
+                    if (line.startsWith("DEBUG_SESSION_ID=")) debugSessionId = line.substring("DEBUG_SESSION_ID=".length()).trim();
+                }
+            }
+            java.net.http.HttpClient.newHttpClient().send(
+                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(debugServerUrl))
+                            .header("Content-Type", "application/json")
+                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                                    objectMapper.writeValueAsString(java.util.Map.of(
+                                            "sessionId", debugSessionId,
+                                            "runId", "pre-fix",
+                                            "hypothesisId", "A",
+                                            "location", "OculusWebSocketIngestor:run",
+                                            "msg", "[DEBUG] Oculus WebSocket startup config",
+                                            "data", java.util.Map.of(
+                                                    "urlConfigured", oculusWsUrlProp != null && !oculusWsUrlProp.isBlank(),
+                                                    "urlHost", java.net.URI.create(oculusWsUrlProp).getHost(),
+                                                    "insecureSsl", insecureSsl
+                                            ),
+                                            "ts", System.currentTimeMillis()
+                                    ))
+                            ))
+                            .build(),
+                    java.net.http.HttpResponse.BodyHandlers.discarding()
+            );
+        } catch (Exception ignored) {
+        }
+        // #endregion
+
         connect();
     }
 
@@ -74,10 +110,114 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
         try {
             HttpClient client = buildHttpClient();
 
+            // #region debug-point B:ws-connect-attempt
+            try {
+                java.nio.file.Path dbgEnv = java.nio.file.Paths.get(".dbg", "live-loriot-offline.env");
+                String debugServerUrl = "http://127.0.0.1:7777/event";
+                String debugSessionId = "live-loriot-offline";
+                if (java.nio.file.Files.exists(dbgEnv)) {
+                    for (String line : java.nio.file.Files.readAllLines(dbgEnv)) {
+                        if (line.startsWith("DEBUG_SERVER_URL=")) debugServerUrl = line.substring("DEBUG_SERVER_URL=".length()).trim();
+                        if (line.startsWith("DEBUG_SESSION_ID=")) debugSessionId = line.substring("DEBUG_SESSION_ID=".length()).trim();
+                    }
+                }
+                java.net.http.HttpClient.newHttpClient().send(
+                        java.net.http.HttpRequest.newBuilder(java.net.URI.create(debugServerUrl))
+                                .header("Content-Type", "application/json")
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                                        objectMapper.writeValueAsString(java.util.Map.of(
+                                                "sessionId", debugSessionId,
+                                                "runId", "pre-fix",
+                                                "hypothesisId", "B",
+                                                "location", "OculusWebSocketIngestor:connect",
+                                                "msg", "[DEBUG] Attempting Oculus WebSocket connect",
+                                                "data", java.util.Map.of(
+                                                        "insecureSsl", insecureSsl,
+                                                        "urlHost", java.net.URI.create(oculusWsUrlProp).getHost()
+                                                ),
+                                                "ts", System.currentTimeMillis()
+                                        ))
+                                ))
+                                .build(),
+                        java.net.http.HttpResponse.BodyHandlers.discarding()
+                );
+            } catch (Exception ignored) {
+            }
+            // #endregion
+
             client.newWebSocketBuilder()
                     .buildAsync(URI.create(oculusWsUrlProp), new Listener())
-                    .thenAccept(ws -> log.info("Connected to Oculus WebSocket"))
+                    .thenAccept(ws -> {
+                        log.info("Connected to Oculus WebSocket");
+                        // #region debug-point B:ws-connect-success
+                        try {
+                            java.nio.file.Path dbgEnv = java.nio.file.Paths.get(".dbg", "live-loriot-offline.env");
+                            String debugServerUrl = "http://127.0.0.1:7777/event";
+                            String debugSessionId = "live-loriot-offline";
+                            if (java.nio.file.Files.exists(dbgEnv)) {
+                                for (String line : java.nio.file.Files.readAllLines(dbgEnv)) {
+                                    if (line.startsWith("DEBUG_SERVER_URL=")) debugServerUrl = line.substring("DEBUG_SERVER_URL=".length()).trim();
+                                    if (line.startsWith("DEBUG_SESSION_ID=")) debugSessionId = line.substring("DEBUG_SESSION_ID=".length()).trim();
+                                }
+                            }
+                            java.net.http.HttpClient.newHttpClient().send(
+                                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(debugServerUrl))
+                                            .header("Content-Type", "application/json")
+                                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                                                    objectMapper.writeValueAsString(java.util.Map.of(
+                                                            "sessionId", debugSessionId,
+                                                            "runId", "pre-fix",
+                                                            "hypothesisId", "B",
+                                                            "location", "OculusWebSocketIngestor:connect",
+                                                            "msg", "[DEBUG] Oculus WebSocket connected",
+                                                            "data", java.util.Map.of("urlHost", java.net.URI.create(oculusWsUrlProp).getHost()),
+                                                            "ts", System.currentTimeMillis()
+                                                    ))
+                                            ))
+                                            .build(),
+                                    java.net.http.HttpResponse.BodyHandlers.discarding()
+                            );
+                        } catch (Exception ignored) {
+                        }
+                        // #endregion
+                    })
                     .exceptionally(ex -> {
+                        // #region debug-point B:ws-connect-failed
+                        try {
+                            java.nio.file.Path dbgEnv = java.nio.file.Paths.get(".dbg", "live-loriot-offline.env");
+                            String debugServerUrl = "http://127.0.0.1:7777/event";
+                            String debugSessionId = "live-loriot-offline";
+                            if (java.nio.file.Files.exists(dbgEnv)) {
+                                for (String line : java.nio.file.Files.readAllLines(dbgEnv)) {
+                                    if (line.startsWith("DEBUG_SERVER_URL=")) debugServerUrl = line.substring("DEBUG_SERVER_URL=".length()).trim();
+                                    if (line.startsWith("DEBUG_SESSION_ID=")) debugSessionId = line.substring("DEBUG_SESSION_ID=".length()).trim();
+                                }
+                            }
+                            Throwable root = ex;
+                            while (root.getCause() != null) root = root.getCause();
+                            java.net.http.HttpClient.newHttpClient().send(
+                                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(debugServerUrl))
+                                            .header("Content-Type", "application/json")
+                                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                                                    objectMapper.writeValueAsString(java.util.Map.of(
+                                                            "sessionId", debugSessionId,
+                                                            "runId", "pre-fix",
+                                                            "hypothesisId", "B",
+                                                            "location", "OculusWebSocketIngestor:connect",
+                                                            "msg", "[DEBUG] Oculus WebSocket connect failed",
+                                                            "data", java.util.Map.of(
+                                                                    "error", String.valueOf(root),
+                                                                    "errorType", root.getClass().getName()
+                                                            ),
+                                                            "ts", System.currentTimeMillis()
+                                                    ))
+                                            ))
+                                            .build(),
+                                    java.net.http.HttpResponse.BodyHandlers.discarding()
+                            );
+                        } catch (Exception ignored) {
+                        }
+                        // #endregion
                         log.error("WebSocket connection failed", ex);
                         reconnect();
                         return null;
@@ -111,6 +251,44 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
                 String message = data.toString();
 
                 if (logWs) log.info("WS {}", message);
+
+                // #region debug-point D:ws-message
+                try {
+                    java.nio.file.Path dbgEnv = java.nio.file.Paths.get(".dbg", "live-loriot-offline.env");
+                    String debugServerUrl = "http://127.0.0.1:7777/event";
+                    String debugSessionId = "live-loriot-offline";
+                    if (java.nio.file.Files.exists(dbgEnv)) {
+                        for (String line : java.nio.file.Files.readAllLines(dbgEnv)) {
+                            if (line.startsWith("DEBUG_SERVER_URL=")) debugServerUrl = line.substring("DEBUG_SERVER_URL=".length()).trim();
+                            if (line.startsWith("DEBUG_SESSION_ID=")) debugSessionId = line.substring("DEBUG_SESSION_ID=".length()).trim();
+                        }
+                    }
+                    JsonNode root = objectMapper.readTree(message);
+                    java.net.http.HttpClient.newHttpClient().send(
+                            java.net.http.HttpRequest.newBuilder(java.net.URI.create(debugServerUrl))
+                                    .header("Content-Type", "application/json")
+                                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                                            objectMapper.writeValueAsString(java.util.Map.of(
+                                                    "sessionId", debugSessionId,
+                                                    "runId", "pre-fix",
+                                                    "hypothesisId", "D",
+                                                    "location", "OculusWebSocketIngestor:onText",
+                                                    "msg", "[DEBUG] Oculus WebSocket message received",
+                                                    "data", java.util.Map.of(
+                                                            "cmd", root.path("cmd").asText(),
+                                                            "eui", root.path("EUI").asText(),
+                                                            "seqno", root.path("seqno").asLong(),
+                                                            "hasData", root.has("data")
+                                                    ),
+                                                    "ts", System.currentTimeMillis()
+                                            ))
+                                    ))
+                                    .build(),
+                            java.net.http.HttpResponse.BodyHandlers.discarding()
+                    );
+                } catch (Exception ignored) {
+                }
+                // #endregion
 
                 processMessage(message);
 
