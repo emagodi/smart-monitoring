@@ -412,6 +412,25 @@ export default function DashboardHome() {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
   const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
+  const DEBUG_SERVER_URL = "http://127.0.0.1:7777/event";
+  const DEBUG_SESSION_ID = "dashboard-fetch-failure";
+
+  const reportDebugEvent = (hypothesisId: string, location: string, msg: string, data: Record<string, unknown>) => {
+    // #region debug-point A:report
+    fetch(DEBUG_SERVER_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        sessionId: DEBUG_SESSION_ID,
+        runId: "pre-fix",
+        hypothesisId,
+        location,
+        msg,
+        data,
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  };
 
   const [stats, setStats] = useState<DashboardStats>({
     totalRegions: 0,
@@ -457,6 +476,15 @@ export default function DashboardHome() {
       try {
         setLoading(true);
         setError(null);
+        // #region debug-point A:dashboard-fetch-start
+        reportDebugEvent("A", "DashboardHome:fetchDashboard", "[DEBUG] dashboard fetch started", {
+          apiBaseUrl: API_BASE_URL,
+          hasToken: Boolean(token),
+          userType: user?.userType ?? null,
+          supplierCode: user?.supplierCode ?? null,
+          permissionsSample: (user?.permissions ?? []).slice(0, 10),
+        });
+        // #endregion
 
         const [regionsRes, districtsRes, depotsRes, transformersRes, sensorsRes, alertsRes, oculusControlRes] = await Promise.all([
           hasPermission("regions.read")
@@ -485,6 +513,17 @@ export default function DashboardHome() {
         const sensorsList = normalizeList<Sensor>(sensorsRes.data);
         const alertsList = normalizeList<AlertItem>(alertsRes.data);
         const oculusControlList = normalizeList<OculusControlSummaryRow>(oculusControlRes.data);
+        // #region debug-point A:dashboard-fetch-success
+        reportDebugEvent("A", "DashboardHome:fetchDashboard", "[DEBUG] dashboard fetch succeeded", {
+          regions: regionsList.length,
+          districts: districtsList.length,
+          depots: depotsList.length,
+          transformers: transformersList.length,
+          sensors: sensorsList.length,
+          alerts: alertsList.length,
+          oculusRows: oculusControlList.length,
+        });
+        // #endregion
 
         const activeTransformers = transformersList.filter(
           (item) => item?.isActive === true || item?.active === true
@@ -520,6 +559,18 @@ export default function DashboardHome() {
           totalAlerts: alertsList.length,
         });
       } catch (fetchError) {
+        const isAxios = axios.isAxiosError(fetchError);
+        const axiosStatus = isAxios ? fetchError.response?.status : null;
+        const axiosUrl = isAxios ? fetchError.config?.url : null;
+        // #region debug-point C:dashboard-fetch-failed
+        reportDebugEvent("C", "DashboardHome:fetchDashboard", "[DEBUG] dashboard fetch failed", {
+          apiBaseUrl: API_BASE_URL,
+          isAxiosError: isAxios,
+          status: axiosStatus,
+          url: axiosUrl,
+          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        });
+        // #endregion
         console.error(fetchError);
         setError("Failed to load dashboard data.");
       } finally {
