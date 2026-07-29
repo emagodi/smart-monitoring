@@ -16,7 +16,7 @@ import {
 import axios from "axios";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useUserAccess } from "../../hooks/useUserAccess";
@@ -404,10 +404,22 @@ const compactAlertLabel = (message?: string) => {
   return `${message.slice(0, 51)}...`;
 };
 
+const WATCHLIST_STORAGE_KEY = "dashboard-transformer-watchlist";
+
 const normalizedTransformerType = (value?: string | null) => {
   const type = value?.trim();
   if (!type) return "Transformer";
-  return type.toUpperCase();
+  const normalized = type.toUpperCase().replace(/\s+/g, " ").trim();
+
+  if (["POLE MOUNTED", "POLE MOUNTED TRANSFORMER", "PMT"].includes(normalized)) {
+    return "PMT";
+  }
+
+  if (["GROUND MOUNTED", "GROUND MOUNTED TRANSFORMER", "GMT"].includes(normalized)) {
+    return "GMT";
+  }
+
+  return normalized;
 };
 
 export default function DashboardHome() {
@@ -415,9 +427,59 @@ export default function DashboardHome() {
   const { theme } = useTheme();
   const { hasNationalAccess, hasRegionAccess, hasDepotAccess, loading: accessLoading } = useUserAccess();
   const { realtimeData } = useRealtimeUpdates(token);
+  const [searchParams, setSearchParams] = useSearchParams();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
   const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
+  const persistedWatchlistState = (() => {
+    const paramsSearch = searchParams.get("watchlistSearch");
+    const paramsDepot = searchParams.get("watchlistDepot");
+    const paramsStatus = searchParams.get("watchlistStatus");
+    const paramsType = searchParams.get("watchlistType");
+    const paramsPage = Number.parseInt(searchParams.get("watchlistPage") || "", 10);
+
+    if (
+      paramsSearch !== null ||
+      paramsDepot !== null ||
+      paramsStatus !== null ||
+      paramsType !== null ||
+      Number.isFinite(paramsPage)
+    ) {
+      return {
+        transformerSearch: paramsSearch ?? "",
+        selectedDepotFilter: paramsDepot || "ALL",
+        selectedStatusFilter: paramsStatus || "ALL",
+        selectedTypeFilter: paramsType || "ALL",
+        watchlistPage: Number.isFinite(paramsPage) && paramsPage > 0 ? paramsPage : 1,
+      };
+    }
+
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    try {
+      const rawValue = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      if (!rawValue) return null;
+      const parsed = JSON.parse(rawValue) as Partial<{
+        transformerSearch: string;
+        selectedDepotFilter: string;
+        selectedStatusFilter: string;
+        selectedTypeFilter: string;
+        watchlistPage: number;
+      }>;
+
+      return {
+        transformerSearch: parsed.transformerSearch ?? "",
+        selectedDepotFilter: parsed.selectedDepotFilter ?? "ALL",
+        selectedStatusFilter: parsed.selectedStatusFilter ?? "ALL",
+        selectedTypeFilter: parsed.selectedTypeFilter ?? "ALL",
+        watchlistPage: typeof parsed.watchlistPage === "number" && parsed.watchlistPage > 0 ? parsed.watchlistPage : 1,
+      };
+    } catch {
+      return null;
+    }
+  })();
 
   const [stats, setStats] = useState<DashboardStats>({
     totalRegions: 0,
@@ -437,11 +499,11 @@ export default function DashboardHome() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<AlertItem[]>([]);
   const [selectedTransformerId, setSelectedTransformerId] = useState<number | null>(null);
-  const [transformerSearch, setTransformerSearch] = useState("");
-  const [selectedDepotFilter, setSelectedDepotFilter] = useState("ALL");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState("ALL");
-  const [watchlistPage, setWatchlistPage] = useState(1);
+  const [transformerSearch, setTransformerSearch] = useState(() => persistedWatchlistState?.transformerSearch ?? "");
+  const [selectedDepotFilter, setSelectedDepotFilter] = useState(() => persistedWatchlistState?.selectedDepotFilter ?? "ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState(() => persistedWatchlistState?.selectedStatusFilter ?? "ALL");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState(() => persistedWatchlistState?.selectedTypeFilter ?? "ALL");
+  const [watchlistPage, setWatchlistPage] = useState(() => persistedWatchlistState?.watchlistPage ?? 1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -722,6 +784,18 @@ export default function DashboardHome() {
       .sort((a, b) => a.localeCompare(b));
   }, [transformerOperations]);
 
+  useEffect(() => {
+    if (selectedDepotFilter !== "ALL" && !availableDepotFilters.includes(selectedDepotFilter)) {
+      setSelectedDepotFilter("ALL");
+    }
+  }, [availableDepotFilters, selectedDepotFilter]);
+
+  useEffect(() => {
+    if (selectedTypeFilter !== "ALL" && !availableTypeFilters.includes(selectedTypeFilter)) {
+      setSelectedTypeFilter("ALL");
+    }
+  }, [availableTypeFilters, selectedTypeFilter]);
+
   const watchlistSummary = useMemo(() => {
     const summary = {
       online: 0,
@@ -829,6 +903,49 @@ export default function DashboardHome() {
       setWatchlistPage(totalWatchlistPages);
     }
   }, [totalWatchlistPages, watchlistPage]);
+
+  useEffect(() => {
+    const persistedState = {
+      transformerSearch,
+      selectedDepotFilter,
+      selectedStatusFilter,
+      selectedTypeFilter,
+      watchlistPage,
+    };
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(persistedState));
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+
+    if (transformerSearch.trim()) nextParams.set("watchlistSearch", transformerSearch.trim());
+    else nextParams.delete("watchlistSearch");
+
+    if (selectedDepotFilter !== "ALL") nextParams.set("watchlistDepot", selectedDepotFilter);
+    else nextParams.delete("watchlistDepot");
+
+    if (selectedStatusFilter !== "ALL") nextParams.set("watchlistStatus", selectedStatusFilter);
+    else nextParams.delete("watchlistStatus");
+
+    if (selectedTypeFilter !== "ALL") nextParams.set("watchlistType", selectedTypeFilter);
+    else nextParams.delete("watchlistType");
+
+    if (watchlistPage > 1) nextParams.set("watchlistPage", String(watchlistPage));
+    else nextParams.delete("watchlistPage");
+
+    if (nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [
+    searchParams,
+    selectedDepotFilter,
+    selectedStatusFilter,
+    selectedTypeFilter,
+    setSearchParams,
+    transformerSearch,
+    watchlistPage,
+  ]);
 
   const paginatedTransformerOperations = useMemo(() => {
     const start = (watchlistPage - 1) * watchlistPageSize;
@@ -1265,20 +1382,8 @@ export default function DashboardHome() {
       </section>
 
       <section className="enterprise-card p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
-              Transformer Watchlist
-            </p>
-            <h3 className="mt-0.5 text-lg font-semibold text-slate-950 dark:text-slate-50">
-              Searchable transformer operations list
-            </h3>
-            <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-              Newest assets first, with supplier monitoring, online status, last alert, and armed state.
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-3 xl:w-auto">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <button
                 type="button"
                 onClick={() => setSelectedStatusFilter("ONLINE")}
@@ -1326,36 +1431,36 @@ export default function DashboardHome() {
                 <p className="mt-1.5 text-2xl font-semibold tracking-tight text-amber-600 dark:text-amber-300">{watchlistSummary.disarmed}</p>
                 <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Control estate currently disarmed</p>
               </button>
-            </div>
+          </div>
 
-            <div className="space-y-3">
-              <div className="sticky top-3 z-10 -mx-1 rounded-3xl border border-slate-200/80 bg-white/90 px-3 py-3 shadow-sm backdrop-blur-sm">
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 rounded-l-3xl bg-gradient-to-r from-white/95 to-transparent xl:hidden" />
-                  <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 rounded-r-3xl bg-gradient-to-l from-white/95 to-transparent xl:hidden" />
-                  <div className="flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 xl:flex-wrap xl:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <span className="shrink-0 self-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Quick Status</span>
-                    {[
-                      { value: "ALL", label: "All", count: transformerOperations.length },
-                      { value: "ONLINE", label: "Online", count: watchlistSummary.online },
-                      { value: "OFFLINE", label: "Offline", count: watchlistSummary.offline },
-                      { value: "ARMED", label: "Armed", count: watchlistSummary.armed },
-                      { value: "DISARMED", label: "Disarmed", count: watchlistSummary.disarmed },
-                      { value: "DELAYED", label: "Delayed", count: watchlistSummary.delayed },
-                    ].map((chip) => (
-                      <button
-                        key={chip.value}
-                        type="button"
-                        onClick={() => setSelectedStatusFilter(chip.value)}
-                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                          selectedStatusFilter === chip.value
-                            ? "border-blue-200 bg-blue-600 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
-                        }`}
-                      >
-                        {chip.label} · {chip.count}
-                      </button>
-                    ))}
+          <div className="space-y-3">
+            <div className="sticky top-3 z-10 -mx-1 rounded-3xl border border-slate-200/80 bg-white/90 px-3 py-3 shadow-sm backdrop-blur-sm">
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 rounded-l-3xl bg-gradient-to-r from-white/95 to-transparent xl:hidden" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 rounded-r-3xl bg-gradient-to-l from-white/95 to-transparent xl:hidden" />
+                <div className="flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 xl:flex-wrap xl:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <span className="shrink-0 self-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Quick Status</span>
+                  {[
+                    { value: "ALL", label: "All", count: transformerOperations.length },
+                    { value: "ONLINE", label: "Online", count: watchlistSummary.online },
+                    { value: "OFFLINE", label: "Offline", count: watchlistSummary.offline },
+                    { value: "ARMED", label: "Armed", count: watchlistSummary.armed },
+                    { value: "DISARMED", label: "Disarmed", count: watchlistSummary.disarmed },
+                    { value: "DELAYED", label: "Delayed", count: watchlistSummary.delayed },
+                  ].map((chip) => (
+                    <button
+                      key={chip.value}
+                      type="button"
+                      onClick={() => setSelectedStatusFilter(chip.value)}
+                      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        selectedStatusFilter === chip.value
+                          ? "border-blue-200 bg-blue-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                      }`}
+                    >
+                      {chip.label} · {chip.count}
+                    </button>
+                  ))}
                   <span className="mx-1 hidden h-5 w-px bg-slate-200 xl:inline-flex" />
                   <span className="shrink-0 self-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Transformer Type</span>
                   <button
@@ -1415,79 +1520,26 @@ export default function DashboardHome() {
                     </button>
                   ))}
                 </div>
-                </div>
               </div>
             </div>
+          </div>
 
-            <div className="flex w-full flex-col gap-3 sm:flex-row xl:justify-end">
-              <div className="relative min-w-[280px] flex-1">
-                <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={transformerSearch}
-                  onChange={(event) => setTransformerSearch(event.target.value)}
-                  placeholder="Search by transformer, depot, supplier, alert, or arm state"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
+          <div className="flex w-full flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div className="relative min-w-[280px] flex-1 xl:max-w-2xl">
+              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={transformerSearch}
+                onChange={(event) => setTransformerSearch(event.target.value)}
+                placeholder="Search by transformer, depot, supplier, alert, or arm state"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
                 <Activity className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                 {filteredTransformerOperations.length} transformers shown
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <label className="flex min-w-[180px] flex-col gap-1">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</span>
-                <select
-                  value={selectedDepotFilter}
-                  onChange={(event) => setSelectedDepotFilter(event.target.value)}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="ALL">All depots</option>
-                  {availableDepotFilters.map((depotName) => (
-                    <option key={depotName} value={depotName}>
-                      {depotName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex min-w-[180px] flex-col gap-1">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Status</span>
-                <select
-                  value={selectedStatusFilter}
-                  onChange={(event) => setSelectedStatusFilter(event.target.value)}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="ALL">All states</option>
-                  <option value="ONLINE">Online</option>
-                  <option value="OFFLINE">Offline</option>
-                  <option value="DELAYED">Delayed</option>
-                  <option value="ARMED">Armed</option>
-                  <option value="DISARMED">Disarmed</option>
-                  <option value="UNKNOWN">Unknown</option>
-                </select>
-              </label>
-
-              <label className="flex min-w-[180px] flex-col gap-1">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Transformer Type</span>
-                <select
-                  value={selectedTypeFilter}
-                  onChange={(event) => setSelectedTypeFilter(event.target.value)}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="ALL">All types</option>
-                  {availableTypeFilters.map((typeName) => (
-                    <option key={typeName} value={typeName}>
-                      {typeName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              </span>
               <span className="enterprise-chip px-3 py-1.5">Page {watchlistPage} of {totalWatchlistPages}</span>
               <span className="enterprise-chip px-3 py-1.5">
                 Showing {watchlistRangeStart}-{watchlistRangeEnd} of {filteredTransformerOperations.length}
@@ -1507,32 +1559,83 @@ export default function DashboardHome() {
                 </button>
               )}
             </div>
-
-            {activeWatchlistFilters.length > 0 && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active Filters</span>
-                  {activeWatchlistFilters.map((filter) => (
-                    <button
-                      key={`${filter.key}-${filter.value}`}
-                      type="button"
-                      onClick={() => {
-                        if (filter.key === "status") setSelectedStatusFilter("ALL");
-                        if (filter.key === "type") setSelectedTypeFilter("ALL");
-                        if (filter.key === "depot") setSelectedDepotFilter("ALL");
-                        if (filter.key === "search") setTransformerSearch("");
-                      }}
-                      className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-                    >
-                      <span className="text-slate-400">{filter.label}</span>
-                      <span>{filter.value}</span>
-                      <span className="text-slate-400">×</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <label className="flex min-w-[180px] flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</span>
+              <select
+                value={selectedDepotFilter}
+                onChange={(event) => setSelectedDepotFilter(event.target.value)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="ALL">All depots</option>
+                {availableDepotFilters.map((depotName) => (
+                  <option key={depotName} value={depotName}>
+                    {depotName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex min-w-[180px] flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Status</span>
+              <select
+                value={selectedStatusFilter}
+                onChange={(event) => setSelectedStatusFilter(event.target.value)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="ALL">All states</option>
+                <option value="ONLINE">Online</option>
+                <option value="OFFLINE">Offline</option>
+                <option value="DELAYED">Delayed</option>
+                <option value="ARMED">Armed</option>
+                <option value="DISARMED">Disarmed</option>
+                <option value="UNKNOWN">Unknown</option>
+              </select>
+            </label>
+
+            <label className="flex min-w-[180px] flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Transformer Type</span>
+              <select
+                value={selectedTypeFilter}
+                onChange={(event) => setSelectedTypeFilter(event.target.value)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="ALL">All types</option>
+                {availableTypeFilters.map((typeName) => (
+                  <option key={typeName} value={typeName}>
+                    {typeName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {activeWatchlistFilters.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active Filters</span>
+                {activeWatchlistFilters.map((filter) => (
+                  <button
+                    key={`${filter.key}-${filter.value}`}
+                    type="button"
+                    onClick={() => {
+                      if (filter.key === "status") setSelectedStatusFilter("ALL");
+                      if (filter.key === "type") setSelectedTypeFilter("ALL");
+                      if (filter.key === "depot") setSelectedDepotFilter("ALL");
+                      if (filter.key === "search") setTransformerSearch("");
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+                  >
+                    <span className="text-slate-400">{filter.label}</span>
+                    <span>{filter.value}</span>
+                    <span className="text-slate-400">×</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 space-y-3">
