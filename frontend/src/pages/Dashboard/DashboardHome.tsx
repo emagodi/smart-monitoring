@@ -404,6 +404,12 @@ const compactAlertLabel = (message?: string) => {
   return `${message.slice(0, 51)}...`;
 };
 
+const normalizedTransformerType = (value?: string | null) => {
+  const type = value?.trim();
+  if (!type) return "Transformer";
+  return type.toUpperCase();
+};
+
 export default function DashboardHome() {
   const { token, user, hasPermission } = useAuth();
   const { theme } = useTheme();
@@ -432,6 +438,10 @@ export default function DashboardHome() {
   const [recentAlerts, setRecentAlerts] = useState<AlertItem[]>([]);
   const [selectedTransformerId, setSelectedTransformerId] = useState<number | null>(null);
   const [transformerSearch, setTransformerSearch] = useState("");
+  const [selectedDepotFilter, setSelectedDepotFilter] = useState("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState("ALL");
+  const [watchlistPage, setWatchlistPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -700,25 +710,152 @@ export default function DashboardHome() {
       });
   }, [alerts, controlRowByTransformerId, depotById, districtToRegion, districts, latestAlertByTransformerId, regions, transformers]);
 
+  const availableDepotFilters = useMemo(() => {
+    return [...new Set(transformerOperations.map((item) => item.depotName))]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+  }, [transformerOperations]);
+
+  const availableTypeFilters = useMemo(() => {
+    return [...new Set(transformerOperations.map((item) => normalizedTransformerType(item.type)))]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+  }, [transformerOperations]);
+
+  const watchlistSummary = useMemo(() => {
+    const summary = {
+      online: 0,
+      offline: 0,
+      delayed: 0,
+      armed: 0,
+      disarmed: 0,
+      unknown: 0,
+    };
+
+    transformerOperations.forEach((item) => {
+      if (item.onlineLabel === "Online") summary.online += 1;
+      else if (item.onlineLabel === "Offline") summary.offline += 1;
+      else if (item.onlineLabel === "Delayed") summary.delayed += 1;
+
+      if (item.armState === "ARMED") summary.armed += 1;
+      else if (item.armState === "DISARMED") summary.disarmed += 1;
+      else summary.unknown += 1;
+    });
+
+    return summary;
+  }, [transformerOperations]);
+
+  const topDepotCounts = useMemo(() => {
+    const depotMap = new Map<string, number>();
+
+    transformerOperations.forEach((item) => {
+      depotMap.set(item.depotName, (depotMap.get(item.depotName) || 0) + 1);
+    });
+
+    return [...depotMap.entries()]
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6);
+  }, [transformerOperations]);
+
+  const activeWatchlistFilters = useMemo(() => {
+    const filters: Array<{ key: string; label: string; value: string }> = [];
+
+    if (selectedStatusFilter !== "ALL") {
+      filters.push({ key: "status", label: "Status", value: selectedStatusFilter });
+    }
+
+    if (selectedTypeFilter !== "ALL") {
+      filters.push({ key: "type", label: "Type", value: selectedTypeFilter });
+    }
+
+    if (selectedDepotFilter !== "ALL") {
+      filters.push({ key: "depot", label: "Depot", value: selectedDepotFilter });
+    }
+
+    if (transformerSearch.trim()) {
+      filters.push({ key: "search", label: "Search", value: transformerSearch.trim() });
+    }
+
+    return filters;
+  }, [selectedDepotFilter, selectedStatusFilter, selectedTypeFilter, transformerSearch]);
+
   const filteredTransformerOperations = useMemo(() => {
     const query = transformerSearch.trim().toLowerCase();
-    if (!query) return transformerOperations;
-    return transformerOperations.filter((item) =>
-      [
-        item.name,
-        item.depotName,
-        item.districtName,
-        item.regionName,
-        item.supplierLabel,
-        item.latestAlertLabel,
-        item.onlineLabel,
-        armStateLabel(item.armState),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [transformerOperations, transformerSearch]);
+    return transformerOperations.filter((item) => {
+      const matchesQuery =
+        !query ||
+        [
+          item.name,
+          item.depotName,
+          item.districtName,
+          item.regionName,
+          item.supplierLabel,
+          item.latestAlertLabel,
+          item.onlineLabel,
+          armStateLabel(item.armState),
+          normalizedTransformerType(item.type),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(query);
+
+      const matchesDepot = selectedDepotFilter === "ALL" || item.depotName === selectedDepotFilter;
+      const matchesType =
+        selectedTypeFilter === "ALL" || normalizedTransformerType(item.type) === selectedTypeFilter;
+
+      const matchesStatus =
+        selectedStatusFilter === "ALL" ||
+        (selectedStatusFilter === "ONLINE" && item.onlineLabel === "Online") ||
+        (selectedStatusFilter === "OFFLINE" && item.onlineLabel === "Offline") ||
+        (selectedStatusFilter === "DELAYED" && item.onlineLabel === "Delayed") ||
+        (selectedStatusFilter === "ARMED" && item.armState === "ARMED") ||
+        (selectedStatusFilter === "DISARMED" && item.armState === "DISARMED") ||
+        (selectedStatusFilter === "UNKNOWN" && item.armState === "UNKNOWN");
+
+      return matchesQuery && matchesDepot && matchesType && matchesStatus;
+    });
+  }, [selectedDepotFilter, selectedStatusFilter, selectedTypeFilter, transformerOperations, transformerSearch]);
+
+  useEffect(() => {
+    setWatchlistPage(1);
+  }, [selectedDepotFilter, selectedStatusFilter, selectedTypeFilter, transformerSearch]);
+
+  const watchlistPageSize = 10;
+  const totalWatchlistPages = Math.max(1, Math.ceil(filteredTransformerOperations.length / watchlistPageSize));
+
+  useEffect(() => {
+    if (watchlistPage > totalWatchlistPages) {
+      setWatchlistPage(totalWatchlistPages);
+    }
+  }, [totalWatchlistPages, watchlistPage]);
+
+  const paginatedTransformerOperations = useMemo(() => {
+    const start = (watchlistPage - 1) * watchlistPageSize;
+    return filteredTransformerOperations.slice(start, start + watchlistPageSize);
+  }, [filteredTransformerOperations, watchlistPage]);
+
+  const watchlistRangeStart = filteredTransformerOperations.length === 0 ? 0 : (watchlistPage - 1) * watchlistPageSize + 1;
+  const watchlistRangeEnd = Math.min(watchlistPage * watchlistPageSize, filteredTransformerOperations.length);
+
+  const visibleWatchlistPages = useMemo(() => {
+    const pages: number[] = [];
+    const start = Math.max(1, watchlistPage - 1);
+    const end = Math.min(totalWatchlistPages, start + 2);
+
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+
+    if (!pages.includes(totalWatchlistPages)) {
+      if (totalWatchlistPages - (pages[pages.length - 1] || 0) > 1) {
+        pages.push(-1);
+      }
+      pages.push(totalWatchlistPages);
+    }
+
+    return pages;
+  }, [totalWatchlistPages, watchlistPage]);
 
   const mapPoints = useMemo(() => {
     return transformerOperations
@@ -1140,21 +1277,261 @@ export default function DashboardHome() {
               Newest assets first, with supplier monitoring, online status, last alert, and armed state.
             </p>
           </div>
-          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-            <div className="relative min-w-[280px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                value={transformerSearch}
-                onChange={(event) => setTransformerSearch(event.target.value)}
-                placeholder="Search by transformer, depot, supplier, alert, or arm state"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-              />
+          <div className="flex w-full flex-col gap-3 xl:w-auto">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter("ONLINE")}
+                className={`enterprise-subtle-card px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50 ${
+                  selectedStatusFilter === "ONLINE" ? "border-blue-200 bg-blue-50/70" : ""
+                }`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Online</p>
+                <p className="mt-1.5 text-2xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-300">{watchlistSummary.online}</p>
+                <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Controllers reporting healthy</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter("OFFLINE")}
+                className={`enterprise-subtle-card px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50 ${
+                  selectedStatusFilter === "OFFLINE" ? "border-blue-200 bg-blue-50/70" : ""
+                }`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Offline</p>
+                <p className="mt-1.5 text-2xl font-semibold tracking-tight text-red-600 dark:text-red-300">{watchlistSummary.offline}</p>
+                <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Needs comms or field attention</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter("ARMED")}
+                className={`enterprise-subtle-card px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50 ${
+                  selectedStatusFilter === "ARMED" ? "border-blue-200 bg-blue-50/70" : ""
+                }`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Armed</p>
+                <p className="mt-1.5 text-2xl font-semibold tracking-tight text-blue-700 dark:text-blue-300">{watchlistSummary.armed}</p>
+                <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Control estate currently armed</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter("DISARMED")}
+                className={`enterprise-subtle-card px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50 ${
+                  selectedStatusFilter === "DISARMED" ? "border-blue-200 bg-blue-50/70" : ""
+                }`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Disarmed</p>
+                <p className="mt-1.5 text-2xl font-semibold tracking-tight text-amber-600 dark:text-amber-300">{watchlistSummary.disarmed}</p>
+                <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Control estate currently disarmed</p>
+              </button>
             </div>
-            <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
-              <Activity className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-              {filteredTransformerOperations.length} transformers shown
+
+            <div className="space-y-3">
+              <div className="sticky top-3 z-10 -mx-1 rounded-3xl border border-slate-200/80 bg-white/90 px-3 py-3 shadow-sm backdrop-blur-sm">
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 rounded-l-3xl bg-gradient-to-r from-white/95 to-transparent xl:hidden" />
+                  <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 rounded-r-3xl bg-gradient-to-l from-white/95 to-transparent xl:hidden" />
+                  <div className="flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 xl:flex-wrap xl:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <span className="shrink-0 self-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Quick Status</span>
+                    {[
+                      { value: "ALL", label: "All", count: transformerOperations.length },
+                      { value: "ONLINE", label: "Online", count: watchlistSummary.online },
+                      { value: "OFFLINE", label: "Offline", count: watchlistSummary.offline },
+                      { value: "ARMED", label: "Armed", count: watchlistSummary.armed },
+                      { value: "DISARMED", label: "Disarmed", count: watchlistSummary.disarmed },
+                      { value: "DELAYED", label: "Delayed", count: watchlistSummary.delayed },
+                    ].map((chip) => (
+                      <button
+                        key={chip.value}
+                        type="button"
+                        onClick={() => setSelectedStatusFilter(chip.value)}
+                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                          selectedStatusFilter === chip.value
+                            ? "border-blue-200 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                        }`}
+                      >
+                        {chip.label} · {chip.count}
+                      </button>
+                    ))}
+                  <span className="mx-1 hidden h-5 w-px bg-slate-200 xl:inline-flex" />
+                  <span className="shrink-0 self-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Transformer Type</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTypeFilter("ALL")}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      selectedTypeFilter === "ALL"
+                        ? "border-blue-200 bg-blue-600 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                    }`}
+                  >
+                    All types · {transformerOperations.length}
+                  </button>
+                  {availableTypeFilters.map((typeName) => {
+                    const total = transformerOperations.filter((item) => normalizedTransformerType(item.type) === typeName).length;
+                    return (
+                      <button
+                        key={typeName}
+                        type="button"
+                        onClick={() => setSelectedTypeFilter(typeName)}
+                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                          selectedTypeFilter === typeName
+                            ? "border-blue-200 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                        }`}
+                      >
+                        {typeName} · {total}
+                      </button>
+                    );
+                  })}
+
+                  <span className="mx-1 hidden h-5 w-px bg-slate-200 xl:inline-flex" />
+                  <span className="shrink-0 self-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Top Depots</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDepotFilter("ALL")}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      selectedDepotFilter === "ALL"
+                        ? "border-blue-200 bg-blue-600 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                    }`}
+                  >
+                    All depots · {availableDepotFilters.length}
+                  </button>
+                  {topDepotCounts.map((depot) => (
+                    <button
+                      key={depot.name}
+                      type="button"
+                      onClick={() => setSelectedDepotFilter(depot.name)}
+                      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        selectedDepotFilter === depot.name
+                          ? "border-blue-200 bg-blue-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                      }`}
+                    >
+                      {depot.name} · {depot.total}
+                    </button>
+                  ))}
+                </div>
+                </div>
+              </div>
             </div>
+
+            <div className="flex w-full flex-col gap-3 sm:flex-row xl:justify-end">
+              <div className="relative min-w-[280px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={transformerSearch}
+                  onChange={(event) => setTransformerSearch(event.target.value)}
+                  placeholder="Search by transformer, depot, supplier, alert, or arm state"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
+                <Activity className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                {filteredTransformerOperations.length} transformers shown
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <label className="flex min-w-[180px] flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</span>
+                <select
+                  value={selectedDepotFilter}
+                  onChange={(event) => setSelectedDepotFilter(event.target.value)}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="ALL">All depots</option>
+                  {availableDepotFilters.map((depotName) => (
+                    <option key={depotName} value={depotName}>
+                      {depotName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex min-w-[180px] flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Status</span>
+                <select
+                  value={selectedStatusFilter}
+                  onChange={(event) => setSelectedStatusFilter(event.target.value)}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="ALL">All states</option>
+                  <option value="ONLINE">Online</option>
+                  <option value="OFFLINE">Offline</option>
+                  <option value="DELAYED">Delayed</option>
+                  <option value="ARMED">Armed</option>
+                  <option value="DISARMED">Disarmed</option>
+                  <option value="UNKNOWN">Unknown</option>
+                </select>
+              </label>
+
+              <label className="flex min-w-[180px] flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Transformer Type</span>
+                <select
+                  value={selectedTypeFilter}
+                  onChange={(event) => setSelectedTypeFilter(event.target.value)}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="ALL">All types</option>
+                  {availableTypeFilters.map((typeName) => (
+                    <option key={typeName} value={typeName}>
+                      {typeName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="enterprise-chip px-3 py-1.5">Page {watchlistPage} of {totalWatchlistPages}</span>
+              <span className="enterprise-chip px-3 py-1.5">
+                Showing {watchlistRangeStart}-{watchlistRangeEnd} of {filteredTransformerOperations.length}
+              </span>
+              {activeWatchlistFilters.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransformerSearch("");
+                    setSelectedDepotFilter("ALL");
+                    setSelectedStatusFilter("ALL");
+                    setSelectedTypeFilter("ALL");
+                  }}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700"
+                >
+                  Reset filters
+                </button>
+              )}
+            </div>
+
+            {activeWatchlistFilters.length > 0 && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active Filters</span>
+                  {activeWatchlistFilters.map((filter) => (
+                    <button
+                      key={`${filter.key}-${filter.value}`}
+                      type="button"
+                      onClick={() => {
+                        if (filter.key === "status") setSelectedStatusFilter("ALL");
+                        if (filter.key === "type") setSelectedTypeFilter("ALL");
+                        if (filter.key === "depot") setSelectedDepotFilter("ALL");
+                        if (filter.key === "search") setTransformerSearch("");
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+                    >
+                      <span className="text-slate-400">{filter.label}</span>
+                      <span>{filter.value}</span>
+                      <span className="text-slate-400">×</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1164,7 +1541,7 @@ export default function DashboardHome() {
               No transformers match the current search.
             </div>
           ) : (
-            filteredTransformerOperations.map((item) => (
+            paginatedTransformerOperations.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -1214,7 +1591,7 @@ export default function DashboardHome() {
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Asset Notes</p>
                     <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {item.type || "Transformer"}{typeof item.capacity === "number" ? ` • ${item.capacity.toLocaleString()} kVA` : ""}
+                      {normalizedTransformerType(item.type)}{typeof item.capacity === "number" ? ` • ${item.capacity.toLocaleString()} kVA` : ""}
                     </p>
                   </div>
                 </div>
@@ -1222,6 +1599,54 @@ export default function DashboardHome() {
             ))
           )}
         </div>
+
+        {filteredTransformerOperations.length > 0 && (
+          <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Browse the filtered estate and keep the map focused on the currently selected transformer.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWatchlistPage((page) => Math.max(1, page - 1))}
+                disabled={watchlistPage === 1}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+
+              {visibleWatchlistPages.map((page, index) =>
+                page === -1 ? (
+                  <span key={`ellipsis-${index}`} className="px-1 text-sm text-slate-400">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setWatchlistPage(page)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                      watchlistPage === page
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                onClick={() => setWatchlistPage((page) => Math.min(totalWatchlistPages, page + 1))}
+                disabled={watchlistPage === totalWatchlistPages}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
