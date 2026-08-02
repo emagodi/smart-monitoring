@@ -12,6 +12,7 @@ public class SendNotificationRequest {
     private String offerId;
     private NotificationType notificationType;
     private String supplierCode;
+    private Long depotId;
     private String sourceSystem;
     private String referenceId;
     private String recipientName;

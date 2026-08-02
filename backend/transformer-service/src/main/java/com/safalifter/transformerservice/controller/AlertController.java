@@ -9,7 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.safalifter.transformerservice.payload.request.AlertCaseUpdateRequest;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.payload.response.AlertCaseActivityResponse;
 import com.safalifter.transformerservice.payload.response.AlertResponse;
 import com.safalifter.transformerservice.service.AlertService;
 
@@ -51,6 +53,20 @@ public class AlertController {
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<List<AlertResponse>> listBySensor(@PathVariable Long sensorId) {
         return ResponseEntity.ok(alertService.listBySensorId(sensorId));
+    }
+
+    @GetMapping("/{id}/timeline")
+    @Operation(summary = "Get alert case timeline")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<List<AlertCaseActivityResponse>> getTimeline(@PathVariable Long id) {
+        return ResponseEntity.ok(alertService.getTimeline(id));
+    }
+
+    @PatchMapping("/{id}/case")
+    @Operation(summary = "Update alert case workflow")
+    @PreAuthorize("hasAuthority('UPDATE_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<AlertResponse> updateCase(@PathVariable Long id, @RequestBody AlertCaseUpdateRequest request) {
+        return ResponseEntity.ok(alertService.updateCase(id, request));
     }
 
     @PutMapping("/{id}")

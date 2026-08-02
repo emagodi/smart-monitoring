@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, String> {
     List<Notification> findAllByUserIdOrderByCreationTimestampDesc(String id);
+    List<Notification> findAllByReferenceIdOrderByCreationTimestampDesc(String referenceId);
+    List<Notification> findAllByReferenceIdAndSourceSystemOrderByCreationTimestampDesc(String referenceId, String sourceSystem);
 
     Optional<Notification> findTopByProviderMessageIdOrderByCreationTimestampDesc(String providerMessageId);
 }

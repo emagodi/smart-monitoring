@@ -16,4 +16,5 @@ public class UserAccessResponse {
     private Long supplierId;
     private String supplierCode;
     private String supplierName;
+    private Long depotId;
 }

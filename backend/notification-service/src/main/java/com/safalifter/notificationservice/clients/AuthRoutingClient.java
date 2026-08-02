@@ -14,6 +14,7 @@ public interface AuthRoutingClient {
     @GetMapping("/api/v1/auth/internal/notification-routing/users")
     List<NotificationRecipientResponse> getNotificationRecipients(
             @RequestParam("notificationType") NotificationType notificationType,
-            @RequestParam(value = "supplierCode", required = false) String supplierCode
+            @RequestParam(value = "supplierCode", required = false) String supplierCode,
+            @RequestParam(value = "depotId", required = false) Long depotId
     );
 }

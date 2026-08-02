@@ -13,6 +13,7 @@ public class AuthenticatedUserPrincipal implements UserDetails {
     private final Long supplierId;
     private final String supplierCode;
     private final String supplierName;
+    private final Long depotId;
     private final Collection<? extends GrantedAuthority> authorities;
 
     public AuthenticatedUserPrincipal(
@@ -21,6 +22,7 @@ public class AuthenticatedUserPrincipal implements UserDetails {
             Long supplierId,
             String supplierCode,
             String supplierName,
+            Long depotId,
             Collection<? extends GrantedAuthority> authorities
     ) {
         this.email = email;
@@ -28,6 +30,7 @@ public class AuthenticatedUserPrincipal implements UserDetails {
         this.supplierId = supplierId;
         this.supplierCode = supplierCode;
         this.supplierName = supplierName;
+        this.depotId = depotId;
         this.authorities = authorities;
     }
 

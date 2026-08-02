@@ -257,7 +257,11 @@ public class NotificationService {
         }
 
         try {
-            List<NotificationRecipientResponse> recipients = authRoutingClient.getNotificationRecipients(notificationType, request.getSupplierCode());
+            List<NotificationRecipientResponse> recipients = authRoutingClient.getNotificationRecipients(
+                    notificationType,
+                    request.getSupplierCode(),
+                    request.getDepotId()
+            );
             if (recipients != null && !recipients.isEmpty()) {
                 return recipients;
             }
@@ -301,6 +305,7 @@ public class NotificationService {
                 .phone(request.getPhone())
                 .whatsappNumber(request.getWhatsappNumber())
                 .supplierCode(request.getSupplierCode())
+                .depotId(request.getDepotId())
                 .notificationType(notificationType)
                 .emailEnabled(emailEnabled)
                 .smsEnabled(smsEnabled)
@@ -377,6 +382,21 @@ public class NotificationService {
 
     public List<Notification> getAllByUserId(String id) {
         return notificationRepository.findAllByUserIdOrderByCreationTimestampDesc(id);
+    }
+
+    public List<Notification> getAllByReferenceId(String referenceId, String sourceSystem) {
+        String normalizedReferenceId = trimToNull(referenceId);
+        String normalizedSourceSystem = trimToNull(sourceSystem);
+        if (normalizedReferenceId == null) {
+            return List.of();
+        }
+        if (normalizedSourceSystem != null) {
+            return notificationRepository.findAllByReferenceIdAndSourceSystemOrderByCreationTimestampDesc(
+                    normalizedReferenceId,
+                    normalizedSourceSystem
+            );
+        }
+        return notificationRepository.findAllByReferenceIdOrderByCreationTimestampDesc(normalizedReferenceId);
     }
 
     private void dispatchNotification(

@@ -83,13 +83,14 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                 .message("Controller trigger detected on " + transformer.getName() + " (" + resolveTransformerTypeLabel(transformer.getType()) + ": " + triggerSummary + ")")
                 .build();
         log.info("Creating controller trigger alert for transformer {} from controller {}", transformer.getId(), controller.getId());
-        alertService.create(alert);
+        var createdAlert = alertService.create(alert);
         try {
             notificationClient.send(SendNotificationRequest.builder()
                     .notificationType(NotificationType.CONTROLLER_TRIGGER)
                     .supplierCode(alert.getSupplierCode())
+                    .depotId(alert.getDepotId())
                     .sourceSystem("transformer-service")
-                    .referenceId(reading.getId() != null ? String.valueOf(reading.getId()) : null)
+                    .referenceId(createdAlert.getId() != null ? String.valueOf(createdAlert.getId()) : null)
                     .subject("Controller trigger detected")
                     .message(alert.getMessage())
                     .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(transformer, triggerSummary, reading.getCreatedAt()))

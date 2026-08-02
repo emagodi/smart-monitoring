@@ -1,127 +1,186 @@
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { AlertTriangle, BellRing, Loader2, RefreshCcw, Search, ShieldAlert, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  BellRing,
+  CheckCircle2,
+  Clock3,
+  FileWarning,
+  History,
+  Loader2,
+  MapPinned,
+  RefreshCcw,
+  Search,
+  Send,
+  ShieldAlert,
+  Siren,
+  Truck,
+  UserCheck,
+  XCircle,
+} from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import Alert from "../../components/ui/alert/Alert";
 
+type AlertCaseStatus = "NEW" | "ACKNOWLEDGED" | "DISPATCHED" | "RESOLVED" | "FALSE_ALARM";
+
 type AlertItem = {
   id: number;
-  sensorId?: number;
-  transformerId?: number;
-  transformerName?: string;
   message?: string;
   value?: string;
   isAlert?: boolean;
-  sensorType?: string;
-  deviceName?: string;
-  deviceId?: string;
-  supplierCode?: string;
-  supplierName?: string;
+  transformerId?: number;
+  transformerName?: string;
+  depotId?: number | null;
+  depotName?: string | null;
+  supplierName?: string | null;
+  supplierCode?: string | null;
+  deviceName?: string | null;
+  deviceId?: string | null;
+  sensorType?: string | null;
+  createdAt?: string | null;
+  caseId?: number | null;
+  caseStatus?: AlertCaseStatus | null;
+  assignedToEmail?: string | null;
+  assignedToName?: string | null;
+  acknowledgedAt?: string | null;
+  dispatchedAt?: string | null;
+  resolvedAt?: string | null;
+  falseAlarmAt?: string | null;
+  lastActionAt?: string | null;
+  lastActionNote?: string | null;
 };
 
-type FilterMode = "all" | "active" | "info";
+type TimelineItem = {
+  id: number;
+  activityType: "CASE_CREATED" | "STATUS_CHANGED" | "ASSIGNMENT_CHANGED" | "NOTE_ADDED";
+  statusBefore?: AlertCaseStatus | null;
+  statusAfter?: AlertCaseStatus | null;
+  actorEmail?: string | null;
+  actorName?: string | null;
+  note?: string | null;
+  createdAt?: string | null;
+};
 
-const normalizeList = (payload: unknown): AlertItem[] => {
-  if (Array.isArray(payload)) return payload as AlertItem[];
+type NotificationItem = {
+  id: string;
+  channel?: "EMAIL" | "SMS" | "WHATSAPP";
+  deliveryStatus?: string | null;
+  providerStatus?: string | null;
+  recipientName?: string | null;
+  recipientAddress?: string | null;
+  creationTimestamp?: string | null;
+  acceptedTimestamp?: string | null;
+  deliveredTimestamp?: string | null;
+  readTimestamp?: string | null;
+  failedTimestamp?: string | null;
+};
+
+type FilterMode =
+  | "all"
+  | "new"
+  | "acknowledged"
+  | "dispatched"
+  | "resolved"
+  | "falseAlarm"
+  | "unassigned";
+
+const normalizeList = <T,>(payload: unknown): T[] => {
+  if (Array.isArray(payload)) return payload as T[];
   const obj = payload as Record<string, unknown> | null;
   if (!obj) return [];
   for (const key of ["data", "content", "items", "records"]) {
     const value = obj[key];
     if (Array.isArray(value)) {
-      return value as AlertItem[];
+      return value as T[];
     }
   }
   return [];
 };
 
-const isControllerTrigger = (item: AlertItem) =>
-  (item.sensorType || "").toUpperCase() === "CONTROLLER_TRIGGER";
+const CASE_ACTIONS: Array<{ label: string; value: AlertCaseStatus; icon: ReactNode }> = [
+  { label: "Acknowledge", value: "ACKNOWLEDGED", icon: <UserCheck className="h-4 w-4" /> },
+  { label: "Dispatch", value: "DISPATCHED", icon: <Truck className="h-4 w-4" /> },
+  { label: "Resolve", value: "RESOLVED", icon: <CheckCircle2 className="h-4 w-4" /> },
+  { label: "False Alarm", value: "FALSE_ALARM", icon: <XCircle className="h-4 w-4" /> },
+];
 
-const getControllerTriggerSignals = (item: AlertItem) => {
-  const signalText = `${item.value || ""} ${item.message || ""}`.toLowerCase();
-  const signals: Array<{ label: string; tone: string }> = [];
+const getCaseStatus = (item: AlertItem): AlertCaseStatus => item.caseStatus || (item.isAlert ? "NEW" : "RESOLVED");
 
-  if (signalText.includes("motion detected")) {
-    signals.push({
-      label: "Motion",
-      tone:
-        "border border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300",
-    });
+const statusTone = (status: AlertCaseStatus) => {
+  switch (status) {
+    case "ACKNOWLEDGED":
+      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300";
+    case "DISPATCHED":
+      return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300";
+    case "RESOLVED":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300";
+    case "FALSE_ALARM":
+      return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
+    default:
+      return "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300";
   }
-  if (signalText.includes("door open")) {
-    signals.push({
-      label: "Door Open",
-      tone:
-        "border border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300",
-    });
-  }
-  if (signalText.includes("vibration detected")) {
-    signals.push({
-      label: "Vibration",
-      tone:
-        "border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300",
-    });
-  }
-  if (signals.length === 0 && signalText.includes("trigger cleared")) {
-    signals.push({
-      label: "Cleared",
-      tone:
-        "border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300",
-    });
-  }
-
-  return signals;
 };
 
-const getTransformerTypeLabel = (item: AlertItem) => {
-  const signalText = `${item.value || ""} ${item.message || ""}`.toLowerCase();
-  if (signalText.includes("gmt") || signalText.includes("door open")) return "GMT";
-  if (signalText.includes("pmt") || signalText.includes("vibration detected")) return "PMT";
-  return null;
+const channelTone = (channel?: string | null) => {
+  switch (channel) {
+    case "WHATSAPP":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300";
+    case "SMS":
+      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300";
+    case "EMAIL":
+      return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
+  }
 };
 
-const transformerTypeTone = (type?: string | null) => {
-  if (type === "GMT") {
-    return "border border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300";
+const deliveryTone = (status?: string | null) => {
+  const normalized = (status || "").toUpperCase();
+  if (normalized.includes("READ") || normalized.includes("DELIVERED")) {
+    return "text-emerald-600 dark:text-emerald-300";
   }
-  if (type === "PMT") {
-    return "border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300";
+  if (normalized.includes("FAILED")) {
+    return "text-red-600 dark:text-red-300";
   }
-  return "border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
+  if (normalized.includes("SENT") || normalized.includes("ACCEPTED")) {
+    return "text-blue-600 dark:text-blue-300";
+  }
+  return "text-slate-500 dark:text-slate-400";
 };
 
-const getStatusMeta = (isAlert?: boolean) =>
-  isAlert
-    ? {
-        label: "Alert",
-        dot: "bg-red-500",
-        text: "text-red-700 dark:text-red-300",
-      }
-    : {
-        label: "Info",
-        dot: "bg-amber-500",
-        text: "text-amber-700 dark:text-amber-300",
-      };
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "Not yet";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+};
 
-const getFilterLabel = (filterMode: FilterMode) => {
-  if (filterMode === "active") return "Active alerts";
-  if (filterMode === "info") return "Informational";
-  return "All alerts";
+const summarizeScope = (supplierName?: string | null, depotId?: number | null) => {
+  if (supplierName && depotId) return `${supplierName} · Depot ${depotId}`;
+  if (supplierName) return supplierName;
+  if (depotId) return `Depot ${depotId}`;
+  return "National operations";
 };
 
 export default function AlertsIndex() {
   const { token, user } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
-  const isSupplierUser =
-    Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
 
   const [items, setItems] = useState<AlertItem[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [note, setNote] = useState("");
+  const [assignedToEmail, setAssignedToEmail] = useState("");
+  const [assignedToName, setAssignedToName] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<AlertCaseStatus>("NEW");
 
   const headers = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
@@ -133,14 +192,38 @@ export default function AlertsIndex() {
       setLoading(true);
       setError(null);
       const response = await axios.get(`${API_BASE_URL}/api/v1/alerts`, { headers });
-      setItems(normalizeList(response.data));
+      setItems(normalizeList<AlertItem>(response.data));
     } catch (fetchError) {
       console.error(fetchError);
-      setError("Failed to load alerts.");
+      setError("Failed to load alert workflow desk.");
     } finally {
       setLoading(false);
     }
   }, [API_BASE_URL, headers]);
+
+  const fetchDetails = useCallback(
+    async (alertId: number) => {
+      try {
+        setDetailLoading(true);
+        const [timelineResponse, notificationsResponse] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/v1/alerts/${alertId}/timeline`, { headers }),
+          axios.get(`${API_BASE_URL}/v1/notification/reference/${alertId}`, {
+            headers,
+            params: { sourceSystem: "transformer-service" },
+          }),
+        ]);
+        setTimeline(normalizeList<TimelineItem>(timelineResponse.data));
+        setNotifications(normalizeList<NotificationItem>(notificationsResponse.data));
+      } catch (detailError) {
+        console.error(detailError);
+        setTimeline([]);
+        setNotifications([]);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [API_BASE_URL, headers]
+  );
 
   useEffect(() => {
     if (token) {
@@ -151,103 +234,131 @@ export default function AlertsIndex() {
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return items.filter((item) => {
+      const status = getCaseStatus(item);
       const matchesFilter =
         filterMode === "all"
           ? true
-          : filterMode === "active"
-            ? item.isAlert === true
-            : item.isAlert !== true;
+          : filterMode === "new"
+            ? status === "NEW"
+            : filterMode === "acknowledged"
+              ? status === "ACKNOWLEDGED"
+              : filterMode === "dispatched"
+                ? status === "DISPATCHED"
+                : filterMode === "resolved"
+                  ? status === "RESOLVED"
+                  : filterMode === "falseAlarm"
+                    ? status === "FALSE_ALARM"
+                    : !item.assignedToEmail && !item.assignedToName;
+
       const matchesQuery =
         !query ||
         (item.message || "").toLowerCase().includes(query) ||
         (item.transformerName || "").toLowerCase().includes(query) ||
         (item.deviceName || "").toLowerCase().includes(query) ||
         (item.deviceId || "").toLowerCase().includes(query) ||
-        (item.sensorType || "").toLowerCase().includes(query);
+        (item.assignedToName || "").toLowerCase().includes(query) ||
+        (item.assignedToEmail || "").toLowerCase().includes(query);
+
       return matchesFilter && matchesQuery;
     });
   }, [filterMode, items, search]);
 
-  const stats = useMemo(() => {
-    const total = items.length;
-    const active = items.filter((item) => item.isAlert === true).length;
-    const informational = Math.max(total - active, 0);
-    const controllerTriggers = items.filter((item) => isControllerTrigger(item)).length;
-    return { total, active, informational, controllerTriggers };
-  }, [items]);
+  useEffect(() => {
+    if (!filtered.length) {
+      setSelectedId(null);
+      setTimeline([]);
+      setNotifications([]);
+      return;
+    }
+    if (!selectedId || !filtered.some((item) => item.id === selectedId)) {
+      setSelectedId(filtered[0].id);
+    }
+  }, [filtered, selectedId]);
 
-  const filteredStats = useMemo(() => {
-    const total = filtered.length;
-    const active = filtered.filter((item) => item.isAlert === true).length;
-    const informational = Math.max(total - active, 0);
-    const controllerTriggers = filtered.filter((item) => isControllerTrigger(item)).length;
-    const uniqueTransformers = new Set(
-      filtered
-        .map((item) => item.transformerId ?? item.transformerName)
-        .filter((value): value is number | string => Boolean(value))
-    ).size;
-    const uniqueDevices = new Set(
-      filtered
-        .map((item) => item.deviceId ?? item.deviceName)
-        .filter((value): value is string => Boolean(value))
-    ).size;
-
-    return {
-      total,
-      active,
-      informational,
-      controllerTriggers,
-      uniqueTransformers,
-      uniqueDevices,
-      activeShare: total ? Math.round((active / total) * 100) : 0,
-    };
-  }, [filtered]);
-
-  const topSensorTypes = useMemo(() => {
-    const grouped = new Map<string, number>();
-    filtered.forEach((item) => {
-      const key = item.sensorType || "Unknown";
-      grouped.set(key, (grouped.get(key) || 0) + 1);
-    });
-
-    return Array.from(grouped.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([label, count]) => ({
-        label,
-        count,
-        share: filtered.length ? Math.round((count / filtered.length) * 100) : 0,
-      }));
-  }, [filtered]);
-
-  const highlightedSignals = useMemo(() => {
-    const grouped = new Map<string, number>();
-    filtered.forEach((item) => {
-      getControllerTriggerSignals(item).forEach((signal) => {
-        grouped.set(signal.label, (grouped.get(signal.label) || 0) + 1);
-      });
-    });
-
-    return Array.from(grouped.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([label, count]) => ({ label, count }));
-  }, [filtered]);
-
-  const totalPages = Math.max(Math.ceil(filtered.length / pageSize), 1);
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const rangeStart = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
-  const rangeEnd = Math.min(page * pageSize, filtered.length);
+  const selected = useMemo(
+    () => filtered.find((item) => item.id === selectedId) || items.find((item) => item.id === selectedId) || null,
+    [filtered, items, selectedId]
+  );
 
   useEffect(() => {
-    setPage(1);
-  }, [filterMode, search, pageSize]);
+    if (!selected) {
+      return;
+    }
+    setSelectedStatus(getCaseStatus(selected));
+    setAssignedToEmail(selected.assignedToEmail || "");
+    setAssignedToName(selected.assignedToName || "");
+    setNote(selected.lastActionNote || "");
+    void fetchDetails(selected.id);
+  }, [fetchDetails, selected]);
+
+  const stats = useMemo(() => {
+    const statusCounts = {
+      total: items.length,
+      newCases: 0,
+      acknowledged: 0,
+      dispatched: 0,
+      resolved: 0,
+      falseAlarm: 0,
+      unassigned: 0,
+    };
+
+    items.forEach((item) => {
+      const status = getCaseStatus(item);
+      if (status === "NEW") statusCounts.newCases += 1;
+      if (status === "ACKNOWLEDGED") statusCounts.acknowledged += 1;
+      if (status === "DISPATCHED") statusCounts.dispatched += 1;
+      if (status === "RESOLVED") statusCounts.resolved += 1;
+      if (status === "FALSE_ALARM") statusCounts.falseAlarm += 1;
+      if (!item.assignedToEmail && !item.assignedToName && status !== "RESOLVED" && status !== "FALSE_ALARM") {
+        statusCounts.unassigned += 1;
+      }
+    });
+
+    return statusCounts;
+  }, [items]);
+
+  const deliverySummary = useMemo(() => {
+    const delivered = notifications.filter((item) =>
+      ["DELIVERED", "READ"].includes((item.deliveryStatus || "").toUpperCase())
+    ).length;
+    const failed = notifications.filter((item) =>
+      (item.deliveryStatus || "").toUpperCase().includes("FAILED")
+    ).length;
+    return { total: notifications.length, delivered, failed };
+  }, [notifications]);
+
+  const saveCaseUpdate = async (statusOverride?: AlertCaseStatus) => {
+    if (!selected) return;
+    try {
+      setSaving(true);
+      const response = await axios.patch(
+        `${API_BASE_URL}/api/v1/alerts/${selected.id}/case`,
+        {
+          status: statusOverride || selectedStatus,
+          assignedToEmail,
+          assignedToName,
+          note,
+        },
+        { headers }
+      );
+      const updated = response.data as AlertItem;
+      setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setSelectedId(updated.id);
+      setSelectedStatus(getCaseStatus(updated));
+      await fetchDetails(updated.id);
+    } catch (saveError) {
+      console.error(saveError);
+      setError("Failed to update the alert workflow.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading && items.length === 0) {
     return (
       <div className="enterprise-card flex h-96 items-center justify-center gap-3 text-slate-500 dark:text-slate-300">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <span>Loading alerts...</span>
+        <span>Loading alert operations desk...</span>
       </div>
     );
   }
@@ -256,403 +367,322 @@ export default function AlertsIndex() {
     <div className="space-y-4">
       {error ? <Alert variant="error" title="Alerts" message={error} /> : null}
 
-      <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-            Alert Workspace
-          </p>
-          <h2 className="mt-0.5 text-base font-semibold text-slate-950 dark:text-slate-50 md:text-lg">
-            Transformer alert stream
-          </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {isSupplierUser
-              ? `Monitoring alerts for ${user?.supplierName || "your organisation"}`
-              : "System alerts across monitored transformer assets"}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void fetchAlerts()}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-        >
-          <RefreshCcw className="h-4 w-4" />
-          Refresh Alerts
-        </button>
-      </section>
-
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Total Alerts"
-          value={stats.total}
-          subtitle="All current alert records"
-          tone="blue"
-          icon={<BellRing className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Active Alerts"
-          value={stats.active}
-          subtitle="Items flagged for action"
-          tone="red"
-          icon={<ShieldAlert className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Informational"
-          value={stats.informational}
-          subtitle="Monitoring-only updates"
-          tone="amber"
-          icon={<Zap className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Controller Triggers"
-          value={stats.controllerTriggers}
-          subtitle="Door, motion, and vibration"
-          tone="violet"
-          icon={<AlertTriangle className="h-5 w-5" />}
-        />
-      </section>
-
-      <section className="flex flex-col gap-4">
-        {/* Top Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Alert Summary */}
-          <div className="enterprise-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Alert Summary
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Current filter snapshot
-                </h3>
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                <BellRing className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Visible alerts</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filtered.length}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Active matches</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.active}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Informational</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.informational}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Controller triggers</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.controllerTriggers}</p>
-              </div>
-            </div>
+      <section className="enterprise-card overflow-hidden p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+              Alert Operations Desk
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950 dark:text-slate-50">
+              Depot-aware transformer response workflow
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Scope: {summarizeScope(user?.supplierName, user?.depotId)}
+            </p>
           </div>
 
-          {/* Filter Context */}
-          <div className="enterprise-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  Filter Context
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Operational scope
-                </h3>
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-                <AlertTriangle className="h-4 w-4" />
-              </div>
+          <div className="flex flex-wrap gap-3">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+              <div className="font-semibold">Unassigned</div>
+              <div className="mt-1 text-2xl font-semibold">{stats.unassigned}</div>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Status mode</p>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {filterMode === "all" ? "All alerts" : filterMode === "active" ? "Active only" : "Info only"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Search query</p>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {search ? `"${search}"` : "No active query"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Unique transformers</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{filteredStats.uniqueTransformers}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Date range</p>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">All time</p>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => void fetchAlerts()}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Refresh Desk
+            </button>
           </div>
         </div>
+      </section>
 
-        {/* Main Table Card */}
-        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard title="Open Cases" value={stats.newCases} subtitle="Awaiting first action" icon={<Siren className="h-5 w-5" />} tone="red" />
+        <StatCard title="Acknowledged" value={stats.acknowledged} subtitle="Seen by operations" icon={<UserCheck className="h-5 w-5" />} tone="amber" />
+        <StatCard title="Dispatched" value={stats.dispatched} subtitle="Field response underway" icon={<Truck className="h-5 w-5" />} tone="blue" />
+        <StatCard title="Resolved" value={stats.resolved} subtitle="Closed operationally" icon={<CheckCircle2 className="h-5 w-5" />} tone="emerald" />
+        <StatCard title="False Alarms" value={stats.falseAlarm} subtitle="Closed as non-events" icon={<FileWarning className="h-5 w-5" />} tone="slate" />
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.45fr,0.95fr]">
+        <div className="enterprise-card overflow-hidden">
           <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Alerts Table
+                  Active Queue
                 </p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                  Prioritized monitoring events
+                <h3 className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
+                  Prioritized alerts with action status
                 </h3>
               </div>
-
               <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
-                  {filtered.length.toLocaleString()}
-                </span>
-                visible matches
+                <BellRing className="h-4 w-4" />
+                {filtered.length} visible
               </div>
             </div>
 
-            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
-              <div className="flex flex-wrap items-center gap-2">
-                <FilterButton
-                  active={filterMode === "all"}
-                  label="All"
-                  count={stats.total}
-                  onClick={() => setFilterMode("all")}
-                />
-                <FilterButton
-                  active={filterMode === "active"}
-                  label="Active Alerts"
-                  count={stats.active}
-                  onClick={() => setFilterMode("active")}
-                />
-                <FilterButton
-                  active={filterMode === "info"}
-                  label="Informational"
-                  count={stats.informational}
-                  onClick={() => setFilterMode("info")}
-                />
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex flex-wrap gap-2">
+                <FilterButton active={filterMode === "all"} label="All" onClick={() => setFilterMode("all")} />
+                <FilterButton active={filterMode === "new"} label="New" onClick={() => setFilterMode("new")} />
+                <FilterButton active={filterMode === "acknowledged"} label="Acknowledged" onClick={() => setFilterMode("acknowledged")} />
+                <FilterButton active={filterMode === "dispatched"} label="Dispatched" onClick={() => setFilterMode("dispatched")} />
+                <FilterButton active={filterMode === "resolved"} label="Resolved" onClick={() => setFilterMode("resolved")} />
+                <FilterButton active={filterMode === "falseAlarm"} label="False Alarm" onClick={() => setFilterMode("falseAlarm")} />
+                <FilterButton active={filterMode === "unassigned"} label="Unassigned" onClick={() => setFilterMode("unassigned")} />
               </div>
 
-              <div className="enterprise-chip inline-flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
-                <span className="font-semibold text-slate-900 dark:text-slate-100">Show</span>
-                <select
-                  value={pageSize}
-                  onChange={(event) => setPageSize(Number(event.target.value))}
-                  className="bg-transparent text-sm outline-none"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
-              <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2.5">
+              <div className="enterprise-chip flex items-center gap-3 px-3 py-2.5">
                 <Search className="h-4 w-4 text-slate-400" />
                 <input
-                  type="text"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search transformer, device, message..."
+                  placeholder="Search transformer, device, assignee..."
                   className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
                 />
               </div>
             </div>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 px-6 py-14 text-slate-500 dark:text-slate-300">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Refreshing alerts...</span>
+          <div className="max-h-[900px] overflow-y-auto p-4">
+            <div className="space-y-3">
+              {filtered.length === 0 ? (
+                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-14 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  No alerts found for the current workflow filters.
+                </div>
+              ) : (
+                filtered.map((item) => {
+                  const status = getCaseStatus(item);
+                  const selectedRow = selectedId === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedId(item.id)}
+                      className={`w-full rounded-[24px] border p-4 text-left transition ${
+                        selectedRow
+                          ? "border-blue-300 bg-blue-50/70 shadow-sm dark:border-blue-500/40 dark:bg-blue-500/10"
+                          : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-900/90"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(status)}`}>
+                              {status.replace("_", " ")}
+                            </span>
+                            <span className="text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                              {item.sensorType || "Alert"}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-base font-semibold text-slate-950 dark:text-slate-50">
+                              {item.transformerName || "Unassigned transformer"}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                              {item.message || item.value || "Operational alert"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid min-w-[260px] grid-cols-2 gap-3 text-sm text-slate-500 dark:text-slate-400">
+                          <MetaBlock
+                            icon={<MapPinned className="h-4 w-4" />}
+                            label="Scope"
+                            value={item.depotName || (item.depotId ? `Depot ${item.depotId}` : item.supplierName || "General")}
+                          />
+                          <MetaBlock
+                            icon={<Clock3 className="h-4 w-4" />}
+                            label="Detected"
+                            value={formatDateTime(item.createdAt)}
+                          />
+                          <MetaBlock
+                            icon={<UserCheck className="h-4 w-4" />}
+                            label="Assigned"
+                            value={item.assignedToName || item.assignedToEmail || "Unassigned"}
+                          />
+                          <MetaBlock
+                            icon={<AlertTriangle className="h-4 w-4" />}
+                            label="Device"
+                            value={item.deviceName || item.deviceId || "Unknown"}
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="enterprise-card overflow-hidden">
+          {!selected ? (
+            <div className="flex h-full min-h-[520px] items-center justify-center px-6 py-14 text-center text-sm text-slate-500 dark:text-slate-400">
+              Select an alert to review case history, recipients, and response actions.
             </div>
           ) : (
-            <>
-              <div className="overflow-x-auto p-4 pt-0">
-                <table className="min-w-full border-separate border-spacing-y-2.5">
-                  <thead>
-                    <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                      <th className="px-3 py-2.5">Status</th>
-                      <th className="px-3 py-2.5">Message</th>
-                      <th className="px-3 py-2.5">Transformer</th>
-                      <th className="px-3 py-2.5">Device</th>
-                      <th className="px-3 py-2.5">Sensor Type</th>
-                      <th className="px-3 py-2.5">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginated.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-12">
-                          <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                            No alerts found for the current filters.
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      paginated.map((item) => {
-                        const controllerSignals = getControllerTriggerSignals(item);
-                        const transformerType = getTransformerTypeLabel(item);
-                        const status = getStatusMeta(item.isAlert);
-
-                        return (
-                          <tr key={item.id} className="enterprise-subtle-card">
-                            <td className="rounded-l-[22px] px-3 py-3">
-                              <div className="space-y-1.5">
-                                <span
-                                  className={`inline-flex items-center gap-2 text-xs font-medium ${status.text}`}
-                                >
-                                  <span className={`h-2 w-2 rounded-full ${status.dot}`} />
-                                  {status.label}
-                                </span>
-                                <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                  {isControllerTrigger(item) ? "Controller trigger" : "General event"}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="px-3 py-3">
-                              <div>
-                                <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">
-                                  {item.message || "Monitoring event"}
-                                </p>
-
-                                {controllerSignals.length > 0 ? (
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    {controllerSignals.map((signal) => (
-                                      <span
-                                        key={`${item.id}-${signal.label}-message`}
-                                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${signal.tone}`}
-                                      >
-                                        {signal.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : null}
-
-                                {isSupplierUser ? null : item.supplierName ? (
-                                  <p className="mt-1.5 text-[12px] text-slate-400 dark:text-slate-500">
-                                    {item.supplierName}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </td>
-
-                            <td className="px-3 py-3">
-                              <div className="space-y-1.5">
-                                <p
-                                  className={`text-sm font-medium ${
-                                    item.transformerName
-                                      ? "text-slate-900 dark:text-slate-100"
-                                      : "text-slate-400 dark:text-slate-500"
-                                  }`}
-                                >
-                                  {item.transformerName || "-"}
-                                </p>
-                                {transformerType ? (
-                                  <span
-                                    className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${transformerTypeTone(transformerType)}`}
-                                  >
-                                    {transformerType}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </td>
-
-                            <td className="px-3 py-3">
-                              <div className="space-y-1">
-                                <p
-                                  className={`text-sm ${
-                                    item.deviceName
-                                      ? "font-medium text-slate-900 dark:text-slate-100"
-                                      : "text-slate-400 dark:text-slate-500"
-                                  }`}
-                                >
-                                  {item.deviceName || "-"}
-                                </p>
-                                <p className="font-mono text-[11px] text-slate-400 dark:text-slate-500">
-                                  {item.deviceId || "-"}
-                                </p>
-                              </div>
-                            </td>
-
-                            <td className="px-3 py-3">
-                              <span
-                                className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                                  item.sensorType
-                                    ? "border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                    : "border border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
-                                }`}
-                              >
-                                {item.sensorType || "Unknown"}
-                              </span>
-                            </td>
-
-                            <td className="rounded-r-[22px] px-3 py-3">
-                              {controllerSignals.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                  {controllerSignals.map((signal) => (
-                                    <span
-                                      key={`${item.id}-${signal.label}`}
-                                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${signal.tone}`}
-                                    >
-                                      {signal.label}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span
-                                  className={`text-sm font-medium ${
-                                    item.value
-                                      ? "text-slate-900 dark:text-slate-100"
-                                      : "text-slate-400 dark:text-slate-500"
-                                  }`}
-                                >
-                                  {item.value || "-"}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+            <div className="flex h-full flex-col">
+              <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                      Case Detail
+                    </p>
+                    <h3 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                      {selected.transformerName || "Transformer alert"}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {selected.message || selected.value || "Operational event"}
+                    </p>
+                  </div>
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(getCaseStatus(selected))}`}>
+                    {getCaseStatus(selected).replace("_", " ")}
+                  </span>
+                </div>
               </div>
 
-              <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Showing {rangeStart} to {rangeEnd} of {filtered.length} alerts
-                  </p>
+              <div className="space-y-4 p-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <SummaryTile label="Detected" value={formatDateTime(selected.createdAt)} />
+                  <SummaryTile label="Last Action" value={formatDateTime(selected.lastActionAt)} />
+                  <SummaryTile label="Depot" value={selected.depotName || (selected.depotId ? `Depot ${selected.depotId}` : "Unscoped")} />
+                  <SummaryTile label="Supplier" value={selected.supplierName || selected.supplierCode || "ZESA"} />
+                </div>
 
-                  <div className="flex items-center gap-2">
+                <div className="rounded-[22px] border border-slate-200 p-4 dark:border-slate-800">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    <ShieldAlert className="h-4 w-4 text-blue-500" />
+                    Response controls
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    {CASE_ACTIONS.map((action) => (
+                      <button
+                        key={action.value}
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          setSelectedStatus(action.value);
+                          void saveCaseUpdate(action.value);
+                        }}
+                        className="enterprise-chip inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:text-slate-950 disabled:opacity-60 dark:text-slate-200"
+                      >
+                        {action.icon}
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <input
+                      value={assignedToName}
+                      onChange={(event) => setAssignedToName(event.target.value)}
+                      placeholder="Assignee name"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <input
+                      value={assignedToEmail}
+                      onChange={(event) => setAssignedToEmail(event.target.value)}
+                      placeholder="Assignee email"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <textarea
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      placeholder="Operational note, call outcome, dispatch detail, or false alarm reason"
+                      rows={4}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
                     <button
                       type="button"
-                      disabled={page === 1}
-                      onClick={() => setPage((current) => Math.max(1, current - 1))}
-                      className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
+                      disabled={saving}
+                      onClick={() => void saveCaseUpdate()}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-700"
                     >
-                      Previous
-                    </button>
-                    <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">
-                      {page}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={page >= totalPages}
-                      onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                      className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
-                    >
-                      Next
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Save workflow update
                     </button>
                   </div>
                 </div>
+
+                <div className="rounded-[22px] border border-slate-200 p-4 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <History className="h-4 w-4 text-blue-500" />
+                      Case timeline
+                    </div>
+                    {detailLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {timeline.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No timeline activity recorded yet.</p>
+                    ) : (
+                      timeline.map((entry) => (
+                        <div key={entry.id} className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              {entry.activityType.replaceAll("_", " ")}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{formatDateTime(entry.createdAt)}</p>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {entry.actorName || entry.actorEmail || "System"}
+                          </p>
+                          {entry.note ? (
+                            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{entry.note}</p>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-[22px] border border-slate-200 p-4 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <BellRing className="h-4 w-4 text-blue-500" />
+                      Recipient audit
+                    </div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {deliverySummary.delivered}/{deliverySummary.total} delivered
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {notifications.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No notification delivery records linked to this alert yet.</p>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div key={notification.id} className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${channelTone(notification.channel)}`}>
+                              {notification.channel || "CHANNEL"}
+                            </span>
+                            <span className={`text-xs font-semibold ${deliveryTone(notification.deliveryStatus || notification.providerStatus)}`}>
+                              {notification.deliveryStatus || notification.providerStatus || "PENDING"}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+                            {notification.recipientName || "Recipient"}
+                          </p>
+                          <p className="mt-1 break-all font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                            {notification.recipientAddress || "No address"}
+                          </p>
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                            Created {formatDateTime(notification.creationTimestamp)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </section>
-
-      {/* Detail Panel */}
     </div>
   );
 }
@@ -660,44 +690,24 @@ export default function AlertsIndex() {
 function FilterButton({
   active,
   label,
-  count,
   onClick,
 }: {
   active: boolean;
   label: string;
-  count: number;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`enterprise-chip inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition ${
+      className={`enterprise-chip rounded-full px-3 py-2 text-sm font-medium transition ${
         active
           ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-          : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          : "text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
       }`}
     >
-      <span>{label}</span>
-      <span
-        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-          active
-            ? "bg-white/80 text-current dark:bg-slate-900/70"
-            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-        }`}
-      >
-        {count}
-      </span>
+      {label}
     </button>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-      <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
-    </div>
   );
 }
 
@@ -705,20 +715,21 @@ function StatCard({
   title,
   value,
   subtitle,
-  tone,
   icon,
+  tone,
 }: {
   title: string;
   value: number;
   subtitle: string;
-  tone: "blue" | "red" | "amber" | "violet";
-  icon: React.ReactNode;
+  icon: ReactNode;
+  tone: "red" | "amber" | "blue" | "emerald" | "slate";
 }) {
   const toneClasses = {
-    blue: "bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300",
     red: "bg-red-50 text-red-600 dark:bg-red-500/14 dark:text-red-300",
     amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300",
-    violet: "bg-violet-50 text-violet-600 dark:bg-violet-500/14 dark:text-violet-300",
+    blue: "bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300",
+    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300",
+    slate: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
   }[tone];
 
   return (
@@ -726,21 +737,42 @@ function StatCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
-          <p
-            className={`mt-2 text-3xl font-semibold tracking-tight ${
-              value > 0
-                ? "text-slate-950 dark:text-slate-50"
-                : "text-slate-400 dark:text-slate-500"
-            }`}
-          >
+          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
             {value.toLocaleString()}
           </p>
-          <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            {subtitle}
-          </p>
+          <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
         </div>
         <div className={`rounded-xl p-2.5 ${toneClasses}`}>{icon}</div>
       </div>
+    </div>
+  );
+}
+
+function MetaBlock({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-slate-900">
+      <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+        {icon}
+        {label}
+      </p>
+      <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   );
 }

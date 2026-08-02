@@ -1084,7 +1084,7 @@ export default function NotificationCenter() {
                     value={formState.displayName}
                     onChange={(event) => setFormState((current) => ({ ...current, displayName: event.target.value }))}
                     className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                    placeholder="Oculus Operations Lead"
+                    placeholder="Oqulus Operations Lead"
                   />
                 </Field>
                 <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">

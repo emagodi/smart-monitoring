@@ -1255,7 +1255,7 @@ export default function DashboardHome() {
         >
           {controlStateSummary.controlEstate === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              Control-state analytics will appear when Oculus-controlled transformers are available in the visible estate.
+              Control-state analytics will appear when Oqulus-controlled transformers are available in the visible estate.
             </div>
           ) : (
             <Chart
@@ -1270,7 +1270,7 @@ export default function DashboardHome() {
         <ExecutiveChartCard
           eyebrow="Supplier Portfolio"
           title="Suppliers with highest monitored estate"
-          subtitle="Shows supplier coverage as the platform grows beyond Oculus."
+          subtitle="Shows supplier coverage as the platform grows beyond Oqulus."
           icon={<Building2 className="h-4.5 w-4.5" />}
           footer={
             <div className="flex flex-wrap gap-2">

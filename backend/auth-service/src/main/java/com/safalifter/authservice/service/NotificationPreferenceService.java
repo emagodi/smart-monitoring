@@ -12,5 +12,5 @@ public interface NotificationPreferenceService {
 
     List<NotificationPreferenceResponse> updatePreferencesForUser(Long userId, NotificationPreferenceUpdateRequest request);
 
-    List<NotificationRecipientResponse> resolveRecipients(NotificationType notificationType, String supplierCode);
+    List<NotificationRecipientResponse> resolveRecipients(NotificationType notificationType, String supplierCode, Long depotId);
 }

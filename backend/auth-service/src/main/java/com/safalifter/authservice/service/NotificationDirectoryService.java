@@ -18,5 +18,5 @@ public interface NotificationDirectoryService {
 
     void deleteEntry(Authentication authentication, Long entryId);
 
-    List<NotificationRecipientResponse> resolveDirectoryRecipients(NotificationType notificationType, String supplierCode);
+    List<NotificationRecipientResponse> resolveDirectoryRecipients(NotificationType notificationType, String supplierCode, Long depotId);
 }

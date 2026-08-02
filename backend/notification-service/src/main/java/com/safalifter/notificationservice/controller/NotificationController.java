@@ -39,6 +39,14 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.getAllByUserId(userId));
     }
 
+    @GetMapping("/reference/{referenceId}")
+    public ResponseEntity<List<Notification>> getAllByReferenceId(
+            @PathVariable String referenceId,
+            @RequestParam(required = false) String sourceSystem
+    ) {
+        return ResponseEntity.ok(notificationService.getAllByReferenceId(referenceId, sourceSystem));
+    }
+
     @PostMapping("/send")
     public ResponseEntity<Void> send(@RequestBody SendNotificationRequest request) {
         notificationService.save(request);

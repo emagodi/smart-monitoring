@@ -114,7 +114,7 @@ const navGroups: NavGroup[] = [
       },
       {
         icon: <Shield className="w-5 h-5" />,
-        name: "Oculus Control",
+        name: "Oqulus Control",
         path: "/oculus-control",
         permission: "controllers.update",
         supplierCodes: ["oculus"],
