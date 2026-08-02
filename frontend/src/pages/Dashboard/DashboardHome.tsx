@@ -141,6 +141,14 @@ const normalizeList = <T,>(payload: unknown): T[] => {
   return [];
 };
 
+const getPagedTotal = (payload: unknown, fallback: number) => {
+  const obj = payload as Record<string, unknown> | null;
+  if (obj && typeof obj.totalElements === "number") {
+    return obj.totalElements;
+  }
+  return fallback;
+};
+
 const formatTime = (value?: string | number) => {
   if (!value) return "Unknown";
   const date = typeof value === "number" ? new Date(value) : new Date(value);
@@ -530,33 +538,42 @@ export default function DashboardHome() {
         setLoading(true);
         setError(null);
 
-        const [regionsRes, districtsRes, depotsRes, transformersRes, sensorsRes, alertsRes, oculusControlRes] = await Promise.all([
+        const safeGet = async <T,>(request: Promise<{ data: T }>, fallback: T) => {
+          try {
+            const response = await request;
+            return response.data;
+          } catch (requestError) {
+            console.error(requestError);
+            return fallback;
+          }
+        };
+
+        const [regionsData, districtsData, depotsData, transformersData, sensorsData, alertsData, oculusControlData] = await Promise.all([
           hasPermission("regions.read")
-            ? axios.get(`${API_BASE_URL}/api/v1/regions`, { headers })
-            : Promise.resolve({ data: [] }),
+            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }), [])
+            : Promise.resolve([]),
           hasPermission("regions.read")
-            ? axios.get(`${API_BASE_URL}/api/v1/districts?page=0&size=1000`, { headers })
-            : Promise.resolve({ data: [] }),
+            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/districts?page=0&size=1000`, { headers }), [])
+            : Promise.resolve([]),
           hasPermission("depots.read")
-            ? axios.get(`${API_BASE_URL}/api/v1/depots`, { headers })
-            : Promise.resolve({ data: [] }),
-          axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers }),
-          axios.get(`${API_BASE_URL}/api/v1/sensors`, { headers }),
-          axios.get(`${API_BASE_URL}/api/v1/alerts`, { headers }),
+            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/depots`, { headers }), [])
+            : Promise.resolve([]),
+          safeGet(axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers }), []),
+          safeGet(axios.get(`${API_BASE_URL}/api/v1/sensors`, { headers }), []),
+          safeGet(axios.get(`${API_BASE_URL}/api/v1/alerts`, { headers, params: { page: 0, size: 50 } }), { content: [], totalElements: 0 }),
           hasPermission("controllers.read") || hasPermission("controllers.update")
-            ? axios
-                .get(`${API_BASE_URL}/api/v1/oculus-control/transformers`, { headers })
-                .catch(() => ({ data: [] }))
-            : Promise.resolve({ data: [] }),
+            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/oculus-control/transformers`, { headers }), [])
+            : Promise.resolve([]),
         ]);
 
-        const regionsList = normalizeList<Region>(regionsRes.data);
-        const districtsList = normalizeList<District>(districtsRes.data);
-        const depotsList = normalizeList<Depot>(depotsRes.data);
-        const transformersList = normalizeList<Transformer>(transformersRes.data);
-        const sensorsList = normalizeList<Sensor>(sensorsRes.data);
-        const alertsList = normalizeList<AlertItem>(alertsRes.data);
-        const oculusControlList = normalizeList<OculusControlSummaryRow>(oculusControlRes.data);
+        const regionsList = normalizeList<Region>(regionsData);
+        const districtsList = normalizeList<District>(districtsData);
+        const depotsList = normalizeList<Depot>(depotsData);
+        const transformersList = normalizeList<Transformer>(transformersData);
+        const sensorsList = normalizeList<Sensor>(sensorsData);
+        const alertsList = normalizeList<AlertItem>(alertsData);
+        const totalAlerts = getPagedTotal(alertsData, alertsList.length);
+        const oculusControlList = normalizeList<OculusControlSummaryRow>(oculusControlData);
 
         const activeTransformers = transformersList.filter(
           (item) => item?.isActive === true || item?.active === true
@@ -589,7 +606,7 @@ export default function DashboardHome() {
           offlineTransformers: Math.max(transformersList.length - activeTransformers, 0),
           totalSensors: sensorsList.length,
           activeSensors,
-          totalAlerts: alertsList.length,
+          totalAlerts,
         });
       } catch (fetchError) {
         console.error(fetchError);
@@ -1023,7 +1040,6 @@ export default function DashboardHome() {
                 <img src="/images/powertel.png" alt="Powertel" />
                 <div className="powertel-logo-copy">
                   <span className="powertel-kicker">Powertel</span>
-                  <span className="powertel-subcopy">Blue, red, and white executive command view</span>
                 </div>
               </div>
               <div className="enterprise-chip inline-flex items-center gap-2 border border-blue-100/80 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300">
