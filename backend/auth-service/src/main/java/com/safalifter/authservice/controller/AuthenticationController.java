@@ -207,6 +207,7 @@ public class AuthenticationController {
                         .supplierId(user.getSupplier() != null ? user.getSupplier().getId() : null)
                         .supplierCode(user.getSupplier() != null ? user.getSupplier().getCode() : null)
                         .supplierName(user.getSupplier() != null ? user.getSupplier().getName() : null)
+                        .depotId(user.getDepotId())
                         .build())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.ok(UserAccessResponse.builder()
@@ -275,9 +276,10 @@ public class AuthenticationController {
     @GetMapping("/internal/notification-routing/users")
     public ResponseEntity<List<NotificationRecipientResponse>> getNotificationRecipients(
             @RequestParam com.safalifter.authservice.enums.NotificationType notificationType,
-            @RequestParam(required = false) String supplierCode
+            @RequestParam(required = false) String supplierCode,
+            @RequestParam(required = false) Long depotId
     ) {
-        return ResponseEntity.ok(notificationPreferenceService.resolveRecipients(notificationType, supplierCode));
+        return ResponseEntity.ok(notificationPreferenceService.resolveRecipients(notificationType, supplierCode, depotId));
     }
 
     @GetMapping("/internal/chat-command-users/resolve")

@@ -1,6 +1,8 @@
 package com.safalifter.transformerservice.service;
 
 import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.payload.request.AlertCaseUpdateRequest;
+import com.safalifter.transformerservice.payload.response.AlertCaseActivityResponse;
 import com.safalifter.transformerservice.payload.response.AlertResponse;
 
 import java.util.List;
@@ -10,6 +12,8 @@ public interface AlertService {
     AlertResponse getById(Long id);
     List<AlertResponse> getAll();
     List<AlertResponse> listBySensorId(Long sensorId);
+    List<AlertCaseActivityResponse> getTimeline(Long id);
+    AlertResponse updateCase(Long id, AlertCaseUpdateRequest request);
     AlertResponse update(Long id, AlertRequest request);
     void delete(Long id);
 }

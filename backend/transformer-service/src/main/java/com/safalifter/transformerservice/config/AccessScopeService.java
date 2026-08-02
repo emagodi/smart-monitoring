@@ -37,6 +37,15 @@ public class AccessScopeService {
         return principal != null ? principal.getEmail() : null;
     }
 
+    public Long getCurrentDepotId() {
+        AuthenticatedUserPrincipal principal = getCurrentPrincipal();
+        return principal != null ? principal.getDepotId() : null;
+    }
+
+    public boolean isDepotScoped() {
+        return getCurrentDepotId() != null;
+    }
+
     private AuthenticatedUserPrincipal getCurrentPrincipal() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) {

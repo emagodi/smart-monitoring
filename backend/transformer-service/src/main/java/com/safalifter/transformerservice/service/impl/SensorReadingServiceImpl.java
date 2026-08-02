@@ -315,13 +315,17 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                     .supplierCode(tf != null ? tf.getSupplierCode() : null)
                     .supplierName(tf != null ? tf.getSupplierName() : null)
                     .build();
-            try { alertService.create(ar); } catch (Exception ignored) {}
+            Long alertId = null;
+            try {
+                alertId = alertService.create(ar).getId();
+            } catch (Exception ignored) {}
             try {
                 notificationClient.send(SendNotificationRequest.builder()
                         .notificationType(NotificationType.CRITICAL_ALERT)
                         .supplierCode(tf != null ? tf.getSupplierCode() : null)
+                        .depotId(tf != null ? tf.getDepotId() : null)
                         .sourceSystem("transformer-service")
-                        .referenceId(reading.getId() != null ? String.valueOf(reading.getId()) : null)
+                        .referenceId(alertId != null ? String.valueOf(alertId) : null)
                         .subject("Sensor trigger detected")
                         .message(message)
                         .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(tf, eventLabel, reading.getCreatedAt()))

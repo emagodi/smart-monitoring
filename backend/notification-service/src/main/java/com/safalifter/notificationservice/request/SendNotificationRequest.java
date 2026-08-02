@@ -15,6 +15,7 @@ public class SendNotificationRequest {
     private NotificationType notificationType;
     private List<NotificationChannel> channels;
     private String supplierCode;
+    private Long depotId;
     private String sourceSystem;
     private String referenceId;
     private String recipientName;

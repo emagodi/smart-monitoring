@@ -72,6 +72,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     accessProfile != null ? accessProfile.getSupplierId() : null,
                     accessProfile != null ? accessProfile.getSupplierCode() : null,
                     accessProfile != null ? accessProfile.getSupplierName() : null,
+                    accessProfile != null ? accessProfile.getDepotId() : null,
                     authorities
             );
             if (jwtService.isTokenValid(jwt, principal)) {

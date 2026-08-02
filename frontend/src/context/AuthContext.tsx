@@ -12,6 +12,7 @@ export interface AuthUser {
   employeeNumber?: string;
   status?: string;
   userType?: string;
+  depotId?: number | null;
   supplierId?: number | null;
   supplierCode?: string;
   supplierName?: string;
@@ -115,6 +116,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           employeeNumber: data?.employeeNumber ?? data?.employee_number ?? '',
           status: data?.status ?? 'ACTIVE',
           userType: data?.userType ?? data?.user_type ?? '',
+          depotId: data?.depotId ?? data?.depot_id ?? null,
           supplierId: data?.supplierId ?? data?.supplier_id ?? null,
           supplierCode: data?.supplierCode ?? data?.supplier_code ?? '',
           supplierName: data?.supplierName ?? data?.supplier_name ?? '',

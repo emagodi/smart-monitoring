@@ -9,6 +9,8 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findBySensorId(Long sensorId);
     List<Alert> findByCameraId(Long cameraId);
     List<Alert> findAllBySupplierCode(String supplierCode);
+    List<Alert> findAllByOrderByCreatedAtDesc();
+    List<Alert> findAllBySupplierCodeOrderByCreatedAtDesc(String supplierCode);
     java.util.Optional<Alert> findByIdAndSupplierCode(Long id, String supplierCode);
     List<Alert> findBySensorIdAndSupplierCode(Long sensorId, String supplierCode);
 }

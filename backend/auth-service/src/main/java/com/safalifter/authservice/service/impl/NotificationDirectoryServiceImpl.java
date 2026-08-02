@@ -106,7 +106,7 @@ public class NotificationDirectoryServiceImpl implements NotificationDirectorySe
 
     @Override
     @Transactional(readOnly = true)
-    public List<NotificationRecipientResponse> resolveDirectoryRecipients(NotificationType notificationType, String supplierCode) {
+    public List<NotificationRecipientResponse> resolveDirectoryRecipients(NotificationType notificationType, String supplierCode, Long depotId) {
         String normalizedSupplier = normalize(supplierCode);
         if (normalizedSupplier == null) {
             return List.of();
@@ -166,6 +166,7 @@ public class NotificationDirectoryServiceImpl implements NotificationDirectorySe
                 .whatsappNumber(whatsappEnabled ? entry.getDestination() : null)
                 .supplierCode(entry.getSupplier() != null ? entry.getSupplier().getCode() : null)
                 .supplierName(entry.getSupplier() != null ? entry.getSupplier().getName() : null)
+                .depotId(null)
                 .userType("Supplier Directory")
                 .notificationType(notificationType)
                 .emailEnabled(emailEnabled)

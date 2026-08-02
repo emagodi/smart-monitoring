@@ -19,6 +19,7 @@ public class NotificationRecipientResponse {
     private String whatsappNumber;
     private String supplierCode;
     private String supplierName;
+    private Long depotId;
     private String userType;
     private NotificationType notificationType;
     private boolean emailEnabled;

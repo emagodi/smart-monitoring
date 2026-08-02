@@ -86,11 +86,12 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
 
     @Override
     @Transactional(readOnly = true)
-    public List<NotificationRecipientResponse> resolveRecipients(NotificationType notificationType, String supplierCode) {
+    public List<NotificationRecipientResponse> resolveRecipients(NotificationType notificationType, String supplierCode, Long depotId) {
         String normalizedSupplier = normalize(supplierCode);
         List<NotificationRecipientResponse> userRecipients = userRepository.findAllWithIam().stream()
                 .filter(user -> user.isEnabled())
                 .filter(user -> matchesSupplier(user, normalizedSupplier))
+                .filter(user -> matchesDepot(user, depotId))
                 .map(user -> toRecipientResponse(user, resolveStoredPreference(user.getId(), notificationType)))
                 .filter(response -> !response.isMuted())
                 .filter(response -> response.isAllChannelsEnabled() || response.isEmailEnabled() || response.isSmsEnabled() || response.isWhatsappEnabled())
@@ -98,7 +99,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
                 .toList();
 
         List<NotificationRecipientResponse> recipients = new ArrayList<>(userRecipients);
-        recipients.addAll(notificationDirectoryService.resolveDirectoryRecipients(notificationType, normalizedSupplier));
+        recipients.addAll(notificationDirectoryService.resolveDirectoryRecipients(notificationType, normalizedSupplier, depotId));
         return recipients;
     }
 
@@ -148,6 +149,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
                 .whatsappNumber(user.getWhatsappNumber())
                 .supplierCode(user.getSupplier() != null ? user.getSupplier().getCode() : null)
                 .supplierName(user.getSupplier() != null ? user.getSupplier().getName() : null)
+                .depotId(user.getDepotId())
                 .userType(user.getUserType() != null ? user.getUserType().getName() : null)
                 .notificationType(effective.getNotificationType())
                 .emailEnabled(effective.isAllChannelsEnabled() || effective.isEmailEnabled())
@@ -166,6 +168,16 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
             return false;
         }
         return supplierCode.equalsIgnoreCase(user.getSupplier().getCode());
+    }
+
+    private boolean matchesDepot(User user, Long depotId) {
+        if (depotId == null) {
+            return true;
+        }
+        if (user.getDepotId() == null) {
+            return true;
+        }
+        return depotId.equals(user.getDepotId());
     }
 
     private String resolveSupplierCode(User user) {
