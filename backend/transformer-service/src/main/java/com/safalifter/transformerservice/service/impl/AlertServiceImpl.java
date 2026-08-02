@@ -17,6 +17,10 @@ import com.safalifter.transformerservice.repository.AlertRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.AlertService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,12 +95,16 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AlertResponse> getAll() {
-        List<Alert> alerts = listScopedAlerts();
-        Map<Long, AlertCase> casesByAlertId = loadCasesByAlertId(alerts);
-        return alerts.stream()
+    public Page<AlertResponse> getAll(int page, int size) {
+        int sanitizedPage = Math.max(page, 0);
+        int sanitizedSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
+        Page<Alert> alerts = listScopedAlerts(pageable);
+        Map<Long, AlertCase> casesByAlertId = loadCasesByAlertId(alerts.getContent());
+        List<AlertResponse> content = alerts.getContent().stream()
                 .map(alert -> toResponse(alert, casesByAlertId.get(alert.getId())))
                 .toList();
+        return new PageImpl<>(content, pageable, alerts.getTotalElements());
     }
 
     @Override
@@ -218,13 +226,19 @@ public class AlertServiceImpl implements AlertService {
         alertRepository.delete(alert);
     }
 
-    private List<Alert> listScopedAlerts() {
-        List<Alert> alerts = accessScopeService.isSupplierScoped()
-                ? alertRepository.findAllBySupplierCodeOrderByCreatedAtDesc(accessScopeService.getCurrentSupplierCode())
-                : alertRepository.findAllByOrderByCreatedAtDesc();
-        return alerts.stream()
-                .filter(this::isVisibleToCurrentUser)
-                .toList();
+    private Page<Alert> listScopedAlerts(Pageable pageable) {
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        Long depotId = accessScopeService.getCurrentDepotId();
+        if (supplierCode != null && depotId != null) {
+            return alertRepository.findAllBySupplierCodeAndDepotIdOrderByCreatedAtDesc(supplierCode, depotId, pageable);
+        }
+        if (supplierCode != null) {
+            return alertRepository.findAllBySupplierCodeOrderByCreatedAtDesc(supplierCode, pageable);
+        }
+        if (depotId != null) {
+            return alertRepository.findAllByDepotIdOrderByCreatedAtDesc(depotId, pageable);
+        }
+        return alertRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
     private Map<Long, AlertCase> loadCasesByAlertId(List<Alert> alerts) {
