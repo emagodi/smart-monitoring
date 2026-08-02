@@ -418,7 +418,7 @@ export default function AlertsIndex() {
       </section>
 
       <section className="enterprise-card overflow-hidden">
-        <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
+        <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 p-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div className="space-y-3">
               <div>
@@ -485,15 +485,13 @@ export default function AlertsIndex() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-[1180px] w-full">
-              <thead className="bg-slate-50/80 dark:bg-slate-900/70">
+            <table className="min-w-[980px] w-full">
+              <thead className="bg-gradient-to-r from-blue-50/80 via-white to-red-50/70 dark:from-blue-500/10 dark:via-slate-900 dark:to-red-500/10">
                 <tr className="text-left">
                   <Th>Status</Th>
-                  <Th>Type</Th>
                   <Th>Transformer</Th>
-                  <Th>Scope</Th>
+                  <Th>Depot</Th>
                   <Th>Supplier</Th>
-                  <Th>Device</Th>
                   <Th>Detected</Th>
                   <Th>Assigned</Th>
                   <Th className="text-right">Action</Th>
@@ -505,7 +503,7 @@ export default function AlertsIndex() {
                   return (
                     <tr
                       key={item.id}
-                      className="cursor-pointer border-t border-slate-200/80 text-xs transition hover:bg-blue-50/40 dark:border-slate-800 dark:hover:bg-blue-500/5"
+                      className="cursor-pointer border-t border-slate-200/80 text-xs transition hover:bg-gradient-to-r hover:from-blue-50/40 hover:to-red-50/30 dark:border-slate-800 dark:hover:from-blue-500/5 dark:hover:to-red-500/5"
                       onClick={() => void openAlertModal(item)}
                     >
                       <Td>
@@ -514,13 +512,7 @@ export default function AlertsIndex() {
                         </span>
                       </Td>
                       <Td>
-                        <div className="inline-flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                          <ShieldAlert className="h-3.5 w-3.5 text-blue-500" />
-                          <span className="font-medium uppercase tracking-[0.14em]">{item.sensorType || "Alert"}</span>
-                        </div>
-                      </Td>
-                      <Td>
-                        <div className="max-w-[260px]">
+                        <div className="max-w-[340px]">
                           <p className="font-semibold text-slate-900 dark:text-slate-100">{item.transformerName || "Unassigned transformer"}</p>
                           <p className="mt-1 line-clamp-2 text-slate-500 dark:text-slate-400">{item.message || item.value || "Operational event"}</p>
                         </div>
@@ -528,11 +520,10 @@ export default function AlertsIndex() {
                       <Td>
                         <div className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-300">
                           <MapPinned className="h-3.5 w-3.5 text-blue-500" />
-                          <span>{item.depotName || (item.depotId ? `Depot ${item.depotId}` : "General")}</span>
+                          <span>{item.depotName || "Unscoped"}</span>
                         </div>
                       </Td>
                       <Td>{item.supplierName || item.supplierCode || "ZESA"}</Td>
-                      <Td>{item.deviceName || item.deviceId || "Unknown"}</Td>
                       <Td>{formatDateTime(item.createdAt)}</Td>
                       <Td>{item.assignedToName || item.assignedToEmail || "Unassigned"}</Td>
                       <Td className="text-right">
@@ -589,12 +580,12 @@ export default function AlertsIndex() {
       <Modal
         isOpen={modalOpen}
         onClose={closeModal}
-        className="max-w-6xl overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
+        className="max-w-5xl overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
         backdropBlur
       >
         {!selectedAlert ? null : (
-          <div className="flex flex-col">
-            <div className="border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
+          <div className="flex max-h-[82vh] flex-col">
+            <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
@@ -611,24 +602,42 @@ export default function AlertsIndex() {
                   {getCaseStatus(selectedAlert).replace("_", " ")}
                 </span>
               </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <InfoPill
+                  label="Depot"
+                  value={selectedAlert.depotName || "Unscoped"}
+                  icon={<MapPinned className="h-3.5 w-3.5" />}
+                />
+                <InfoPill
+                  label="Sensor"
+                  value={selectedAlert.sensorType || "Alert"}
+                  icon={<ShieldAlert className="h-3.5 w-3.5" />}
+                />
+                <InfoPill
+                  label="Device"
+                  value={selectedAlert.deviceName || selectedAlert.deviceId || "Unknown"}
+                  icon={<AlertTriangle className="h-3.5 w-3.5" />}
+                />
+              </div>
             </div>
 
-            <div className="space-y-4 px-5 py-4">
+            <div className="space-y-4 overflow-y-auto px-5 py-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <SummaryTile label="Detected" value={formatDateTime(selectedAlert.createdAt)} />
                 <SummaryTile label="Last Action" value={formatDateTime(selectedAlert.lastActionAt)} />
-                <SummaryTile label="Depot" value={selectedAlert.depotName || (selectedAlert.depotId ? `Depot ${selectedAlert.depotId}` : "Unscoped")} />
+                <SummaryTile label="Depot" value={selectedAlert.depotName || "Unscoped"} />
                 <SummaryTile label="Supplier" value={selectedAlert.supplierName || selectedAlert.supplierCode || "ZESA"} />
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-[1.15fr,0.85fr]">
-                <div className="rounded-[24px] border border-slate-200 p-4 dark:border-slate-800">
+              <div className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
+                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                     <ShieldAlert className="h-4 w-4 text-blue-500" />
                     Response controls
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
                     {CASE_ACTIONS.map((action) => (
                       <button
                         key={action.value}
@@ -638,7 +647,7 @@ export default function AlertsIndex() {
                           setSelectedStatus(action.value);
                           void saveCaseUpdate(action.value);
                         }}
-                        className="enterprise-chip inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-xs font-medium text-slate-700 transition hover:text-slate-950 disabled:opacity-60 dark:text-slate-200"
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-blue-50 px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-blue-200 hover:from-blue-50 hover:to-red-50 disabled:opacity-60 dark:border-slate-700 dark:from-slate-900 dark:to-slate-900 dark:text-slate-200"
                       >
                         {action.icon}
                         {action.label}
@@ -661,35 +670,41 @@ export default function AlertsIndex() {
                     />
                   </div>
 
-                  <textarea
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    placeholder="Operational note, call outcome, dispatch detail, or false alarm reason"
-                    rows={4}
-                    className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr,0.75fr]">
+                    <textarea
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      placeholder="Operational note, call outcome, dispatch detail, or false alarm reason"
+                      rows={4}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
 
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => void saveCaseUpdate()}
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-700"
-                    >
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Save update
-                    </button>
-                    {detailLoading ? (
-                      <span className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading detail...
-                      </span>
-                    ) : null}
+                    <div className="space-y-3 rounded-[22px] border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-red-50 p-3 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <QuickInfo label="Case" value={selectedAlert.caseId ? `#${selectedAlert.caseId}` : "Pending"} />
+                        <QuickInfo label="Alert ID" value={`#${selectedAlert.id}`} />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void saveCaseUpdate()}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-700"
+                      >
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Save update
+                      </button>
+                      {detailLoading ? (
+                        <span className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Loading detail...
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="rounded-[24px] border border-slate-200 p-4 dark:border-slate-800">
+                  <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                       <History className="h-4 w-4 text-blue-500" />
                       Case timeline
@@ -716,7 +731,7 @@ export default function AlertsIndex() {
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-slate-200 p-4 dark:border-slate-800">
+                  <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                         <BellRing className="h-4 w-4 text-blue-500" />
@@ -853,6 +868,15 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
       <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
       <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function QuickInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/80 bg-white/80 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/80">
+      <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   );
 }
