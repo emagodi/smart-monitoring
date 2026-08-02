@@ -85,6 +85,14 @@ type FilterMode =
   | "falseAlarm"
   | "unassigned";
 
+type PagePayload<T> = {
+  content?: T[];
+  totalElements?: number;
+  totalPages?: number;
+  number?: number;
+  size?: number;
+};
+
 const normalizeList = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) return payload as T[];
   const obj = payload as Record<string, unknown> | null;
@@ -96,6 +104,17 @@ const normalizeList = <T,>(payload: unknown): T[] => {
     }
   }
   return [];
+};
+
+const normalizePage = <T,>(payload: unknown) => {
+  const obj = payload as PagePayload<T> | null;
+  return {
+    items: normalizeList<T>(payload),
+    totalElements: typeof obj?.totalElements === "number" ? obj.totalElements : normalizeList<T>(payload).length,
+    totalPages: typeof obj?.totalPages === "number" ? obj.totalPages : 1,
+    page: typeof obj?.number === "number" ? obj.number : 0,
+    size: typeof obj?.size === "number" ? obj.size : normalizeList<T>(payload).length || 50,
+  };
 };
 
 const CASE_ACTIONS: Array<{ label: string; value: AlertCaseStatus; icon: ReactNode }> = [
@@ -181,6 +200,10 @@ export default function AlertsIndex() {
   const [assignedToEmail, setAssignedToEmail] = useState("");
   const [assignedToName, setAssignedToName] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<AlertCaseStatus>("NEW");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const headers = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
@@ -191,15 +214,21 @@ export default function AlertsIndex() {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`${API_BASE_URL}/api/v1/alerts`, { headers });
-      setItems(normalizeList<AlertItem>(response.data));
+      const response = await axios.get(`${API_BASE_URL}/api/v1/alerts`, {
+        headers,
+        params: { page, size: pageSize },
+      });
+      const normalized = normalizePage<AlertItem>(response.data);
+      setItems(normalized.items);
+      setTotalElements(normalized.totalElements);
+      setTotalPages(Math.max(normalized.totalPages, 1));
     } catch (fetchError) {
       console.error(fetchError);
       setError("Failed to load alert workflow desk.");
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers]);
+  }, [API_BASE_URL, headers, page, pageSize]);
 
   const fetchDetails = useCallback(
     async (alertId: number) => {
@@ -230,6 +259,10 @@ export default function AlertsIndex() {
       void fetchAlerts();
     }
   }, [fetchAlerts, token]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filterMode, search]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -317,6 +350,9 @@ export default function AlertsIndex() {
     return statusCounts;
   }, [items]);
 
+  const pageStart = items.length === 0 ? 0 : page * pageSize + 1;
+  const pageEnd = items.length === 0 ? 0 : page * pageSize + items.length;
+
   const deliverySummary = useMemo(() => {
     const delivered = notifications.filter((item) =>
       ["DELIVERED", "READ"].includes((item.deliveryStatus || "").toUpperCase())
@@ -385,6 +421,7 @@ export default function AlertsIndex() {
             <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
               <div className="font-semibold">Unassigned</div>
               <div className="mt-1 text-2xl font-semibold">{stats.unassigned}</div>
+              <div className="mt-1 text-xs text-blue-600/80 dark:text-blue-200/80">Current page</div>
             </div>
             <button
               type="button"
@@ -420,7 +457,7 @@ export default function AlertsIndex() {
               </div>
               <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300">
                 <BellRing className="h-4 w-4" />
-                {filtered.length} visible
+                {pageStart}-{pageEnd} of {totalElements.toLocaleString()}
               </div>
             </div>
 
@@ -443,6 +480,25 @@ export default function AlertsIndex() {
                   placeholder="Search transformer, device, assignee..."
                   className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
                 />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <span>Filters and search apply to the current loaded page. Select an alert to load timeline and recipient audit on demand.</span>
+                <label className="inline-flex items-center gap-2">
+                  <span>Rows</span>
+                  <select
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPage(0);
+                      setPageSize(Number(event.target.value));
+                    }}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
               </div>
             </div>
           </div>
@@ -515,6 +571,32 @@ export default function AlertsIndex() {
                   );
                 })
               )}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Page {totalElements === 0 ? 0 : page + 1} of {Math.max(totalPages, 1)}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page === 0 || loading}
+                  onClick={() => setPage((current) => Math.max(current - 1, 0))}
+                  className="enterprise-chip rounded-full px-3 py-2 text-sm font-medium text-slate-700 transition hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={loading || page + 1 >= totalPages}
+                  onClick={() => setPage((current) => current + 1)}
+                  className="rounded-full bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>
