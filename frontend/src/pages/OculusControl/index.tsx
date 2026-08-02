@@ -286,7 +286,7 @@ export default function OculusControlIndex() {
       setDepots(normalizeList<Depot>(depotsRes.data));
     } catch (fetchError: any) {
       console.error(fetchError);
-      setError(fetchError?.response?.data?.message || "Failed to load Oculus control transformers.");
+      setError(fetchError?.response?.data?.message || "Failed to load Oqulus control transformers.");
     } finally {
       if (showLoader) {
         setLoading(false);
@@ -474,8 +474,8 @@ export default function OculusControlIndex() {
     return (
       <Alert
         variant="warning"
-        title="Oculus Control"
-        message="This control page is only available for the Oculus supplier workspace."
+        title="Oqulus Control"
+        message="This control page is only available for the Oqulus supplier workspace."
       />
     );
   }
@@ -507,10 +507,10 @@ export default function OculusControlIndex() {
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Oculus Control</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Oqulus Control</p>
             <h1 className="mt-1 text-xl font-semibold text-slate-950 md:text-2xl">Enterprise arming control workspace</h1>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Review Oculus-monitored transformers, compare operator state with confirmed telemetry, and send Loriot arm or disarm commands without losing command context.
+              Review Oqulus-monitored transformers, compare operator state with confirmed telemetry, and send Loriot arm or disarm commands without losing command context.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -525,11 +525,11 @@ export default function OculusControlIndex() {
         </div>
       </section>
 
-      {error ? <Alert variant="error" title="Oculus Control" message={error} /> : null}
-      {success ? <Alert variant="success" title="Oculus Control" message={success} /> : null}
+      {error ? <Alert variant="error" title="Oqulus Control" message={error} /> : null}
+      {success ? <Alert variant="success" title="Oqulus Control" message={success} /> : null}
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Monitored" value={stats.total} helper="Oculus transformers in scope" tone="slate" icon={<Shield className="h-5 w-5" />} />
+        <StatCard title="Monitored" value={stats.total} helper="Oqulus transformers in scope" tone="slate" icon={<Shield className="h-5 w-5" />} />
         <StatCard title="Armed now" value={stats.armed} helper={`${stats.disarmed} disarmed posture`} tone="emerald" icon={<ShieldCheck className="h-5 w-5" />} />
         <StatCard
           title="Pending confirmation"
@@ -726,7 +726,7 @@ export default function OculusControlIndex() {
           {loading ? (
             <div className="flex items-center justify-center gap-2 px-6 py-16 text-slate-500">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading Oculus control transformers...</span>
+              <span>Loading Oqulus control transformers...</span>
             </div>
           ) : (
             <>
@@ -745,7 +745,7 @@ export default function OculusControlIndex() {
                     {paginatedRows.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-5 py-14 text-center text-sm text-slate-500">
-                          No Oculus-monitored transformers found for the current filters.
+                          No Oqulus-monitored transformers found for the current filters.
                         </td>
                       </tr>
                     ) : (
@@ -776,7 +776,7 @@ export default function OculusControlIndex() {
                                 <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${transformerTypeTone(row.transformerType)}`}>
                                   {row.transformerType || "Unspecified"}
                                 </span>
-                                <span className="text-xs text-slate-500">{row.controllerCount || 0} Oculus controller(s)</span>
+                                <span className="text-xs text-slate-500">{row.controllerCount || 0} Oqulus controller(s)</span>
                               </div>
                               <div className="mt-2">
                                 <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${activeAlertSummaryTone(row.activeAlertSummary)}`}>
@@ -864,7 +864,7 @@ export default function OculusControlIndex() {
                   <p className="text-sm text-slate-500">
                     Showing <span className="font-medium text-slate-900">{filteredRows.length === 0 ? 0 : (page - 1) * pageSize + 1}</span> to{" "}
                     <span className="font-medium text-slate-900">{Math.min(page * pageSize, filteredRows.length)}</span> of{" "}
-                    <span className="font-medium text-slate-900">{filteredRows.length}</span> Oculus transformers
+                    <span className="font-medium text-slate-900">{filteredRows.length}</span> Oqulus transformers
                   </p>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>
@@ -904,7 +904,7 @@ export default function OculusControlIndex() {
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Control Detail</p>
-                  <h3 className="mt-1 text-base font-semibold text-slate-950 md:text-lg">{selectedRow?.transformerName || "Oculus transformer"}</h3>
+                  <h3 className="mt-1 text-base font-semibold text-slate-950 md:text-lg">{selectedRow?.transformerName || "Oqulus transformer"}</h3>
                   <p className="mt-1 text-xs text-slate-500 md:text-sm">
                     {selectedRow
                       ? `${selectedRow.regionName} / ${selectedRow.districtName} / ${selectedRow.depotName}`
@@ -989,7 +989,7 @@ export default function OculusControlIndex() {
                       <DetailField label="Controller" value={selectedRow.controllerName || "No linked controller"} />
                       <DetailField label="Controller DevEUI" value={selectedRow.controllerDevEui || "Unavailable"} />
                       <DetailField label="Transformer type" value={selectedRow.transformerType || "Unspecified"} />
-                      <DetailField label="Supplier" value={selectedRow.supplierName || selectedRow.supplierCode || "Oculus"} />
+                      <DetailField label="Supplier" value={selectedRow.supplierName || selectedRow.supplierCode || "Oqulus"} />
                       <DetailField label="Controller type" value={selectedRow.controllerType || "Unavailable"} />
                     </SectionCard>
 
