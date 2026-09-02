@@ -28,8 +28,11 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 @ConditionalOnProperty(prefix = "oculus.ws", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -56,7 +59,19 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
     @Value("${oculus.ws.insecure-ssl:false}")
     private boolean insecureSsl;
 
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    @Value("${oculus.ws.liveness-check-seconds:30}")
+    private long livenessCheckSeconds;
+
+    @Value("${oculus.ws.max-idle-seconds:300}")
+    private long maxIdleSeconds;
+
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+
+    private volatile Instant lastMessageAt = null;
+    private volatile WebSocket activeSocket = null;
+    private volatile Instant connectedAt = null;
+    private final AtomicBoolean reconnectScheduled = new AtomicBoolean(false);
+    private long reconnectCount = 0L;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -102,7 +117,69 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
         }
         // #endregion
 
+        startLivenessWatchdog();
         connect();
+    }
+
+    private void startLivenessWatchdog() {
+        long period = Math.max(5L, livenessCheckSeconds);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                evaluateLiveness();
+            } catch (Exception t) {
+                log.warn("Oculus WS liveness checker exception", t);
+            }
+        }, period, period, TimeUnit.SECONDS);
+        log.info("Oculus WS liveness watchdog started (checkEvery={}s maxIdle={}s)", period, maxIdleSeconds);
+    }
+
+    private synchronized void evaluateLiveness() {
+        WebSocket ws = activeSocket;
+        boolean socketOpen = ws != null && !ws.isInputClosed() && !ws.isOutputClosed();
+        boolean socketPresent = ws != null;
+
+        Instant now = Instant.now();
+        Long idleSeconds = null;
+        if (lastMessageAt != null) {
+            idleSeconds = Duration.between(lastMessageAt, now).getSeconds();
+        } else if (connectedAt != null) {
+            idleSeconds = Duration.between(connectedAt, now).getSeconds();
+        }
+
+        boolean stale = idleSeconds != null && idleSeconds > Math.max(30L, maxIdleSeconds);
+        boolean needsReconnect = !socketPresent || !socketOpen || stale;
+
+        if (needsReconnect) {
+            String reason = !socketPresent ? "no-active-socket"
+                    : (!socketOpen ? "socket-closed" : "idle-stale-" + idleSeconds + "s");
+            log.warn("Oculus WS liveness check: triggering reconnect (reason={}, open={}, lastMsg={}s ago)",
+                    reason, socketOpen, idleSeconds);
+            safeReconnect();
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("Oculus WS liveness OK: open={}, lastMsg={}s ago", socketOpen, idleSeconds);
+            }
+        }
+    }
+
+    private void safeReconnect() {
+        if (reconnectScheduled.compareAndSet(false, true)) {
+            try {
+                reconnectCount++;
+                WebSocket stale = activeSocket;
+                if (stale != null) {
+                    try {
+                        stale.abort();
+                    } catch (Exception ignored) {
+                    }
+                }
+                activeSocket = null;
+            } catch (Exception ignored) {
+            }
+            reconnect();
+        } else {
+            log.debug("Oculus WS reconnect already scheduled; skipping");
+        }
     }
 
     private void connect() {
@@ -149,6 +226,10 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
                     .buildAsync(URI.create(oculusWsUrlProp), new Listener())
                     .thenAccept(ws -> {
                         log.info("Connected to Oculus WebSocket");
+                        activeSocket = ws;
+                        connectedAt = Instant.now();
+                        if (lastMessageAt == null) lastMessageAt = connectedAt;
+                        reconnectScheduled.set(false);
                         // #region debug-point B:ws-connect-success
                         try {
                             java.nio.file.Path dbgEnv = java.nio.file.Paths.get(".dbg", "live-loriot-offline.env");
@@ -182,6 +263,7 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
                         // #endregion
                     })
                     .exceptionally(ex -> {
+                        reconnectScheduled.set(false);
                         // #region debug-point B:ws-connect-failed
                         try {
                             java.nio.file.Path dbgEnv = java.nio.file.Paths.get(".dbg", "live-loriot-offline.env");
@@ -219,14 +301,14 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
                         }
                         // #endregion
                         log.error("WebSocket connection failed", ex);
-                        reconnect();
+                        safeReconnect();
                         return null;
                     });
 
         } catch (Exception e) {
 
             log.error("WebSocket start error", e);
-            reconnect();
+            safeReconnect();
 
         }
     }
@@ -234,8 +316,13 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
     private void reconnect() {
 
         scheduler.schedule(() -> {
-            log.info("Reconnecting WebSocket...");
-            connect();
+            log.info("Reconnecting Oculus WebSocket (attempt #{})...", reconnectCount);
+            try {
+                connect();
+            } catch (Exception e) {
+                log.error("Reconnect attempt error", e);
+                reconnectScheduled.set(false);
+            }
 
         }, 10, TimeUnit.SECONDS);
 
@@ -244,7 +331,20 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
     private class Listener implements WebSocket.Listener {
 
         @Override
+        public void onOpen(WebSocket webSocket) {
+            WebSocket.Listener.super.onOpen(webSocket);
+            activeSocket = webSocket;
+            connectedAt = Instant.now();
+            if (lastMessageAt == null) lastMessageAt = connectedAt;
+            reconnectScheduled.set(false);
+            log.info("Oculus WS session opened");
+            webSocket.request(1);
+        }
+
+        @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+
+            lastMessageAt = Instant.now();
 
             try {
 
@@ -303,16 +403,16 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-            log.error("WebSocket error", error);
-            reconnect();
+            log.error("Oculus WebSocket error", error);
+            safeReconnect();
 
         }
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
 
-            log.warn("WebSocket closed {} {}", statusCode, reason);
-            reconnect();
+            log.warn("Oculus WebSocket closed code={} reason={}", statusCode, reason);
+            safeReconnect();
 
             return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
         }
@@ -495,6 +595,29 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
 
         return result;
 
+    }
+
+    public Map<String, Object> getStatusSnapshot() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        WebSocket ws = activeSocket;
+        boolean open = ws != null && !ws.isInputClosed() && !ws.isOutputClosed();
+        m.put("supplier", "oculus");
+        m.put("enabled", true);
+        m.put("urlConfigured", oculusWsUrlProp != null && !oculusWsUrlProp.isBlank());
+        m.put("connected", open);
+        m.put("socketPresent", ws != null);
+        m.put("connectedAt", connectedAt == null ? null : connectedAt.toString());
+        m.put("lastMessageAt", lastMessageAt == null ? null : lastMessageAt.toString());
+        Long idleSec = null;
+        if (lastMessageAt != null) {
+            idleSec = Duration.between(lastMessageAt, Instant.now()).getSeconds();
+        }
+        m.put("idleSeconds", idleSec);
+        m.put("maxIdleSeconds", Math.max(30L, maxIdleSeconds));
+        m.put("livenessCheckSeconds", Math.max(5L, livenessCheckSeconds));
+        m.put("reconnectCount", reconnectCount);
+        m.put("reconnectScheduled", reconnectScheduled.get());
+        return m;
     }
 
 }

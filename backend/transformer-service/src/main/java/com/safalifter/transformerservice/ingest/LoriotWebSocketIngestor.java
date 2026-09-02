@@ -19,7 +19,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -31,6 +34,7 @@ import java.util.regex.Pattern;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 @ConditionalOnProperty(prefix = "loriot.ws", name = "enabled", havingValue = "true")
@@ -52,7 +56,19 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     @Value("${loriot.default.sensor-type:}")
     private String defaultSensorType;
 
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    @Value("${loriot.ws.liveness-check-seconds:30}")
+    private long livenessCheckSeconds;
+
+    @Value("${loriot.ws.max-idle-seconds:600}")
+    private long maxIdleSeconds;
+
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+
+    private volatile Instant lastMessageAt = null;
+    private volatile WebSocket activeSocket = null;
+    private volatile Instant connectedAt = null;
+    private final AtomicBoolean reconnectScheduled = new AtomicBoolean(false);
+    private long reconnectCount = 0L;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -61,7 +77,69 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             log.info("LORIOT WebSocket URL not configured; skipping ingestion");
             return;
         }
+        startLivenessWatchdog();
         connect();
+    }
+
+    private void startLivenessWatchdog() {
+        long period = Math.max(5L, livenessCheckSeconds);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                evaluateLiveness();
+            } catch (Exception t) {
+                log.warn("LORIOT WS liveness checker exception", t);
+            }
+        }, period, period, TimeUnit.SECONDS);
+        log.info("LORIOT WS liveness watchdog started (checkEvery={}s maxIdle={}s)", period, maxIdleSeconds);
+    }
+
+    private synchronized void evaluateLiveness() {
+        WebSocket ws = activeSocket;
+        boolean socketOpen = ws != null && !ws.isInputClosed() && !ws.isOutputClosed();
+        boolean socketPresent = ws != null;
+
+        Instant now = Instant.now();
+        Long idleSeconds = null;
+        if (lastMessageAt != null) {
+            idleSeconds = Duration.between(lastMessageAt, now).getSeconds();
+        } else if (connectedAt != null) {
+            idleSeconds = Duration.between(connectedAt, now).getSeconds();
+        }
+
+        boolean stale = idleSeconds != null && idleSeconds > Math.max(30L, maxIdleSeconds);
+        boolean needsReconnect = !socketPresent || !socketOpen || stale;
+
+        if (needsReconnect) {
+            String reason = !socketPresent ? "no-active-socket"
+                    : (!socketOpen ? "socket-closed" : "idle-stale-" + idleSeconds + "s");
+            log.warn("LORIOT WS liveness check: triggering reconnect (reason={}, open={}, lastMsg={}s ago)",
+                    reason, socketOpen, idleSeconds);
+            safeReconnect();
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("LORIOT WS liveness OK: open={}, lastMsg={}s ago", socketOpen, idleSeconds);
+            }
+        }
+    }
+
+    private void safeReconnect() {
+        if (reconnectScheduled.compareAndSet(false, true)) {
+            try {
+                reconnectCount++;
+                WebSocket stale = activeSocket;
+                if (stale != null) {
+                    try {
+                        stale.abort();
+                    } catch (Exception ignored) {
+                    }
+                }
+                activeSocket = null;
+            } catch (Exception ignored) {
+            }
+            scheduleReconnect();
+        } else {
+            log.debug("LORIOT WS reconnect already scheduled; skipping");
+        }
     }
 
     private String resolveUrl() {
@@ -80,25 +158,33 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
             HttpClient client = HttpClient.newHttpClient();
             client.newWebSocketBuilder()
                     .buildAsync(URI.create(url), new Listener())
-                    .thenAccept(ws -> log.info("Connected to LORIOT WebSocket"))
+                    .thenAccept(ws -> {
+                        log.info("Connected to LORIOT WebSocket");
+                        activeSocket = ws;
+                        connectedAt = Instant.now();
+                        if (lastMessageAt == null) lastMessageAt = connectedAt;
+                        reconnectScheduled.set(false);
+                    })
                     .exceptionally(ex -> {
+                        reconnectScheduled.set(false);
                         log.error("Failed to connect to LORIOT WebSocket", ex);
-                        scheduleReconnect();
+                        safeReconnect();
                         return null;
                     });
         } catch (Exception e) {
             log.error("Error starting LORIOT WebSocket client", e);
-            scheduleReconnect();
+            safeReconnect();
         }
     }
 
     private void scheduleReconnect() {
         scheduler.schedule(() -> {
             try {
-                log.info("Attempting to reconnect to LORIOT WebSocket...");
+                log.info("Attempting to reconnect to LORIOT WebSocket (attempt #{})...", reconnectCount);
                 connect();
             } catch (Exception e) {
-                log.error("Error during reconnection attempt", e);
+                log.error("Error during LORIOT reconnection attempt", e);
+                reconnectScheduled.set(false);
             }
         }, 10, TimeUnit.SECONDS);
     }
@@ -107,12 +193,17 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         @Override
         public void onOpen(WebSocket webSocket) {
             WebSocket.Listener.super.onOpen(webSocket);
-            log.info("LORIOT WebSocket opened");
+            activeSocket = webSocket;
+            connectedAt = Instant.now();
+            if (lastMessageAt == null) lastMessageAt = connectedAt;
+            reconnectScheduled.set(false);
+            log.info("LORIOT WebSocket session opened");
             webSocket.request(1);
         }
 
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            lastMessageAt = Instant.now();
             try {
                 String message = data.toString();
                 if (logWs) {
@@ -136,13 +227,13 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
             log.error("LORIOT WebSocket error", error);
-            scheduleReconnect();
+            safeReconnect();
         }
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             log.info("LORIOT WebSocket closed: code={} reason={}", statusCode, reason);
-            scheduleReconnect();
+            safeReconnect();
             return CompletableFuture.completedFuture(null);
         }
 
@@ -430,4 +521,28 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         }
     }
     private static final Pattern HEX_PATTERN = Pattern.compile("[0-9A-Fa-f\\s]+");
+
+    public Map<String, Object> getStatusSnapshot() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        WebSocket ws = activeSocket;
+        boolean open = ws != null && !ws.isInputClosed() && !ws.isOutputClosed();
+        String url = resolveUrl();
+        m.put("supplier", "loriot");
+        m.put("enabled", true);
+        m.put("urlConfigured", url != null && !url.isBlank());
+        m.put("connected", open);
+        m.put("socketPresent", ws != null);
+        m.put("connectedAt", connectedAt == null ? null : connectedAt.toString());
+        m.put("lastMessageAt", lastMessageAt == null ? null : lastMessageAt.toString());
+        Long idleSec = null;
+        if (lastMessageAt != null) {
+            idleSec = Duration.between(lastMessageAt, Instant.now()).getSeconds();
+        }
+        m.put("idleSeconds", idleSec);
+        m.put("maxIdleSeconds", Math.max(30L, maxIdleSeconds));
+        m.put("livenessCheckSeconds", Math.max(5L, livenessCheckSeconds));
+        m.put("reconnectCount", reconnectCount);
+        m.put("reconnectScheduled", reconnectScheduled.get());
+        return m;
+    }
 }
