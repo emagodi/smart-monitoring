@@ -34,7 +34,8 @@ public class SecurityConfiguration {
                                 "/swagger-resources/**", "/swagger-ui/**",
                                 "/webjars/**", "/swagger-ui.html", "/error",
                                 "/api/v1/chat-commands/**",
-                                "/api/v1/integrations/digital/**").permitAll()
+                                "/api/v1/integrations/digital/**",
+                                "/internal/integrations/loriot/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(STATELESS))

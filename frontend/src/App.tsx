@@ -28,6 +28,8 @@ import AlertsIndex from "./pages/Alerts";
 import SiteIndex from "./pages/Site";
 import OculusControlIndex from "./pages/OculusControl";
 import NotificationCenter from "./pages/NotificationCenter";
+import GatewaysIndex from "./pages/Gateways";
+import SimsIndex from "./pages/Sims";
 
 const AppRoutes = () => {
   const { isAuthenticated, user } = useAuth();
@@ -115,6 +117,22 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute permission="sensors.read">
               <SensorsIndex />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="gateways"
+          element={
+            <ProtectedRoute permission="gateways.view" disallowSupplier>
+              <GatewaysIndex />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="sims"
+          element={
+            <ProtectedRoute permission="sims.view" disallowSupplier>
+              <SimsIndex />
             </ProtectedRoute>
           }
         />

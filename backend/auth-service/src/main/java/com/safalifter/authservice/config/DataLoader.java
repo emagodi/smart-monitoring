@@ -73,6 +73,8 @@ public class DataLoader implements CommandLineRunner {
         moduleActions.put("sensors", List.of("create", "read", "update", "delete"));
         moduleActions.put("alerts", List.of("create", "read", "update", "delete"));
         moduleActions.put("reports", List.of("read", "export"));
+        moduleActions.put("gateways", List.of("view", "create", "edit", "sync", "assign_customer", "update_location", "audit_view"));
+        moduleActions.put("sims", List.of("view", "create", "edit", "assign", "unassign", "view_sensitive"));
 
         moduleActions.forEach((module, actions) -> actions.forEach(action -> upsertPermission(module, action)));
     }

@@ -3,8 +3,10 @@ package com.safalifter.transformerservice.ingest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.safalifter.transformerservice.entities.Sensor;
 import com.safalifter.transformerservice.entities.SensorReading;
+import com.safalifter.transformerservice.integration.loriot.LoriotProperties;
 import com.safalifter.transformerservice.repository.SensorReadingRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
+import com.safalifter.transformerservice.service.GatewayStatusService;
 import com.safalifter.transformerservice.service.SensorReadingService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -16,6 +18,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
-@ConditionalOnProperty(prefix = "loriot.ws", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "loriot.ws", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class LoriotWebSocketIngestor implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(LoriotWebSocketIngestor.class);
@@ -45,9 +48,11 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     @Value("${loriot.ws.url:}")
     private String loriotWsUrlProp;
 
+    private final LoriotProperties loriotProperties;
     private final SensorRepository sensorRepository;
     private final SensorReadingRepository sensorReadingRepository;
     private final SensorReadingService sensorReadingService;
+    private final GatewayStatusService gatewayStatusService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Value("${loriot.ws.log:false}")
     private boolean logWs;
@@ -147,7 +152,35 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         if (url == null || url.isBlank()) {
             url = System.getenv("LORIOT_WS_URL");
         }
-        return url;
+        if (url == null || url.isBlank()) {
+            String base = null;
+            String token = null;
+            if (loriotProperties != null) {
+                base = loriotProperties.getBaseUrl();
+                token = loriotProperties.getApplicationAccessToken();
+            }
+            if (base == null || base.isBlank()) {
+                base = System.getenv("LORIOT_BASE_URL");
+            }
+            if (token == null || token.isBlank()) {
+                token = System.getenv("LORIOT_APPLICATION_ACCESS_TOKEN");
+            }
+            if (base != null && !base.isBlank() && token != null && !token.isBlank()) {
+                try {
+                    URI baseUri = URI.create(base);
+                    String scheme = "https".equalsIgnoreCase(baseUri.getScheme()) ? "wss" : ("http".equalsIgnoreCase(baseUri.getScheme()) ? "ws" : baseUri.getScheme());
+                    String host = baseUri.getHost();
+                    int port = baseUri.getPort();
+                    String authority = port > 0 && port != 443 && port != 80 ? (host + ":" + port) : host;
+                    String qs = "token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+                    url = scheme + "://" + authority + "/app?" + qs;
+                    log.info("LORIOT WebSocket URL auto-derived from base URL and application access token (host={})", host);
+                } catch (Exception ex) {
+                    log.warn("Failed to auto-derive LORIOT WebSocket URL: {}", ex.getMessage());
+                }
+            }
+        }
+        return (url == null || url.isBlank()) ? null : url;
     }
 
     private void connect() {
@@ -287,6 +320,66 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
                 if (logWs) log.info("DECODE {}", saved.getDecoded());
             } catch (Exception e) {
                 log.error("Failed to persist sensor reading for {}", sensorKey, e);
+            }
+            try {
+                extractAndRegisterGatewayMetadata(msg);
+            } catch (Exception gatewayMetaEx) {
+                if (logWs) {
+                    log.debug("Gateway metadata extraction skipped: {}", gatewayMetaEx.getMessage());
+                }
+            }
+        }
+
+        private void extractAndRegisterGatewayMetadata(Map<?,?> msg) {
+            if (msg == null) return;
+            Instant ts = Instant.now();
+            Object rootEui = firstMatch(msg, "gweui", "gwEui", "gatewayEui", "EUI", "eui", "gw_eui");
+            if (rootEui instanceof String s && !s.isBlank()) {
+                safeRegister(s, ts);
+            }
+            Object rootGw = msg.get("gw");
+            if (rootGw instanceof Map<?,?> gwMap) {
+                Object gwEui = firstMatch(gwMap, "gweui", "gwEui", "gatewayEui", "EUI", "eui", "mac");
+                if (gwEui instanceof String s && !s.isBlank()) {
+                    safeRegister(s, ts);
+                }
+            }
+            Object gws = msg.get("gws");
+            if (gws instanceof java.util.List<?> gwsList) {
+                for (Object item : gwsList) {
+                    if (!(item instanceof Map<?,?> gwItem)) continue;
+                    Object gwEui = firstMatch(gwItem, "gweui", "gwEui", "gatewayEui", "EUI", "eui", "mac");
+                    if (gwEui instanceof String s && !s.isBlank()) {
+                        safeRegister(s, ts);
+                    }
+                }
+            }
+            Object rxq = msg.get("rxq");
+            if (rxq instanceof java.util.List<?> rxList) {
+                for (Object item : rxList) {
+                    if (!(item instanceof Map<?,?> rxItem)) continue;
+                    Object gwEui = firstMatch(rxItem, "gweui", "gwEui", "gatewayEui", "EUI", "eui", "mac");
+                    if (gwEui instanceof String s && !s.isBlank()) {
+                        safeRegister(s, ts);
+                    }
+                }
+            }
+        }
+
+        private Object firstMatch(Map<?,?> m, String... keys) {
+            for (String k : keys) {
+                Object v = m.get(k);
+                if (v != null) return v;
+            }
+            return null;
+        }
+
+        private void safeRegister(String rawEui, Instant ts) {
+            try {
+                String normalized = GatewayStatusService.normalizeEui(rawEui);
+                if (normalized == null || normalized.isBlank()) return;
+                gatewayStatusService.registerUplinkTraffic(normalized, ts);
+            } catch (Exception ignored) {
             }
         }
 
