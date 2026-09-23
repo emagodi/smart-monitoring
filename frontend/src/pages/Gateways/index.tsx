@@ -869,16 +869,13 @@ export default function GatewaysIndex() {
           </div>
         ) : (
           <div className="w-full col-span-full overflow-x-auto">
-            <table className="min-w-[1280px] w-full">
+            <table className="min-w-[920px] w-full">
               <thead className="bg-gradient-to-r from-blue-50/80 via-white to-red-50/70 dark:from-blue-500/10 dark:via-slate-900 dark:to-red-500/10">
                 <tr className="text-left">
                   <Th>Status</Th>
                   <Th>Gateway</Th>
-                  <Th>EUI / MAC</Th>
                   <Th>Region / Depot</Th>
-                  <Th>Model / FW</Th>
                   <Th>Network / Operator</Th>
-                  <Th>Location</Th>
                   <Th>SIM</Th>
                   <Th>Last Seen</Th>
                   <Th className="text-right">Actions</Th>
@@ -906,18 +903,6 @@ export default function GatewaysIndex() {
                       </div>
                     </Td>
                     <Td>
-                      <div className="space-y-0.5 font-mono text-[11px]">
-                        {item.gatewayEui ? (
-                          <p className="text-slate-700 dark:text-slate-200">{item.gatewayEui}</p>
-                        ) : (
-                          <p className="text-slate-400">—</p>
-                        )}
-                        {item.mac ? (
-                          <p className="text-slate-500 dark:text-slate-400">{item.mac}</p>
-                        ) : null}
-                      </div>
-                    </Td>
-                    <Td>
                       <div className="space-y-0.5">
                         <p className="text-slate-700 dark:text-slate-200">{item.regionName || "—"}</p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400">{item.depotName || "—"}</p>
@@ -925,30 +910,9 @@ export default function GatewaysIndex() {
                     </Td>
                     <Td>
                       <div className="space-y-0.5">
-                        <p className="text-slate-700 dark:text-slate-200">{item.model || "—"}</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {item.fwVersion ? `FW ${item.fwVersion}` : "—"}
-                        </p>
-                      </div>
-                    </Td>
-                    <Td>
-                      <div className="space-y-0.5">
                         <p className="text-slate-700 dark:text-slate-200">{item.networkName || "—"}</p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400">{item.operator || "—"}</p>
                       </div>
-                    </Td>
-                    <Td>
-                      {typeof item.lat === "number" && typeof item.lng === "number" ? (
-                        <div className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                          <MapPinned className="h-3.5 w-3.5 text-blue-500" />
-                          <span className="text-[11px]">Mapped</span>
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
-                          <MapPinOff className="h-3.5 w-3.5" />
-                          <span className="text-[11px]">No coords</span>
-                        </div>
-                      )}
                     </Td>
                     <Td>
                       {item.simAssigned ? (
@@ -1118,6 +1082,16 @@ export default function GatewaysIndex() {
                   <OverviewTile label="Network" value={selectedGateway.networkName || "—"} />
                   <OverviewTile label="Operator" value={selectedGateway.operator || "—"} />
                   <OverviewTile label="Location Source" value={selectedGateway.locationSource || "—"} />
+                  <OverviewTile
+                    label="Latitude"
+                    value={typeof selectedGateway.lat === "number" ? String(selectedGateway.lat) : "—"}
+                    mono
+                  />
+                  <OverviewTile
+                    label="Longitude"
+                    value={typeof selectedGateway.lng === "number" ? String(selectedGateway.lng) : "—"}
+                    mono
+                  />
                   <OverviewTile label="Address" value={selectedGateway.address || "—"} full />
                   <OverviewTile label="Last Traffic" value={formatDateTime(selectedGateway.lastTrafficSeenAt)} />
                   <OverviewTile label="Last LORIOT" value={formatDateTime(selectedGateway.lastLoriotSeenAt)} />
