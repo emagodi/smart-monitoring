@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 // Import icons from lucide-react
 import {
   Grid,
+  Map as MapIcon,
   MapPinned,
   Warehouse,
   Zap,
@@ -101,6 +102,13 @@ const navGroups: NavGroup[] = [
         icon: <Router className="w-5 h-5" />,
         name: "Gateways",
         path: "/gateways",
+        permission: "gateways.view",
+        hideForSupplier: true,
+      },
+      {
+        icon: <MapIcon className="w-5 h-5" />,
+        name: "Gateway Map",
+        path: "/gateways-map",
         permission: "gateways.view",
         hideForSupplier: true,
       },

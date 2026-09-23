@@ -2,11 +2,9 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  Activity,
   AlertTriangle,
   CloudOff,
   Eye,
-  FileWarning,
   HelpCircle,
   Loader2,
   MapPinned,
@@ -24,7 +22,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
-import GoogleAssetMap, { GoogleAssetMapPoint } from "../../components/maps/GoogleAssetMap";
 import { Modal } from "../../components/ui/modal";
 
 type GatewayStatus = "ONLINE" | "OFFLINE" | "DEGRADED" | "NEVER_SEEN" | "UNKNOWN";
@@ -44,7 +41,7 @@ interface GatewaySummary {
   lastSyncAt?: string | null;
 }
 
-interface GatewayItem extends GoogleAssetMapPoint {
+interface GatewayItem {
   id: number;
   name: string;
   loriotGatewayId?: string | null;
@@ -178,8 +175,8 @@ const syncStatusLabel = (status?: GatewaySyncStatus | null) => {
   }
 };
 
-const getMarkerColors = (point: GatewayItem): { fillColor: string; strokeColor: string } => {
-  switch (point.effectiveStatus) {
+const getMarkerColors = (status: GatewayStatus): { fillColor: string; strokeColor: string } => {
+  switch (status) {
     case "ONLINE":
       return { fillColor: "#22c55e", strokeColor: "#16a34a" };
     case "OFFLINE":
@@ -264,33 +261,6 @@ const StatCard = ({
   );
 };
 
-const MetricTile = ({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone: "red" | "amber" | "blue" | "emerald" | "slate";
-}) => {
-  const toneClasses = {
-    red: "bg-red-50 text-red-600 dark:bg-red-500/14 dark:text-red-300",
-    amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300",
-    blue: "bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300",
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300",
-    slate: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-  }[tone];
-
-  return (
-    <div className="enterprise-card px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{label}</p>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">
-        <span className={`inline-flex rounded-xl px-2.5 py-1 ${toneClasses}`}>{value}</span>
-      </div>
-    </div>
-  );
-};
-
 function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <th className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500 ${className}`}>
@@ -330,7 +300,6 @@ function FilterButton({
 export default function GatewaysIndex() {
   const { token, hasPermission } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
-  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [items, setItems] = useState<GatewayItem[]>([]);
@@ -364,7 +333,7 @@ export default function GatewaysIndex() {
   const [lastSeenFrom, setLastSeenFrom] = useState<string>("");
   const [lastSeenTo, setLastSeenTo] = useState<string>("");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -373,7 +342,6 @@ export default function GatewaysIndex() {
   const [detailTab, setDetailTab] = useState<string>("overview");
   const [statusHistory, setStatusHistory] = useState<GatewayStatusHistoryItem[]>([]);
   const [simAssignments, setSimAssignments] = useState<GatewaySimAssignment[]>([]);
-  const [selectedMapPointId, setSelectedMapPointId] = useState<number | null>(null);
 
   const canSync = hasPermission("gateways.sync");
   const canEdit = hasPermission("gateways.edit");
@@ -497,18 +465,6 @@ export default function GatewaysIndex() {
     return [...set].sort();
   }, [items]);
 
-  const mapPoints = useMemo<GatewayItem[]>(
-    () =>
-      items.filter(
-        (item) =>
-          typeof item.lat === "number" &&
-          typeof item.lng === "number" &&
-          Number.isFinite(item.lat) &&
-          Number.isFinite(item.lng)
-      ),
-    [items]
-  );
-
   const openDetailModal = async (gateway: GatewayItem) => {
     setSelectedGateway(gateway);
     setDetailModalOpen(true);
@@ -555,8 +511,6 @@ export default function GatewaysIndex() {
   const pageStart = items.length === 0 ? 0 : page * pageSize + 1;
   const pageEnd = items.length === 0 ? 0 : page * pageSize + items.length;
 
-  const visibleMapPoint = selectedMapPointId != null ? items.find((i) => i.id === selectedMapPointId) ?? null : null;
-
   return (
     <div className="space-y-4">
       <section className="enterprise-card p-4">
@@ -591,7 +545,7 @@ export default function GatewaysIndex() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-9">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
         <StatCard
           title="Total Gateways"
           value={summary.total}
@@ -607,18 +561,28 @@ export default function GatewaysIndex() {
           highlight="emerald"
         />
         <StatCard
-          title="Offline"
-          value={summary.offline}
-          subtitle="Offline beyond grace period — needs attention."
-          icon={<WifiOff className="h-5 w-5" />}
-          highlight="red"
-        />
-        <StatCard
           title="Degraded"
           value={summary.degraded}
           subtitle="Grace-period held offline, likely to flip soon."
           icon={<AlertTriangle className="h-5 w-5" />}
           highlight="amber"
+        />
+        <StatCard
+          title="Last Sync"
+          value={syncStatusLabel(summary.lastSyncStatus)}
+          subtitle={`Ran ${formatDateTime(summary.lastSyncAt)}`}
+          icon={summary.lastSyncStatus === "FAILED" ? <ServerCrash className="h-5 w-5" /> : <Server className="h-5 w-5" />}
+          highlight={summary.lastSyncStatus === "FAILED" ? "red" : summary.lastSyncStatus === "PARTIAL" ? "amber" : "emerald"}
+        />
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5">
+        <StatCard
+          title="Offline"
+          value={summary.offline}
+          subtitle="Offline beyond grace period — needs attention."
+          icon={<WifiOff className="h-5 w-5" />}
+          highlight="red"
         />
         <StatCard
           title="Never Seen"
@@ -647,13 +611,6 @@ export default function GatewaysIndex() {
           subtitle="Gateways without an active SIM assignment."
           icon={<CardSim className="h-5 w-5" />}
           highlight="red"
-        />
-        <StatCard
-          title="Last Sync"
-          value={syncStatusLabel(summary.lastSyncStatus)}
-          subtitle={`Ran ${formatDateTime(summary.lastSyncAt)}`}
-          icon={summary.lastSyncStatus === "FAILED" ? <ServerCrash className="h-5 w-5" /> : <Server className="h-5 w-5" />}
-          highlight={summary.lastSyncStatus === "FAILED" ? "red" : summary.lastSyncStatus === "PARTIAL" ? "amber" : "emerald"}
         />
       </section>
 
@@ -766,9 +723,9 @@ export default function GatewaysIndex() {
                       }}
                       className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                     >
+                      <option value={10}>10</option>
                       <option value={25}>25</option>
                       <option value={50}>50</option>
-                      <option value={100}>100</option>
                     </select>
                   </label>
                 </div>
@@ -1089,83 +1046,6 @@ export default function GatewaysIndex() {
             </div>
           </div>
         </div>
-      </section>
-
-      <section className="enterprise-card overflow-hidden p-4">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
-              Gateway Map
-            </p>
-            <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-              Geographic gateway footprint
-            </h3>
-            <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-              ONLINE = green · OFFLINE = red · DEGRADED = amber · NEVER_SEEN = slate · UNKNOWN = grey
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-            <MetricTile label="Online" value={summary.online} tone="emerald" />
-            <MetricTile label="Offline" value={summary.offline} tone="red" />
-            <MetricTile label="Degraded" value={summary.degraded} tone="amber" />
-            <MetricTile label="Never Seen" value={summary.neverSeen} tone="slate" />
-            <MetricTile label="Unknown" value={summary.unknown} tone="slate" />
-          </div>
-        </div>
-
-        <div className="overflow-hidden rounded-[22px] border border-slate-200/80 dark:border-slate-800">
-          <GoogleAssetMap
-            apiKey={GOOGLE_MAPS_API_KEY}
-            className="h-[460px]"
-            points={mapPoints}
-            selectedPointId={selectedMapPointId}
-            onPointSelect={(point) => setSelectedMapPointId(Number(point.id))}
-            emptyLabel="No gateway coordinates are available for the current filters."
-            getMarkerColors={(point) => getMarkerColors(point as GatewayItem)}
-            renderDetails={(point) => {
-              const gw = point as GatewayItem;
-              return (
-                <div className="space-y-1.5 text-sm text-slate-600">
-                  <p>
-                    Region: <span className="font-medium text-slate-900">{gw.regionName || "—"}</span>
-                  </p>
-                  <p>
-                    Depot: <span className="font-medium text-slate-900">{gw.depotName || "—"}</span>
-                  </p>
-                  <p>
-                    Model: <span className="font-medium text-slate-900">{gw.model || "—"}</span>
-                  </p>
-                  <p>
-                    SIM: <span className="font-medium text-slate-900">{gw.simAssigned ? "Assigned" : "Unassigned"}</span>
-                  </p>
-                  <p>
-                    Last seen: <span className="font-medium text-slate-900">{formatDateTime(gw.lastTrafficSeenAt)}</span>
-                  </p>
-                </div>
-              );
-            }}
-          />
-        </div>
-        {visibleMapPoint ? (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3">
-            <div>
-              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                Selected: {visibleMapPoint.name}
-              </p>
-              <p className="text-[11px] text-blue-600/80 dark:text-blue-400">
-                {visibleMapPoint.regionName || "—"} · {visibleMapPoint.depotName || "—"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void openDetailModal(visibleMapPoint)}
-              className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
-            >
-              <Eye className="h-3 w-3" />
-              Open details
-            </button>
-          </div>
-        ) : null}
       </section>
 
       <Modal

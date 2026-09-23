@@ -29,6 +29,7 @@ import SiteIndex from "./pages/Site";
 import OculusControlIndex from "./pages/OculusControl";
 import NotificationCenter from "./pages/NotificationCenter";
 import GatewaysIndex from "./pages/Gateways";
+import GatewaysMapIndex from "./pages/Gateways/Map";
 import SimsIndex from "./pages/Sims";
 
 const AppRoutes = () => {
@@ -125,6 +126,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute permission="gateways.view" disallowSupplier>
               <GatewaysIndex />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="gateways-map"
+          element={
+            <ProtectedRoute permission="gateways.view" disallowSupplier>
+              <GatewaysMapIndex />
             </ProtectedRoute>
           }
         />
