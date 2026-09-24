@@ -8,8 +8,11 @@ import java.time.LocalDate;
 
 @Data
 public class SimCardUpdateRequest {
+    private String iccid;
+    private String imsi;
     private String msisdn;
     private String operator;
+    private String networkName;
     private String apn;
     private String pin;
     private String puk;

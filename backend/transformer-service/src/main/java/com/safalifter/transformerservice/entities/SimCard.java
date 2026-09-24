@@ -47,6 +47,9 @@ public class SimCard {
     @Column(name = "operator", length = 128)
     private String operator;
 
+    @Column(name = "network_name", length = 128)
+    private String networkName;
+
     @Column(name = "apn", length = 128)
     private String apn;
 

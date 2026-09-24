@@ -261,9 +261,7 @@ export default function SimsIndex() {
 
   const [revealingSimId, setRevealingSimId] = useState<number | null>(null);
   const [revealedMap, setRevealedMap] = useState<Map<number, { pin: string; puk: string; iccid: string; imsi?: string | null; msisdn?: string | null }>>(new Map());
-  const [revealReason, setRevealReason] = useState("");
-  const [revealReasonOpen, setRevealReasonOpen] = useState(false);
-  const [pendingRevealSim, setPendingRevealSim] = useState<SimCardItem | null>(null);
+  const [visibleFieldsMap, setVisibleFieldsMap] = useState<Map<number, Set<string>>>(new Map());
 
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [unassignModalOpen, setUnassignModalOpen] = useState(false);
@@ -325,7 +323,8 @@ export default function SimsIndex() {
       setLoading(true);
       setError(null);
       const params: Record<string, unknown> = { page, size: pageSize };
-      if (statusFilter !== "ALL") params.status = statusFilter;
+      const lifecycleFilter = ["ASSIGNED", "UNASSIGNED"].includes(statusFilter) ? "ALL" : statusFilter;
+      if (lifecycleFilter !== "ALL") params.status = lifecycleFilter;
       if (selectedOperator !== "ALL") params.operator = selectedOperator;
       if (search.trim()) params.search = search.trim();
 
@@ -341,6 +340,17 @@ export default function SimsIndex() {
       setLoading(false);
     }
   }, [API_BASE_URL, headers, token, page, pageSize, statusFilter, selectedOperator, search]);
+
+  const visibleItems = useMemo(() => {
+    if (statusFilter === "ASSIGNED") return items.filter((i) => Boolean(i.assignedGatewayId));
+    if (statusFilter === "UNASSIGNED") return items.filter((i) => !i.assignedGatewayId);
+    return items;
+  }, [items, statusFilter]);
+
+  const effectiveTotal = useMemo(() => {
+    if (statusFilter === "ASSIGNED" || statusFilter === "UNASSIGNED") return visibleItems.length;
+    return totalElements;
+  }, [statusFilter, visibleItems.length, totalElements]);
 
   useEffect(() => {
     if (token) {
@@ -419,48 +429,6 @@ export default function SimsIndex() {
     setUnassignReason("");
   };
 
-  const closeRevealReasonModal = () => {
-    setRevealReasonOpen(false);
-    setPendingRevealSim(null);
-    setRevealReason("");
-  };
-
-  const requestReveal = (sim: SimCardItem) => {
-    setPendingRevealSim(sim);
-    setRevealReason("");
-    setRevealReasonOpen(true);
-  };
-
-  const executeReveal = async () => {
-    if (!pendingRevealSim) return;
-    try {
-      setRevealingSimId(pendingRevealSim.id);
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/sim-cards/${pendingRevealSim.id}/reveal-sensitive`,
-        { reason: revealReason || "Operator requested detail" },
-        { headers }
-      );
-      const data = (response.data || {}) as Record<string, unknown>;
-      setRevealedMap((prev) => {
-        const next = new Map(prev);
-        next.set(pendingRevealSim.id, {
-          pin: (data.pin as string) || "****",
-          puk: (data.puk as string) || "****",
-          iccid: (data.iccid as string) || pendingRevealSim.iccid,
-          imsi: (data.imsi as string | undefined) ?? pendingRevealSim.imsi,
-          msisdn: (data.msisdn as string | undefined) ?? pendingRevealSim.msisdn,
-        });
-        return next;
-      });
-      closeRevealReasonModal();
-    } catch (revealError) {
-      console.error(revealError);
-      setError("Failed to reveal sensitive SIM data.");
-    } finally {
-      setRevealingSimId(null);
-    }
-  };
-
   const submitAssign = async () => {
     if (!assignTargetSim || !selectedGatewayId) return;
     try {
@@ -505,6 +473,89 @@ export default function SimsIndex() {
 
   const getRevealed = (simId: number) => revealedMap.get(simId) || null;
 
+  const isFieldVisible = (simId: number, field: string) => {
+    const fields = visibleFieldsMap.get(simId);
+    return fields?.has(field) ?? false;
+  };
+
+  const toggleFieldVisible = (simId: number, field: string) => {
+    setVisibleFieldsMap((prev) => {
+      const next = new Map(prev);
+      const set = new Set(next.get(simId) ?? []);
+      if (set.has(field)) set.delete(field);
+      else set.add(field);
+      next.set(simId, set);
+      return next;
+    });
+  };
+
+  const inlineToggleReveal = async (sim: SimCardItem, field: string) => {
+    const alreadyRevealed = getRevealed(sim.id);
+    const currentlyVisible = isFieldVisible(sim.id, field);
+
+    if (alreadyRevealed) {
+      toggleFieldVisible(sim.id, field);
+      return;
+    }
+
+    if (currentlyVisible) {
+      toggleFieldVisible(sim.id, field);
+      return;
+    }
+
+    if (!canViewSensitive) return;
+
+    try {
+      setRevealingSimId(sim.id);
+      const response = await axios.post(
+        `${API_BASE_URL}/api/v1/sim-cards/${sim.id}/reveal-sensitive`,
+        { reason: "inline table reveal (UI)" },
+        { headers }
+      );
+      const data = (response.data || {}) as Record<string, unknown>;
+      setRevealedMap((prev) => {
+        const next = new Map(prev);
+        next.set(sim.id, {
+          pin: (data.pin as string) || "",
+          puk: (data.puk as string) || "",
+          iccid: (data.iccid as string) || sim.iccid,
+          imsi: (data.imsi as string | undefined) ?? sim.imsi,
+          msisdn: (data.msisdn as string | undefined) ?? sim.msisdn,
+        });
+        return next;
+      });
+      toggleFieldVisible(sim.id, field);
+    } catch (revealError) {
+      console.error(revealError);
+      setError("Failed to reveal sensitive SIM data.");
+    } finally {
+      setRevealingSimId(null);
+    }
+  };
+
+  const FieldEyeToggle = ({ sim, field, titleShow, titleHide }: { sim: SimCardItem; field: string; titleShow: string; titleHide: string }) => {
+    if (!canViewSensitive) return null;
+    const revealed = getRevealed(sim.id);
+    const showing = revealed && isFieldVisible(sim.id, field);
+    return (
+      <button
+        type="button"
+        disabled={revealingSimId === sim.id}
+        onClick={() => void inlineToggleReveal(sim, field)}
+        className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        title={showing ? titleHide : titleShow}
+      >
+        {revealingSimId === sim.id ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : showing ? (
+          <EyeOff className="h-3.5 w-3.5" />
+        ) : (
+          <Eye className="h-3.5 w-3.5" />
+        )}
+      </button>
+    );
+  };
+
   const filteredGatewayPickerItems = useMemo(() => {
     const query = gatewayPickerSearch.trim().toLowerCase();
     if (!query) return gatewayPickerItems.slice(0, 50);
@@ -518,8 +569,8 @@ export default function SimsIndex() {
       .slice(0, 50);
   }, [gatewayPickerItems, gatewayPickerSearch]);
 
-  const pageStart = items.length === 0 ? 0 : page * pageSize + 1;
-  const pageEnd = items.length === 0 ? 0 : page * pageSize + items.length;
+  const pageStart = visibleItems.length === 0 ? 0 : page * pageSize + 1;
+  const pageEnd = visibleItems.length === 0 ? 0 : page * pageSize + visibleItems.length;
 
   return (
     <div className="space-y-4">
@@ -533,7 +584,7 @@ export default function SimsIndex() {
               Subscriber identity module cards
             </h2>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              PIN/PUK masked by default; reveal requires sims.view_sensitive permission and audit reason.
+              PIN/PUK/ICCID masked by default. Click the per-field eye icon to reveal.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -626,7 +677,7 @@ export default function SimsIndex() {
                   SIM Table
                 </p>
                 <h3 className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
-                  Masked ICCID/MSISDN — reveal actions gated to permission
+                  Sensitive fields masked — tap the per-cell eye to reveal
                 </h3>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -706,7 +757,7 @@ export default function SimsIndex() {
             <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
             <span>Loading SIM card inventory...</span>
           </div>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm text-slate-500 dark:text-slate-400">
             No SIM cards found for the current filters.
           </div>
@@ -728,47 +779,64 @@ export default function SimsIndex() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {visibleItems.map((item) => {
                   const revealed = getRevealed(item.id);
+                  const isAssigned = Boolean(item.assignedGatewayId);
+                  const effectiveStatus: SimStatus = isAssigned
+                    ? "ASSIGNED"
+                    : (item.status === "ASSIGNED" ? "ACTIVE" : (item.status as SimStatus) ?? "ACTIVE");
                   return (
                     <tr
                       key={item.id}
                       className="border-t border-slate-200/80 text-xs transition hover:bg-gradient-to-r hover:from-blue-50/40 hover:to-red-50/30 dark:border-slate-800 dark:hover:from-blue-500/5 dark:hover:to-red-500/5"
                     >
                       <Td>
-                        <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${statusTone(item.status)}`}>
-                          {statusLabel(item.status)}
+                        <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${statusTone(effectiveStatus)}`}>
+                          {statusLabel(effectiveStatus)}
                         </span>
                       </Td>
                       <Td>
-                        <div className="space-y-0.5">
-                          <p className="font-mono text-slate-700 dark:text-slate-200">
-                            {revealed ? revealed.iccid : maskIccid(item.iccid)}
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono min-w-0 truncate text-slate-700 dark:text-slate-200">
+                            {revealed && isFieldVisible(item.id, "iccid") ? revealed.iccid : maskIccid(item.iccid)}
                           </p>
+                          <FieldEyeToggle sim={item} field="iccid" titleShow="Reveal ICCID" titleHide="Hide ICCID" />
                         </div>
                       </Td>
                       <Td>
-                        <p className="font-mono text-slate-600 dark:text-slate-300">
-                          {revealed?.imsi || maskImsi(item.imsi)}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono min-w-0 truncate text-slate-600 dark:text-slate-300">
+                            {revealed && isFieldVisible(item.id, "imsi") ? (revealed.imsi ?? maskImsi(item.imsi)) : maskImsi(item.imsi)}
+                          </p>
+                          <FieldEyeToggle sim={item} field="imsi" titleShow="Reveal IMSI" titleHide="Hide IMSI" />
+                        </div>
                       </Td>
                       <Td>
-                        <p className="font-mono text-slate-600 dark:text-slate-300">
-                          {revealed?.msisdn || maskMsisdn(item.msisdn, item.maskedMsisdn)}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono min-w-0 truncate text-slate-600 dark:text-slate-300">
+                            {revealed && isFieldVisible(item.id, "msisdn") ? (revealed.msisdn ?? maskMsisdn(item.msisdn, item.maskedMsisdn)) : maskMsisdn(item.msisdn, item.maskedMsisdn)}
+                          </p>
+                          <FieldEyeToggle sim={item} field="msisdn" titleShow="Reveal MSISDN" titleHide="Hide MSISDN" />
+                        </div>
                       </Td>
                       <Td>
                         <p className="text-slate-700 dark:text-slate-200">{item.operator || item.networkName || "—"}</p>
                       </Td>
                       <Td>
-                        <p className="font-mono tracking-widest text-slate-700 dark:text-slate-200">
-                          {revealed ? revealed.pin : "****"}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono tracking-widest min-w-0 truncate text-slate-700 dark:text-slate-200">
+                            {revealed && isFieldVisible(item.id, "pin") ? revealed.pin : "****"}
+                          </p>
+                          <FieldEyeToggle sim={item} field="pin" titleShow="Reveal PIN" titleHide="Hide PIN" />
+                        </div>
                       </Td>
                       <Td>
-                        <p className="font-mono tracking-widest text-slate-700 dark:text-slate-200">
-                          {revealed ? revealed.puk : "****"}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono tracking-widest min-w-0 truncate text-slate-700 dark:text-slate-200">
+                            {revealed && isFieldVisible(item.id, "puk") ? revealed.puk : "****"}
+                          </p>
+                          <FieldEyeToggle sim={item} field="puk" titleShow="Reveal PUK" titleHide="Hide PUK" />
+                        </div>
                       </Td>
                       <Td>
                         {item.assignedGatewayId ? (
@@ -799,38 +867,6 @@ export default function SimsIndex() {
                       </Td>
                       <Td className="text-right">
                         <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                          {canViewSensitive ? (
-                            revealed ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setRevealedMap((prev) => {
-                                    const next = new Map(prev);
-                                    next.delete(item.id);
-                                    return next;
-                                  });
-                                }}
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                              >
-                                <EyeOff className="h-3 w-3" />
-                                Mask
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={revealingSimId === item.id}
-                                onClick={() => requestReveal(item)}
-                                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-                              >
-                                {revealingSimId === item.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Eye className="h-3 w-3" />
-                                )}
-                                Reveal
-                              </button>
-                            )
-                          ) : null}
                           {canEditSim ? (
                             <button
                               type="button"
@@ -888,7 +924,7 @@ export default function SimsIndex() {
         <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Showing {pageStart}-{pageEnd} of {totalElements.toLocaleString()}
+              Showing {pageStart}-{pageEnd} of {effectiveTotal.toLocaleString()}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -900,7 +936,7 @@ export default function SimsIndex() {
                 Previous
               </button>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                Page {totalElements === 0 ? 0 : page + 1} of {Math.max(totalPages, 1)}
+                Page {effectiveTotal === 0 ? 0 : page + 1} of {Math.max(totalPages, 1)}
               </span>
               <button
                 type="button"
@@ -914,57 +950,6 @@ export default function SimsIndex() {
           </div>
         </div>
       </section>
-
-      <Modal
-        isOpen={revealReasonOpen}
-        onClose={closeRevealReasonModal}
-        className="max-w-md overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
-        backdropBlur
-      >
-        <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
-          <div className="flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              Reveal Sensitive Data
-            </p>
-            <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-50">
-              Audit reason required
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              SIM {pendingRevealSim ? maskIccid(pendingRevealSim.iccid) : ""} — PIN/PUK and raw identifiers.
-            </p>
-          </div>
-        </div>
-        <div className="space-y-4 px-5 py-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Reason</span>
-            <textarea
-              value={revealReason}
-              onChange={(event) => setRevealReason(event.target.value)}
-              placeholder="Incident reference, operator name, or business justification"
-              rows={4}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={closeRevealReasonModal}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void executeReveal()}
-              disabled={revealingSimId !== null}
-              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
-            >
-              {revealingSimId !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-              Reveal credentials
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       <Modal
         isOpen={assignModalOpen}

@@ -12,6 +12,7 @@ public class SimCardCreateRequest {
     private String iccid;
     private String imsi;
     private String operator;
+    private String networkName;
     private String apn;
     private String pin;
     private String puk;

@@ -81,6 +81,7 @@ public class SimCardService {
         sim.setImsi(trimToNull(request.getImsi()));
         sim.setNormalizedImsi(normalizedImsi);
         sim.setOperator(trimToNull(request.getOperator()));
+        sim.setNetworkName(trimToNull(request.getNetworkName()));
         sim.setApn(trimToNull(request.getApn()));
         sim.setEncryptedPin(encryptionService.encrypt(trimToNull(request.getPin())));
         sim.setEncryptedPuk(encryptionService.encrypt(trimToNull(request.getPuk())));
@@ -106,36 +107,52 @@ public class SimCardService {
         forbidSupplierCrud();
         SimCard sim = simCardRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SIM Card not found"));
-        boolean hasSensitive = (request.getPin() != null && !request.getPin().isBlank())
-                || (request.getPuk() != null && !request.getPuk().isBlank())
-                || (request.getPin2() != null && !request.getPin2().isBlank())
-                || (request.getPuk2() != null && !request.getPuk2().isBlank());
+        if (trimToNull(request.getIccid()) != null && !looksLikeMask(request.getIccid())) {
+            sim.setIccid(trimToNull(request.getIccid()));
+        }
+        if (trimToNull(request.getImsi()) != null && !looksLikeMask(request.getImsi())) {
+            sim.setImsi(trimToNull(request.getImsi()));
+        }
+        if (trimToNull(request.getMsisdn()) != null && !looksLikeMask(request.getMsisdn())) {
+            sim.setMsisdn(trimToNull(request.getMsisdn()));
+        }
+        if (trimToNull(request.getCardSerialNumber()) != null && !looksLikeMask(request.getCardSerialNumber())) {
+            sim.setCardSerialNumber(trimToNull(request.getCardSerialNumber()));
+        }
+        if (request.getOperator() != null) {
+            sim.setOperator(trimToNull(request.getOperator()));
+        }
+        if (request.getNetworkName() != null) {
+            sim.setNetworkName(trimToNull(request.getNetworkName()));
+        }
+        if (request.getApn() != null) {
+            sim.setApn(trimToNull(request.getApn()));
+        }
+        boolean hasSensitive = false;
+        if (!looksLikeMask(request.getPin()) && trimToNull(request.getPin()) != null) {
+            sim.setEncryptedPin(encryptionService.encrypt(trimToNull(request.getPin())));
+            hasSensitive = true;
+        }
+        if (!looksLikeMask(request.getPuk()) && trimToNull(request.getPuk()) != null) {
+            sim.setEncryptedPuk(encryptionService.encrypt(trimToNull(request.getPuk())));
+            hasSensitive = true;
+        }
+        if (!looksLikeMask(request.getPin2()) && trimToNull(request.getPin2()) != null) {
+            sim.setEncryptedPin2(encryptionService.encrypt(trimToNull(request.getPin2())));
+            hasSensitive = true;
+        }
+        if (!looksLikeMask(request.getPuk2()) && trimToNull(request.getPuk2()) != null) {
+            sim.setEncryptedPuk2(encryptionService.encrypt(trimToNull(request.getPuk2())));
+            hasSensitive = true;
+        }
         if (hasSensitive) {
             encryptionService.requireEncryptionKeyForWrite();
         }
-        sim.setMsisdn(trimToNull(request.getMsisdn()));
-        sim.setOperator(trimToNull(request.getOperator()));
-        sim.setApn(trimToNull(request.getApn()));
-        if (trimToNull(request.getPin()) != null) {
-            sim.setEncryptedPin(encryptionService.encrypt(trimToNull(request.getPin())));
-        }
-        if (trimToNull(request.getPuk()) != null) {
-            sim.setEncryptedPuk(encryptionService.encrypt(trimToNull(request.getPuk())));
-        }
-        if (trimToNull(request.getPin2()) != null) {
-            sim.setEncryptedPin2(encryptionService.encrypt(trimToNull(request.getPin2())));
-        }
-        if (trimToNull(request.getPuk2()) != null) {
-            sim.setEncryptedPuk2(encryptionService.encrypt(trimToNull(request.getPuk2())));
-        }
-        if (request.getKi() != null) {
+        if (trimToNull(request.getKi()) != null && !looksLikeMask(request.getKi())) {
             sim.setKi(trimToNull(request.getKi()));
         }
-        if (request.getOpc() != null) {
+        if (trimToNull(request.getOpc()) != null && !looksLikeMask(request.getOpc())) {
             sim.setOpc(trimToNull(request.getOpc()));
-        }
-        if (request.getCardSerialNumber() != null) {
-            sim.setCardSerialNumber(trimToNull(request.getCardSerialNumber()));
         }
         if (request.getStatus() != null) {
             SimCardStatus prev = sim.getStatus();
@@ -148,7 +165,9 @@ public class SimCardService {
         sim.setAllowanceGb(request.getAllowanceGb());
         sim.setActivationDate(request.getActivationDate());
         sim.setExpiryDate(request.getExpiryDate());
-        sim.setNotes(trimToNull(request.getNotes()));
+        if (request.getNotes() != null) {
+            sim.setNotes(trimToNull(request.getNotes()));
+        }
         sim.setUpdatedBy(accessScopeService.getCurrentUserEmail());
         SimCard saved = simCardRepository.save(sim);
         return toMaskedResponse(saved);
@@ -190,6 +209,9 @@ public class SimCardService {
                 actor, id, reason, last4(sim.getNormalizedIccid()));
         return SimCardRevealResponse.builder()
                 .id(sim.getId())
+                .iccid(sim.getNormalizedIccid())
+                .imsi(sim.getImsi())
+                .msisdn(sim.getMsisdn())
                 .pin(pin)
                 .puk(puk)
                 .pin2(pin2)
@@ -319,6 +341,13 @@ public class SimCardService {
     }
 
     private SimCardResponse toMaskedResponse(SimCard sim) {
+        GatewaySimAssignment active = assignmentRepository.findActiveBySimId(sim.getId()).orElse(null);
+        String assignedGatewayName = null;
+        if (active != null && active.getGatewayId() != null) {
+            assignedGatewayName = gatewayRepository.findById(active.getGatewayId())
+                    .map(g -> g.getName() != null ? g.getName() : "Gateway #" + active.getGatewayId())
+                    .orElse("Gateway #" + active.getGatewayId());
+        }
         return SimCardResponse.builder()
                 .id(sim.getId())
                 .msisdn(maskMsisdn(sim.getMsisdn()))
@@ -327,6 +356,7 @@ public class SimCardService {
                 .imsi(maskImsi(sim.getImsi(), sim.getNormalizedImsi()))
                 .normalizedImsi(maskImsi(null, sim.getNormalizedImsi()))
                 .operator(sim.getOperator())
+                .networkName(sim.getNetworkName())
                 .apn(sim.getApn())
                 .pin("****")
                 .puk("****")
@@ -336,6 +366,11 @@ public class SimCardService {
                 .opc(maskTail(sim.getOpc()))
                 .cardSerialNumber(maskTail(sim.getCardSerialNumber()))
                 .status(sim.getStatus() != null ? sim.getStatus().name() : null)
+                .assignedGatewayId(active != null ? active.getGatewayId() : null)
+                .assignedGatewayName(assignedGatewayName)
+                .slotNumber(active != null ? active.getSlotNumber() : null)
+                .assignedAt(active != null ? active.getAssignedAt() : null)
+                .unassignedAt(active != null ? active.getUnassignedAt() : null)
                 .dataPlanGb(sim.getDataPlanGb())
                 .allowanceGb(sim.getAllowanceGb())
                 .activationDate(sim.getActivationDate())
@@ -433,5 +468,14 @@ public class SimCardService {
         if (s == null) return null;
         String t = s.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    private static boolean looksLikeMask(String s) {
+        if (s == null) return true;
+        String t = s.trim();
+        if (t.isEmpty()) return true;
+        if (t.equals("****")) return true;
+        if (t.startsWith("*") && (t.contains("************") || t.contains("********"))) return true;
+        return t.chars().allMatch(c -> c == '*');
     }
 }
