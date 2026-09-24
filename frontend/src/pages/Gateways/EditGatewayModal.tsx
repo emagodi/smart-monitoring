@@ -33,6 +33,9 @@ export function EditGatewayModal({
   regionOptions,
   networkOptions,
   operatorOptions,
+  embed,
+  onCancel,
+  canSave = true,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -45,6 +48,9 @@ export function EditGatewayModal({
   regionOptions: string[];
   networkOptions: string[];
   operatorOptions: string[];
+  embed?: boolean;
+  onCancel?: () => void;
+  canSave?: boolean;
 }) {
   void token;
   const [name, setName] = useState(gateway.name || "");
@@ -65,6 +71,11 @@ export function EditGatewayModal({
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleCancel = () => {
+    if (onCancel) onCancel();
+    else onClose();
+  };
 
   const onSubmit = async () => {
     setSubmitting(true);
@@ -89,7 +100,7 @@ export function EditGatewayModal({
         { headers }
       );
       onSaved();
-      onClose();
+      if (!embed) onClose();
     } catch (err) {
       console.error(err);
       const e = err as AxiosErrorShape;
@@ -101,6 +112,201 @@ export function EditGatewayModal({
       setSubmitting(false);
     }
   };
+
+  const Footer = (
+    <div className="flex items-center justify-end gap-2 border-t border-slate-200/80 px-5 py-4 dark:border-slate-800">
+      <button
+        type="button"
+        onClick={handleCancel}
+        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+      >
+        {embed ? "Back to view" : "Cancel"}
+      </button>
+      <button
+        type="button"
+        disabled={submitting || !canSave}
+        onClick={() => void onSubmit()}
+        title={canSave ? "Save changes to gateway metadata" : "You do not have the 'gateways.edit' permission. Ask an administrator to grant it before you can save."}
+        className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+      >
+        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+        {submitting ? "Saving..." : "Save changes"}
+      </button>
+    </div>
+  );
+
+  const FormBody = (
+    <div className="space-y-4">
+      {embed ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-3 text-xs text-slate-600 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-slate-300">
+          Tip for coordinates: Find gateway on maps.google.com → right-click the exact spot → copy first pair of numbers as Latitude (e.g. -17.825...) and second as Longitude (31.033...). Save → appears immediately on Gateways Map page.
+        </div>
+      ) : null}
+      {error !== null ? (
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-3 text-xs text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Name</span>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</span>
+          <input
+            type="text"
+            list="depot-list"
+            value={depotName}
+            onChange={(e) => setDepotName(e.target.value)}
+            placeholder="Select or type..."
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+          <datalist id="depot-list">
+            {depotOptions.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Region</span>
+          <input
+            type="text"
+            list="region-list"
+            value={regionName}
+            onChange={(e) => setRegionName(e.target.value)}
+            placeholder="Select or type..."
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+          <datalist id="region-list">
+            {regionOptions.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">District</span>
+          <input
+            type="text"
+            value={districtName}
+            onChange={(e) => setDistrictName(e.target.value)}
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Network Name</span>
+          <input
+            type="text"
+            list="network-list"
+            value={networkName}
+            onChange={(e) => setNetworkName(e.target.value)}
+            placeholder="Select or type..."
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+          <datalist id="network-list">
+            {networkOptions.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Operator</span>
+          <input
+            type="text"
+            list="operator-list"
+            value={operator}
+            onChange={(e) => setOperator(e.target.value)}
+            placeholder="Select or type..."
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+          <datalist id="operator-list">
+            {operatorOptions.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Latitude</span>
+          <input
+            type="number"
+            step="any"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            placeholder="e.g. -17.825"
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Longitude</span>
+          <input
+            type="number"
+            step="any"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            placeholder="e.g. 31.033"
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Commissioning Date</span>
+          <input
+            type="date"
+            value={commissioningDate}
+            onChange={(e) => setCommissioningDate(e.target.value)}
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        </label>
+
+        <label className="flex items-center gap-2 pt-5">
+          <input
+            type="checkbox"
+            checked={locationVerified}
+            onChange={(e) => setLocationVerified(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            Location Verified
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1 md:col-span-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Address</span>
+          <textarea
+            rows={3}
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Full physical address..."
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        </label>
+      </div>
+    </div>
+  );
+
+  if (embed) {
+    return (
+      <div className="flex max-h-[75vh] flex-col">
+        <div className="overflow-y-auto px-5 py-4">
+          {FormBody}
+        </div>
+        {Footer}
+      </div>
+    );
+  }
 
   return (
     <Modal
@@ -132,185 +338,10 @@ export function EditGatewayModal({
         </div>
       </div>
 
-      <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-        {error !== null ? (
-          <div className="rounded-2xl border border-red-100 bg-red-50 p-3 text-xs text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-            {error}
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
-          <p className="text-xs text-slate-600 dark:text-slate-300">
-            Tip for coordinates: Find gateway on maps.google.com → right-click the exact spot → copy first pair of numbers as Latitude (e.g. -17.825...) and second as Longitude (31.033...). Save → appears immediately on Gateways Map page.
-          </p>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Name</span>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</span>
-            <input
-              type="text"
-              list="depot-list"
-              value={depotName}
-              onChange={(e) => setDepotName(e.target.value)}
-              placeholder="Select or type..."
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-            <datalist id="depot-list">
-              {depotOptions.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Region</span>
-            <input
-              type="text"
-              list="region-list"
-              value={regionName}
-              onChange={(e) => setRegionName(e.target.value)}
-              placeholder="Select or type..."
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-            <datalist id="region-list">
-              {regionOptions.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">District</span>
-            <input
-              type="text"
-              value={districtName}
-              onChange={(e) => setDistrictName(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Network Name</span>
-            <input
-              type="text"
-              list="network-list"
-              value={networkName}
-              onChange={(e) => setNetworkName(e.target.value)}
-              placeholder="Select or type..."
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-            <datalist id="network-list">
-              {networkOptions.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Operator</span>
-            <input
-              type="text"
-              list="operator-list"
-              value={operator}
-              onChange={(e) => setOperator(e.target.value)}
-              placeholder="Select or type..."
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-            <datalist id="operator-list">
-              {operatorOptions.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Latitude</span>
-            <input
-              type="number"
-              step="any"
-              value={latitude}
-              onChange={(e) => setLatitude(e.target.value)}
-              placeholder="e.g. -17.825"
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Longitude</span>
-            <input
-              type="number"
-              step="any"
-              value={longitude}
-              onChange={(e) => setLongitude(e.target.value)}
-              placeholder="e.g. 31.033"
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Commissioning Date</span>
-            <input
-              type="date"
-              value={commissioningDate}
-              onChange={(e) => setCommissioningDate(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-
-          <label className="flex items-center gap-2 pt-5">
-            <input
-              type="checkbox"
-              checked={locationVerified}
-              onChange={(e) => setLocationVerified(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-              Location Verified
-            </span>
-          </label>
-
-          <label className="flex flex-col gap-1 md:col-span-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Address</span>
-            <textarea
-              rows={3}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Full physical address..."
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-        </div>
+      <div className="max-h-[62vh] overflow-y-auto px-5 py-4">
+        {FormBody}
       </div>
-
-      <div className="flex items-center justify-end gap-2 border-t border-slate-200/80 px-5 py-4 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={submitting}
-          onClick={() => void onSubmit()}
-          className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
-        >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-          {submitting ? "Saving..." : "Save changes"}
-        </button>
-      </div>
+      {Footer}
     </Modal>
   );
 }

@@ -354,11 +354,9 @@ export default function GatewaysIndex() {
   const [selectedGateway, setSelectedGateway] = useState<GatewayItem | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<string>("overview");
+  const [detailMode, setDetailMode] = useState<"view" | "edit">("view");
   const [statusHistory, setStatusHistory] = useState<GatewayStatusHistoryItem[]>([]);
   const [simAssignments, setSimAssignments] = useState<GatewaySimAssignment[]>([]);
-
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editingGateway, setEditingGateway] = useState<GatewayItem | null>(null);
 
   const [assignSimModalOpen, setAssignSimModalOpen] = useState(false);
   const [assignSimTargetGatewayId, setAssignSimTargetGatewayId] = useState<number | null>(null);
@@ -400,9 +398,18 @@ export default function GatewaysIndex() {
       setError(null);
       const params: Record<string, unknown> = { page, size: pageSize };
       if (statusFilter !== "ALL") params.status = statusFilter;
-      if (selectedRegion !== "ALL") params.regionId = selectedRegion;
-      if (selectedDepot !== "ALL") params.depotId = selectedDepot;
-      if (selectedNetwork !== "ALL") params.networkId = selectedNetwork;
+      if (selectedRegion !== "ALL") {
+        if (!Number.isNaN(Number(selectedRegion))) params.regionId = Number(selectedRegion);
+        params.regionName = selectedRegion;
+      }
+      if (selectedDepot !== "ALL") {
+        if (!Number.isNaN(Number(selectedDepot))) params.depotId = Number(selectedDepot);
+        params.depotName = selectedDepot;
+      }
+      if (selectedNetwork !== "ALL") {
+        params.networkId = selectedNetwork;
+        params.networkName = selectedNetwork;
+      }
       if (selectedModel !== "ALL") params.model = selectedModel;
       if (selectedOperator !== "ALL") params.operator = selectedOperator;
       if (hasLocationFilter !== "ALL") params.hasLocation = hasLocationFilter === "YES";
@@ -443,7 +450,104 @@ export default function GatewaysIndex() {
     }
   }, [statusFilter, searchParams, setSearchParams]);
 
-  const filteredItems = useMemo(() => items, [items]);
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (statusFilter !== "ALL" && item.effectiveStatus !== statusFilter) return false;
+
+      if (selectedRegion !== "ALL") {
+        const match =
+          (item.regionId != null && String(item.regionId) === selectedRegion) ||
+          (item.regionName != null && item.regionName.toLowerCase() === selectedRegion.toLowerCase());
+        if (!match) return false;
+      }
+
+      if (selectedDepot !== "ALL") {
+        const match =
+          (item.depotId != null && String(item.depotId) === selectedDepot) ||
+          (item.depotName != null && item.depotName.toLowerCase() === selectedDepot.toLowerCase());
+        if (!match) return false;
+      }
+
+      if (selectedNetwork !== "ALL") {
+        const match =
+          (item.networkId != null && item.networkId.toLowerCase() === selectedNetwork.toLowerCase()) ||
+          (item.networkName != null && item.networkName.toLowerCase() === selectedNetwork.toLowerCase());
+        if (!match) return false;
+      }
+
+      if (selectedModel !== "ALL") {
+        if (
+          !item.model ||
+          !item.model.toLowerCase().includes(selectedModel.toLowerCase())
+        ) return false;
+      }
+
+      if (selectedOperator !== "ALL") {
+        if (
+          !item.operator ||
+          item.operator.toLowerCase() !== selectedOperator.toLowerCase()
+        ) return false;
+      }
+
+      if (hasLocationFilter === "YES") {
+        const has =
+          (typeof item.lat === "number" && !Number.isNaN(item.lat)) &&
+          (typeof item.lng === "number" && !Number.isNaN(item.lng));
+        if (!has) return false;
+      } else if (hasLocationFilter === "NO") {
+        const missing =
+          !(typeof item.lat === "number" && !Number.isNaN(item.lat)) ||
+          !(typeof item.lng === "number" && !Number.isNaN(item.lng));
+        if (!missing) return false;
+      }
+
+      if (hasSimFilter === "YES") {
+        const has =
+          !!item.simAssigned ||
+          item.activeSimId != null ||
+          item.assignedSimId != null;
+        if (!has) return false;
+      } else if (hasSimFilter === "NO") {
+        const missing =
+          !item.simAssigned &&
+          item.activeSimId == null &&
+          item.assignedSimId == null;
+        if (!missing) return false;
+      }
+
+      if (q) {
+        const haystack = [
+          item.name,
+          item.gatewayEui,
+          item.mac,
+          item.model,
+          item.address,
+          item.regionName,
+          item.depotName,
+          item.networkName,
+          item.operator,
+        ]
+          .filter((x): x is string => typeof x === "string" && x.length > 0)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+
+      return true;
+    });
+  }, [
+    items,
+    statusFilter,
+    selectedRegion,
+    selectedDepot,
+    selectedNetwork,
+    selectedModel,
+    selectedOperator,
+    hasLocationFilter,
+    hasSimFilter,
+    search,
+  ]);
 
   const regionOptions = useMemo(() => {
     const set = new Set<string>();
@@ -485,10 +589,11 @@ export default function GatewaysIndex() {
     return [...set].sort();
   }, [items]);
 
-  const openDetailModal = async (gateway: GatewayItem) => {
+  const openDetailModal = async (gateway: GatewayItem, startInEdit = false) => {
     setSelectedGateway(gateway);
     setDetailModalOpen(true);
     setDetailTab("overview");
+    setDetailMode(startInEdit ? "edit" : "view");
     setStatusHistory([]);
     setSimAssignments([]);
     setDetailLoading(true);
@@ -512,16 +617,19 @@ export default function GatewaysIndex() {
     setStatusHistory([]);
     setSimAssignments([]);
     setDetailTab("overview");
+    setDetailMode("view");
   };
 
-  const openEditModal = (item: GatewayItem) => {
-    setEditingGateway(item);
-    setEditModalOpen(true);
-  };
-
-  const closeEditModal = () => {
-    setEditModalOpen(false);
-    setEditingGateway(null);
+  const refreshSelectedGateway = async () => {
+    if (!selectedGateway || !token) return;
+    try {
+      const resp = await axios.get(`${API_BASE_URL}/api/v1/gateways/${selectedGateway.id}`, { headers });
+      const refreshed = resp.data as GatewayItem;
+      setSelectedGateway(refreshed);
+      setItems((prev) => prev.map((it) => (it.id === refreshed.id ? refreshed : it)));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const closeAssignSimModal = () => {
@@ -543,8 +651,15 @@ export default function GatewaysIndex() {
     }
   };
 
-  const pageStart = items.length === 0 ? 0 : page * pageSize + 1;
-  const pageEnd = items.length === 0 ? 0 : page * pageSize + items.length;
+  const paginatedItems = useMemo(() => {
+    const start = page * pageSize;
+    return filteredItems.slice(start, start + pageSize);
+  }, [filteredItems, page, pageSize]);
+
+  const pageStart = filteredItems.length === 0 ? 0 : page * pageSize + 1;
+  const pageEnd = filteredItems.length === 0 ? 0 : Math.min(page * pageSize + pageSize, filteredItems.length);
+  const totalFiltered = filteredItems.length;
+  const totalPagesComputed = Math.max(Math.ceil(Math.max(totalFiltered, 1) / pageSize), 1);
 
   return (
     <div className="space-y-4">
@@ -917,7 +1032,7 @@ export default function GatewaysIndex() {
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map((item) => (
+                {paginatedItems.map((item) => (
                   <tr
                     key={item.id}
                     className="border-t border-slate-200/80 text-xs transition hover:bg-gradient-to-r hover:from-blue-50/40 hover:to-red-50/30 dark:border-slate-800 dark:hover:from-blue-500/5 dark:hover:to-red-500/5"
@@ -1006,34 +1121,20 @@ export default function GatewaysIndex() {
                         <button
                           type="button"
                           onClick={() => void openDetailModal(item)}
-                          className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
+                          title="View / Edit"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
                         >
-                          <Eye className="h-3 w-3" />
-                          Details
+                          <Eye className="h-3.5 w-3.5" />
                         </button>
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            onClick={() => void openEditModal(item)}
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                          >
-                            <Pencil className="h-3 w-3" />
-                            Edit
-                          </button>
-                        ) : null}
                         {canSync ? (
                           <button
                             type="button"
                             disabled={syncingId === item.id}
                             onClick={() => void triggerSync(item.id)}
-                            className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                            title="Sync Now"
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
                           >
-                            {syncingId === item.id ? (
-                              <RefreshCw className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-3 w-3" />
-                            )}
-                            Sync Now
+                            <RefreshCw className={`h-3.5 w-3.5 ${syncingId === item.id ? "animate-spin" : ""}`} />
                           </button>
                         ) : null}
                       </div>
@@ -1048,7 +1149,7 @@ export default function GatewaysIndex() {
         <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Showing {pageStart}-{pageEnd} of {totalElements.toLocaleString()}
+              Showing {pageStart}-{pageEnd} of {totalFiltered.toLocaleString()}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -1060,11 +1161,11 @@ export default function GatewaysIndex() {
                 Previous
               </button>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                Page {totalElements === 0 ? 0 : page + 1} of {Math.max(totalPages, 1)}
+                Page {totalFiltered === 0 ? 0 : page + 1} of {totalPagesComputed}
               </span>
               <button
                 type="button"
-                disabled={loading || page + 1 >= totalPages}
+                disabled={loading || page + 1 >= totalPagesComputed}
                 onClick={() => setPage((current) => current + 1)}
                 className="rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -1078,10 +1179,32 @@ export default function GatewaysIndex() {
       <Modal
         isOpen={detailModalOpen}
         onClose={closeDetailModal}
-        className="max-w-5xl overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
+        className={`${detailMode === "edit" ? "max-w-4xl" : "max-w-5xl"} overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950`}
         backdropBlur
       >
-        {!selectedGateway ? null : (
+        {!selectedGateway ? null : detailMode === "edit" ? (
+          <EditGatewayModal
+            isOpen={true}
+            onClose={closeDetailModal}
+            gateway={selectedGateway}
+            onSaved={async () => {
+              void fetchSummary();
+              void fetchGateways();
+              setDetailMode("view");
+              await refreshSelectedGateway();
+            }}
+            token={token!}
+            apiBaseUrl={API_BASE_URL}
+            headers={headers!}
+            depotOptions={depotOptions}
+            regionOptions={regionOptions}
+            networkOptions={networkOptions}
+            operatorOptions={operatorOptions}
+            embed
+            canSave={canEdit}
+            onCancel={() => setDetailMode("view")}
+          />
+        ) : (
           <div className="flex max-h-[82vh] flex-col">
             <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1096,9 +1219,37 @@ export default function GatewaysIndex() {
                     {selectedGateway.gatewayEui || selectedGateway.mac || selectedGateway.loriotGatewayId || "No identifiers"}
                   </p>
                 </div>
-                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(selectedGateway.effectiveStatus)}`}>
-                  {selectedGateway.effectiveStatus.replace("_", " ")}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(selectedGateway.effectiveStatus)}`}>
+                    {selectedGateway.effectiveStatus.replace("_", " ")}
+                  </span>
+                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => setDetailMode(detailMode === "view" ? "edit" : "view")}
+                      title={detailMode === "view" ? "Viewing — click Eye to edit this gateway" : "Editing — click Eye to go back to view"}
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                        detailMode === "view"
+                          ? "bg-blue-600 text-white shadow"
+                          : "text-slate-500 hover:text-blue-600 dark:text-slate-400"
+                      }`}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDetailMode("edit")}
+                      title="Edit this gateway"
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                        detailMode === "edit"
+                          ? "bg-blue-600 text-white shadow"
+                          : "text-slate-500 hover:text-blue-600 dark:text-slate-400"
+                      } ${!canEdit ? "opacity-60" : ""}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <div className="flex flex-wrap gap-2">
@@ -1316,27 +1467,6 @@ export default function GatewaysIndex() {
           </div>
         )}
       </Modal>
-
-      {editingGateway ? (
-        <EditGatewayModal
-          isOpen={editModalOpen}
-          onClose={closeEditModal}
-          gateway={editingGateway}
-          onSaved={() => {
-            void fetchSummary();
-            void fetchGateways();
-            if (selectedGateway?.id === editingGateway.id)
-              void openDetailModal(editingGateway);
-          }}
-          token={token!}
-          apiBaseUrl={API_BASE_URL}
-          headers={headers!}
-          depotOptions={depotOptions}
-          regionOptions={regionOptions}
-          networkOptions={networkOptions}
-          operatorOptions={operatorOptions}
-        />
-      ) : null}
 
       {assignSimTargetGatewayId !== null ? (
         <AssignSimModal

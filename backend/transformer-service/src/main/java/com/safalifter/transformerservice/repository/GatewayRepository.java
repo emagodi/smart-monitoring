@@ -49,16 +49,21 @@ public interface GatewayRepository extends JpaRepository<Gateway, Long> {
 
     @Query("SELECT g FROM Gateway g WHERE " +
             "(:status IS NULL OR g.effectiveStatus = :status) AND " +
-            "(:regionId IS NULL OR g.regionId = :regionId) AND " +
+            "((:regionId IS NULL AND (:regionName IS NULL OR :regionName = '')) OR g.regionId = :regionId OR LOWER(COALESCE(g.regionName, '')) = LOWER(:regionName)) AND " +
             "(:districtId IS NULL OR g.districtId = :districtId) AND " +
-            "(:depotId IS NULL OR g.depotId = :depotId) AND " +
-            "(:networkId IS NULL OR :networkId = '' OR g.networkId = :networkId) AND " +
+            "((:depotId IS NULL AND (:depotName IS NULL OR :depotName = '')) OR g.depotId = :depotId OR LOWER(COALESCE(g.depotName, '')) = LOWER(:depotName)) AND " +
+            "((:networkId IS NULL OR :networkId = '') AND (:networkName IS NULL OR :networkName = '') OR g.networkId = :networkId OR LOWER(COALESCE(g.networkName, '')) = LOWER(:networkName)) AND " +
             "(:model IS NULL OR :model = '' OR LOWER(g.model) LIKE LOWER(CONCAT('%', :model, '%'))) AND " +
+            "(:operator IS NULL OR :operator = '' OR LOWER(COALESCE(g.operator, '')) = LOWER(:operator)) AND " +
+            "(:hasLocation IS NULL OR (CASE WHEN :hasLocation = TRUE THEN (g.latitude IS NOT NULL AND g.longitude IS NOT NULL) ELSE (g.latitude IS NULL OR g.longitude IS NULL) END) = TRUE) AND " +
+            "(:hasSim IS NULL OR (CASE WHEN :hasSim = TRUE THEN EXISTS (SELECT 1 FROM GatewaySimAssignment a WHERE a.gatewayId = g.id AND a.active = TRUE) ELSE NOT EXISTS (SELECT 1 FROM GatewaySimAssignment a WHERE a.gatewayId = g.id AND a.active = TRUE) END) = TRUE) AND " +
             "(:search IS NULL OR :search = '' OR " +
             "LOWER(g.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(g.gatewayEui) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(g.normalizedGatewayEui) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(g.macAddress) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(g.normalizedMac) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(g.address) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(g.serialNumber) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
             "(:lastSeenFrom IS NULL OR g.lastTrafficSeenAt >= :lastSeenFrom OR g.lastLoriotSeenAt >= :lastSeenFrom) AND " +
             "(:lastSeenTo IS NULL OR g.lastTrafficSeenAt <= :lastSeenTo OR g.lastLoriotSeenAt <= :lastSeenTo)")
@@ -72,6 +77,12 @@ public interface GatewayRepository extends JpaRepository<Gateway, Long> {
             @Param("search") String search,
             @Param("lastSeenFrom") Instant lastSeenFrom,
             @Param("lastSeenTo") Instant lastSeenTo,
+            @Param("operator") String operator,
+            @Param("hasLocation") Boolean hasLocation,
+            @Param("hasSim") Boolean hasSim,
+            @Param("regionName") String regionName,
+            @Param("depotName") String depotName,
+            @Param("networkName") String networkName,
             Pageable pageable
     );
 }

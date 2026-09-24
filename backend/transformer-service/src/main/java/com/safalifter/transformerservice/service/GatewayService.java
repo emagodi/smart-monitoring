@@ -84,6 +84,12 @@ public class GatewayService {
                 filter.getSearch(),
                 filter.getLastSeenFrom(),
                 filter.getLastSeenTo(),
+                filter.getOperator(),
+                filter.getHasLocation(),
+                filter.getHasSim(),
+                filter.getRegionName(),
+                filter.getDepotName(),
+                filter.getNetworkName(),
                 pageable
         ).map(this::toResponse);
     }

@@ -16,4 +16,10 @@ public class GatewayListFilterRequest {
     private Long depotId;
     private Instant lastSeenFrom;
     private Instant lastSeenTo;
+    private String operator;
+    private Boolean hasLocation;
+    private Boolean hasSim;
+    private String regionName;
+    private String depotName;
+    private String networkName;
 }

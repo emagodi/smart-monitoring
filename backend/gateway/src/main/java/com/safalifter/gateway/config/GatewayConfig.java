@@ -64,6 +64,18 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
 
+                .route("transformer-gateways", r -> r.path("/api/v1/gateways/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-sim-cards", r -> r.path("/api/v1/sim-cards/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-sites", r -> r.path("/api/v1/sites/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
                 .route("auth-swagger-ui", r -> r.path("/auth/swagger-ui/**", "/auth/swagger-ui.html")
                         .filters(f -> f.rewritePath("/auth/(?<segment>.*)", "/${segment}"))
                         .uri("lb://auth-service"))

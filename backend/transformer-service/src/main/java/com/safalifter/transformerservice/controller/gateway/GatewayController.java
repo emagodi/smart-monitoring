@@ -59,6 +59,12 @@ public class GatewayController {
             @RequestParam(required = false) Long depotId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant lastSeenFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant lastSeenTo,
+            @RequestParam(required = false) String operator,
+            @RequestParam(required = false) Boolean hasLocation,
+            @RequestParam(required = false) Boolean hasSim,
+            @RequestParam(required = false) String regionName,
+            @RequestParam(required = false) String depotName,
+            @RequestParam(required = false) String networkName,
             @PageableDefault(size = 25, sort = "id", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         GatewayListFilterRequest filter = new GatewayListFilterRequest();
@@ -76,6 +82,12 @@ public class GatewayController {
         filter.setDepotId(depotId);
         filter.setLastSeenFrom(lastSeenFrom);
         filter.setLastSeenTo(lastSeenTo);
+        filter.setOperator(operator);
+        filter.setHasLocation(hasLocation);
+        filter.setHasSim(hasSim);
+        filter.setRegionName(regionName);
+        filter.setDepotName(depotName);
+        filter.setNetworkName(networkName);
         return ResponseEntity.ok(gatewayService.findPage(filter, pageable));
     }
 
