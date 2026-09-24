@@ -12,12 +12,12 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "sim_cards", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_sim_cards_normalized_iccid", columnNames = {"normalized_iccid"}),
-        @UniqueConstraint(name = "uk_sim_cards_normalized_imsi", columnNames = {"normalized_imsi"})
+        @UniqueConstraint(name = "uk_sim_cards_normalized_iccid", columnNames = {"normalized_iccid"})
 }, indexes = {
         @Index(name = "idx_sim_cards_status", columnList = "status"),
         @Index(name = "idx_sim_cards_msisdn", columnList = "msisdn"),
-        @Index(name = "idx_sim_cards_operator", columnList = "operator")
+        @Index(name = "idx_sim_cards_operator", columnList = "operator"),
+        @Index(name = "idx_sim_cards_normalized_imsi", columnList = "normalized_imsi")
 })
 @Data
 @Builder

@@ -353,42 +353,12 @@ export function SimModal({
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Card Body Serial Number</span>
-              <input
-                type="text"
-                value={cardSerialNumber}
-                onChange={(e) => setCardSerialNumber(e.target.value)}
-                placeholder="Printed on plastic, not ICCID"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
               <span className={labelClass}>Operator</span>
               <input
                 type="text"
                 value={operator}
                 onChange={(e) => setOperator(e.target.value)}
                 placeholder="Econet, NetOne, Powertel, Liquid"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Network Name</span>
-              <input
-                type="text"
-                value={networkName}
-                onChange={(e) => setNetworkName(e.target.value)}
-                placeholder="Powertel LoRaWAN, Econet LTE"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 md:col-span-2">
-              <span className={labelClass}>APN</span>
-              <input
-                type="text"
-                value={apn}
-                onChange={(e) => setApn(e.target.value)}
-                placeholder="internet"
                 className={inputClass}
               />
             </label>
@@ -402,8 +372,6 @@ export function SimModal({
           <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
             <PasswordInput label="PIN" value={pin} onChange={setPin} placeholder="4-8 digits" />
             <PasswordInput label="PUK" value={puk} onChange={setPuk} placeholder="8 digits" />
-            <PasswordInput label="PIN2 (optional)" value={pin2} onChange={setPin2} />
-            <PasswordInput label="PUK2 (optional)" value={puk2} onChange={setPuk2} />
           </div>
         </div>
 
@@ -439,17 +407,6 @@ export function SimModal({
                 step="0.01"
                 value={dataPlanGb}
                 onChange={(e) => setDataPlanGb(e.target.value)}
-                placeholder="25.00"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Allowance (GB)</span>
-              <input
-                type="number"
-                step="0.01"
-                value={allowanceGb}
-                onChange={(e) => setAllowanceGb(e.target.value)}
                 placeholder="25.00"
                 className={inputClass}
               />

@@ -62,11 +62,6 @@ public class SimCardService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "SIM with this ICCID already exists");
             });
         }
-        if (normalizedImsi != null) {
-            simCardRepository.findByNormalizedImsi(normalizedImsi).ifPresent(s -> {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "SIM with this IMSI already exists");
-            });
-        }
         boolean hasSensitive = (request.getPin() != null && !request.getPin().isBlank())
                 || (request.getPuk() != null && !request.getPuk().isBlank())
                 || (request.getPin2() != null && !request.getPin2().isBlank())
@@ -108,13 +103,18 @@ public class SimCardService {
         SimCard sim = simCardRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SIM Card not found"));
         if (trimToNull(request.getIccid()) != null && !looksLikeMask(request.getIccid())) {
-            sim.setIccid(trimToNull(request.getIccid()));
+            String v = trimToNull(request.getIccid());
+            sim.setIccid(v);
+            sim.setNormalizedIccid(v);
         }
         if (trimToNull(request.getImsi()) != null && !looksLikeMask(request.getImsi())) {
-            sim.setImsi(trimToNull(request.getImsi()));
+            String v = trimToNull(request.getImsi());
+            sim.setImsi(v);
+            sim.setNormalizedImsi(v);
         }
         if (trimToNull(request.getMsisdn()) != null && !looksLikeMask(request.getMsisdn())) {
-            sim.setMsisdn(trimToNull(request.getMsisdn()));
+            String v = trimToNull(request.getMsisdn());
+            sim.setMsisdn(v);
         }
         if (trimToNull(request.getCardSerialNumber()) != null && !looksLikeMask(request.getCardSerialNumber())) {
             sim.setCardSerialNumber(trimToNull(request.getCardSerialNumber()));
@@ -414,13 +414,17 @@ public class SimCardService {
     }
 
     public static String maskIccid(String iccid, String normalized) {
-        String tail = last4(normalized != null ? normalized : iccid);
+        // Prefer actual iccid column value for last-4 suffix to avoid stale-normalized drift; fallback to normalized only when iccid empty
+        String source = (iccid != null && !iccid.isBlank()) ? iccid : normalized;
+        String tail = last4(source);
         if (tail == null) return null;
         return "************" + tail;
     }
 
     private static String maskImsi(String imsi, String normalized) {
-        String tail = last4(normalized != null ? normalized : imsi);
+        // Prefer actual imsi column value for last-4 suffix; fallback to normalized only when imsi empty
+        String source = (imsi != null && !imsi.isBlank()) ? imsi : normalized;
+        String tail = last4(source);
         if (tail == null) return null;
         return "********" + tail;
     }

@@ -95,21 +95,27 @@ const formatDateTime = (value?: string | null) => {
   return parsed.toLocaleString();
 };
 
-const maskIccid = (iccid: string) => {
+const looksAlreadyMasked = (value?: string | null) =>
+  typeof value === "string" && value.length > 0 && value.includes("*");
+
+const maskIccid = (iccid?: string | null) => {
+  if (looksAlreadyMasked(iccid)) return iccid as string;
   if (!iccid) return "************0000";
   if (iccid.length <= 4) return `************${iccid}`;
   return `************${iccid.slice(-4)}`;
 };
 
 const maskImsi = (imsi?: string | null) => {
-  if (!imsi) return "—";
+  if (looksAlreadyMasked(imsi)) return imsi as string;
+  if (!imsi) return "********0000";
   if (imsi.length <= 4) return `********${imsi}`;
   return `********${imsi.slice(-4)}`;
 };
 
 const maskMsisdn = (msisdn?: string | null, fallback?: string | null) => {
   const value = msisdn || fallback;
-  if (!value) return "—";
+  if (looksAlreadyMasked(value)) return value as string;
+  if (!value) return "****0000";
   if (value.length <= 4) return `****${value}`;
   return `****${value.slice(-4)}`;
 };
@@ -478,6 +484,28 @@ export default function SimsIndex() {
     return fields?.has(field) ?? false;
   };
 
+  const clearAllRevealed = () => {
+    setRevealedMap(new Map());
+    setVisibleFieldsMap(new Map());
+  };
+
+  const clearRevealedForSim = (simId: number | null | undefined) => {
+    if (!simId) {
+      clearAllRevealed();
+      return;
+    }
+    setRevealedMap((prev) => {
+      const next = new Map(prev);
+      next.delete(simId);
+      return next;
+    });
+    setVisibleFieldsMap((prev) => {
+      const next = new Map(prev);
+      next.delete(simId);
+      return next;
+    });
+  };
+
   const toggleFieldVisible = (simId: number, field: string) => {
     setVisibleFieldsMap((prev) => {
       const next = new Map(prev);
@@ -694,19 +722,7 @@ export default function SimsIndex() {
                 ))}
               </div>
             </div>
-            <div className="flex w-full flex-col gap-2 xl:max-w-[540px]">
-              <div className="enterprise-chip flex items-center gap-3 px-3 py-2">
-                <Search className="h-3.5 w-3.5 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                    setPage(0);
-                  }}
-                  placeholder="Search ICCID last-4, MSISDN, operator, gateway name..."
-                  className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
-                />
-              </div>
+            <div className="flex w-full flex-col gap-2 xl:max-w-[560px]">
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex min-w-[180px] flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 sm:col-span-1">
                   Operator
@@ -742,6 +758,18 @@ export default function SimsIndex() {
                   </select>
                 </label>
               </div>
+              <div className="enterprise-chip flex items-center gap-3 px-3 py-2">
+                <Search className="h-3.5 w-3.5 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(0);
+                  }}
+                  placeholder="Search ICCID last-4, MSISDN, operator, gateway name..."
+                  className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -763,18 +791,16 @@ export default function SimsIndex() {
           </div>
         ) : (
           <div className="w-full col-span-full overflow-x-auto">
-            <table className="min-w-[1240px] w-full">
+            <table className="min-w-[1020px] w-full">
               <thead className="bg-gradient-to-r from-blue-50/80 via-white to-red-50/70 dark:from-blue-500/10 dark:via-slate-900 dark:to-red-500/10">
                 <tr className="text-left">
                   <Th>Status</Th>
                   <Th>ICCID</Th>
-                  <Th>IMSI</Th>
                   <Th>MSISDN</Th>
                   <Th>Operator</Th>
                   <Th>PIN</Th>
                   <Th>PUK</Th>
                   <Th>Gateway</Th>
-                  <Th>Assigned</Th>
                   <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
@@ -801,14 +827,6 @@ export default function SimsIndex() {
                             {revealed && isFieldVisible(item.id, "iccid") ? revealed.iccid : maskIccid(item.iccid)}
                           </p>
                           <FieldEyeToggle sim={item} field="iccid" titleShow="Reveal ICCID" titleHide="Hide ICCID" />
-                        </div>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-mono min-w-0 truncate text-slate-600 dark:text-slate-300">
-                            {revealed && isFieldVisible(item.id, "imsi") ? (revealed.imsi ?? maskImsi(item.imsi)) : maskImsi(item.imsi)}
-                          </p>
-                          <FieldEyeToggle sim={item} field="imsi" titleShow="Reveal IMSI" titleHide="Hide IMSI" />
                         </div>
                       </Td>
                       <Td>
@@ -854,16 +872,6 @@ export default function SimsIndex() {
                         ) : (
                           <p className="text-slate-400 dark:text-slate-500">Unassigned</p>
                         )}
-                      </Td>
-                      <Td>
-                        <div className="space-y-0.5">
-                          <p className="text-slate-700 dark:text-slate-200">{formatDateTime(item.assignedAt)}</p>
-                          {item.unassignedAt ? (
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                              Unassigned {formatDateTime(item.unassignedAt)}
-                            </p>
-                          ) : null}
-                        </div>
                       </Td>
                       <Td className="text-right">
                         <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
@@ -1156,7 +1164,10 @@ export default function SimsIndex() {
         isOpen={createSimModalOpen}
         onClose={closeSimModals}
         isEdit={false}
-        onSaved={() => { void fetchSims(); }}
+        onSaved={() => {
+          clearAllRevealed();
+          void fetchSims();
+        }}
         headers={headers!}
         apiBaseUrl={API_BASE_URL}
       />
@@ -1166,7 +1177,10 @@ export default function SimsIndex() {
           onClose={closeSimModals}
           isEdit={true}
           existing={simModalTarget}
-          onSaved={() => { void fetchSims(); }}
+          onSaved={() => {
+            clearRevealedForSim(simModalTarget.id);
+            void fetchSims();
+          }}
           headers={headers!}
           apiBaseUrl={API_BASE_URL}
         />
