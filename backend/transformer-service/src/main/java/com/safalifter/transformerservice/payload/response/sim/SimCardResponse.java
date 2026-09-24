@@ -20,6 +20,11 @@ public class SimCardResponse {
     private String apn;
     private String pin;
     private String puk;
+    private String pin2;
+    private String puk2;
+    private String ki;
+    private String opc;
+    private String cardSerialNumber;
     private String status;
     private BigDecimal dataPlanGb;
     private BigDecimal allowanceGb;

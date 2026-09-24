@@ -25,6 +25,11 @@ public class GatewayCreateRequest {
     private String address;
     private GatewayLocationSource locationSource;
     private String customer;
+    private String networkName;
+    private String operator;
+    private String regionName;
+    private String districtName;
+    private String depotName;
     private Long regionId;
     private Long districtId;
     private Long depotId;

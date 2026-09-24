@@ -14,9 +14,15 @@ public class GatewayUpdateRequest {
     private BigDecimal altitude;
     private String address;
     private String customer;
+    private String networkId;
+    private String networkName;
+    private String operator;
     private Long regionId;
+    private String regionName;
     private Long districtId;
+    private String districtName;
     private Long depotId;
+    private String depotName;
     private LocalDate commissioningDate;
     private Boolean locationVerified;
 }

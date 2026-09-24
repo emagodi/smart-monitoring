@@ -7,6 +7,8 @@ import {
   Link2,
   Link2Off,
   Loader2,
+  Pencil,
+  Plus,
   RefreshCcw,
   Router,
   Search,
@@ -15,10 +17,12 @@ import {
   ShieldCheck,
   CardSim,
   Smartphone,
+  Trash2,
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Modal } from "../../components/ui/modal";
+import { SimModal } from "./SimModal";
 
 type SimStatus = "ACTIVE" | "INACTIVE" | "ASSIGNED" | "UNASSIGNED" | "SUSPENDED";
 
@@ -277,11 +281,43 @@ export default function SimsIndex() {
   const canViewSensitive = hasPermission("sims.view_sensitive");
   const canAssign = hasPermission("sims.assign");
   const canUnassign = hasPermission("sims.unassign");
+  const canCreateSim = hasPermission("sims.create");
+  const canEditSim = hasPermission("sims.edit");
+
+  const [createSimModalOpen, setCreateSimModalOpen] = useState(false);
+  const [editSimModalOpen, setEditSimModalOpen] = useState(false);
+  const [simModalTarget, setSimModalTarget] = useState<SimCardItem | null>(null);
 
   const headers = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
     [token]
   );
+
+  const openCreateSimModal = () => {
+    setSimModalTarget(null);
+    setCreateSimModalOpen(true);
+  };
+
+  const openEditSimModal = (item: SimCardItem) => {
+    setSimModalTarget(item);
+    setEditSimModalOpen(true);
+  };
+
+  const closeSimModals = () => {
+    setCreateSimModalOpen(false);
+    setEditSimModalOpen(false);
+    setSimModalTarget(null);
+  };
+
+  const retireSim = async (id: number) => {
+    try {
+      await axios.delete(`${API_BASE_URL}/api/v1/sim-cards/${id}`, { headers });
+      await fetchSims();
+    } catch (e) {
+      console.error(e);
+      setError("Failed to retire SIM.");
+    }
+  };
 
   const fetchSims = useCallback(async () => {
     if (!token) return;
@@ -430,7 +466,7 @@ export default function SimsIndex() {
     try {
       setSubmitting(true);
       await axios.post(
-        `${API_BASE_URL}/api/v1/gateways/${selectedGatewayId}/sim-assignments`,
+        `${API_BASE_URL}/api/v1/gateways/${selectedGatewayId}/sims/assign`,
         {
           simId: assignTargetSim.id,
           slotNumber: assignSlot,
@@ -449,15 +485,13 @@ export default function SimsIndex() {
   };
 
   const submitUnassign = async () => {
-    if (!unassignTargetSim || !unassignTargetSim.assignedGatewayId) return;
+    if (!unassignTargetSim) return;
     try {
       setSubmitting(true);
-      await axios.delete(
-        `${API_BASE_URL}/api/v1/gateways/${unassignTargetSim.assignedGatewayId}/sim-assignments/${unassignTargetSim.id}`,
-        {
-          headers,
-          data: { reason: unassignReason || "Operator unassigned SIM" },
-        }
+      await axios.post(
+        `${API_BASE_URL}/api/v1/sim-cards/${unassignTargetSim.id}/unassign`,
+        { reason: unassignReason || "Operator unassigned SIM" },
+        { headers }
       );
       closeUnassignModal();
       await fetchSims();
@@ -516,6 +550,16 @@ export default function SimsIndex() {
                 </>
               )}
             </div>
+            {canCreateSim ? (
+              <button
+                type="button"
+                onClick={openCreateSimModal}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New SIM
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void fetchSims()}
@@ -787,6 +831,16 @@ export default function SimsIndex() {
                               </button>
                             )
                           ) : null}
+                          {canEditSim ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditSimModal(item)}
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </button>
+                          ) : null}
                           {canAssign && !item.assignedGatewayId ? (
                             <button
                               type="button"
@@ -805,6 +859,20 @@ export default function SimsIndex() {
                             >
                               <Link2Off className="h-3 w-3" />
                               Unassign
+                            </button>
+                          ) : null}
+                          {canEditSim && item.status !== "RETIRED" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Retire SIM ${maskIccid(item.iccid)}? This sets status to RETIRED and removes it from available inventory but keeps audit history.`)) {
+                                  void retireSim(item.id);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Retire
                             </button>
                           ) : null}
                         </div>
@@ -1098,6 +1166,26 @@ export default function SimsIndex() {
           </div>
         </div>
       </Modal>
+
+      <SimModal
+        isOpen={createSimModalOpen}
+        onClose={closeSimModals}
+        isEdit={false}
+        onSaved={() => { void fetchSims(); }}
+        headers={headers!}
+        apiBaseUrl={API_BASE_URL}
+      />
+      {simModalTarget ? (
+        <SimModal
+          isOpen={editSimModalOpen}
+          onClose={closeSimModals}
+          isEdit={true}
+          existing={simModalTarget}
+          onSaved={() => { void fetchSims(); }}
+          headers={headers!}
+          apiBaseUrl={API_BASE_URL}
+        />
+      ) : null}
     </div>
   );
 }

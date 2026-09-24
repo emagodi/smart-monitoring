@@ -18,6 +18,10 @@ public interface SimCardRepository extends JpaRepository<SimCard, Long> {
 
     Optional<SimCard> findByMsisdn(String msisdn);
 
+    @Query("SELECT s FROM SimCard s WHERE s.status = 'AVAILABLE' AND s.id NOT IN " +
+            "(SELECT a.simId FROM GatewaySimAssignment a WHERE a.active = true)")
+    Page<SimCard> findAvailable(Pageable pageable);
+
     @Query("SELECT s FROM SimCard s WHERE " +
             "(:status IS NULL OR s.status = :status) AND " +
             "(:operator IS NULL OR :operator = '' OR LOWER(s.operator) LIKE LOWER(CONCAT('%', :operator, '%'))) AND " +

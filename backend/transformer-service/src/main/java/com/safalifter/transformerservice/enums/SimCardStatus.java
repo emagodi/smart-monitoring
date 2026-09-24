@@ -8,5 +8,6 @@ public enum SimCardStatus {
     LOST,
     DAMAGED,
     EXPIRED,
-    DECOMMISSIONED
+    DECOMMISSIONED,
+    RETIRED
 }

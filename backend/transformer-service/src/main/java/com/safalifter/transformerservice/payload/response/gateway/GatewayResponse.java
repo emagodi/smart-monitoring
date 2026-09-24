@@ -46,6 +46,11 @@ public class GatewayResponse {
     private Instant locationVerifiedAt;
     private String locationVerifiedBy;
     private String customer;
+    private String operator;
+    private String networkName;
+    private String depotName;
+    private String regionName;
+    private String districtName;
     private Long regionId;
     private Long districtId;
     private Long depotId;
@@ -55,7 +60,10 @@ public class GatewayResponse {
     private Instant decommissionedAt;
     private String decommissionedReason;
     private Long activeSimId;
+    private Long assignedSimId;
     private String assignedMsisdn;
+    private String assignedSimIccid;
+    private boolean simAssigned;
     private String createdBy;
     private LocalDateTime createdAt;
     private String updatedBy;

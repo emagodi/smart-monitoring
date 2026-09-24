@@ -2,10 +2,14 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
+  Activity,
   AlertTriangle,
   CloudOff,
   Eye,
+  FileWarning,
   HelpCircle,
+  Link2,
+  Link2Off,
   Loader2,
   MapPinned,
   MapPinOff,
@@ -23,6 +27,8 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import { Modal } from "../../components/ui/modal";
+import { EditGatewayModal } from "./EditGatewayModal";
+import { AssignSimModal } from "./AssignSimModal";
 
 type GatewayStatus = "ONLINE" | "OFFLINE" | "DEGRADED" | "NEVER_SEEN" | "UNKNOWN";
 
@@ -64,8 +70,10 @@ interface GatewayItem {
   address?: string | null;
   locationSource?: string | null;
   simAssigned?: boolean;
+  activeSimId?: number | null;
   assignedSimId?: number | null;
   assignedSimIccid?: string | null;
+  assignedMsisdn?: string | null;
   decommissioned?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -84,10 +92,16 @@ interface GatewaySimAssignment {
   id: number;
   simId: number;
   iccid?: string | null;
+  simIccid?: string | null;
+  simMsisdn?: string | null;
   slotNumber: number;
   active: boolean;
+  status?: "ACTIVE" | "UNASSIGNED" | string | null;
   assignedAt?: string | null;
   unassignedAt?: string | null;
+  assignedBy?: string | null;
+  unassignedBy?: string | null;
+  reason?: string | null;
 }
 
 type PagePayload<T> = {
@@ -343,6 +357,12 @@ export default function GatewaysIndex() {
   const [statusHistory, setStatusHistory] = useState<GatewayStatusHistoryItem[]>([]);
   const [simAssignments, setSimAssignments] = useState<GatewaySimAssignment[]>([]);
 
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingGateway, setEditingGateway] = useState<GatewayItem | null>(null);
+
+  const [assignSimModalOpen, setAssignSimModalOpen] = useState(false);
+  const [assignSimTargetGatewayId, setAssignSimTargetGatewayId] = useState<number | null>(null);
+
   const canSync = hasPermission("gateways.sync");
   const canEdit = hasPermission("gateways.edit");
 
@@ -475,7 +495,7 @@ export default function GatewaysIndex() {
     try {
       const [historyResp, simResp] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/v1/gateways/${gateway.id}/status-history`, { headers }),
-        axios.get(`${API_BASE_URL}/api/v1/gateways/${gateway.id}/sim-assignments`, { headers }),
+        axios.get(`${API_BASE_URL}/api/v1/gateways/${gateway.id}/sims`, { headers }),
       ]);
       setStatusHistory(normalizeList<GatewayStatusHistoryItem>(historyResp.data));
       setSimAssignments(normalizeList<GatewaySimAssignment>(simResp.data));
@@ -492,6 +512,21 @@ export default function GatewaysIndex() {
     setStatusHistory([]);
     setSimAssignments([]);
     setDetailTab("overview");
+  };
+
+  const openEditModal = (item: GatewayItem) => {
+    setEditingGateway(item);
+    setEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditModalOpen(false);
+    setEditingGateway(null);
+  };
+
+  const closeAssignSimModal = () => {
+    setAssignSimModalOpen(false);
+    setAssignSimTargetGatewayId(null);
   };
 
   const triggerSync = async (gatewayId: number) => {
@@ -874,7 +909,7 @@ export default function GatewaysIndex() {
                 <tr className="text-left">
                   <Th>Status</Th>
                   <Th>Gateway</Th>
-                  <Th>Region / Depot</Th>
+                  <Th>Depot</Th>
                   <Th>Network / Operator</Th>
                   <Th>SIM</Th>
                   <Th>Last Seen</Th>
@@ -903,10 +938,7 @@ export default function GatewaysIndex() {
                       </div>
                     </Td>
                     <Td>
-                      <div className="space-y-0.5">
-                        <p className="text-slate-700 dark:text-slate-200">{item.regionName || "—"}</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">{item.depotName || "—"}</p>
-                      </div>
+                      <p className="text-slate-700 dark:text-slate-200">{item.depotName || "—"}</p>
                     </Td>
                     <Td>
                       <div className="space-y-0.5">
@@ -915,17 +947,47 @@ export default function GatewaysIndex() {
                       </div>
                     </Td>
                     <Td>
-                      {item.simAssigned ? (
-                        <div className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
-                          <CardSim className="h-3.5 w-3.5" />
-                          <span className="text-[11px] font-medium">Assigned</span>
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-300">
-                          <CardSim className="h-3.5 w-3.5" />
-                          <span className="text-[11px] font-medium">Unassigned</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const isAssigned =
+                          !!item.simAssigned ||
+                          item.activeSimId != null ||
+                          item.assignedSimId != null;
+                        const hint = item.assignedMsisdn || item.assignedSimIccid || null;
+                        const content = (
+                          <div className="flex flex-col gap-0.5">
+                            {isAssigned ? (
+                              <div className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                                <CardSim className="h-3.5 w-3.5" />
+                                <span className="text-[11px] font-medium">Assigned</span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-300">
+                                <CardSim className="h-3.5 w-3.5" />
+                                <span className="text-[11px] font-medium">Unassigned</span>
+                              </div>
+                            )}
+                            {hint ? (
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                {hint}
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                        if (!canEdit) return content;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingGateway(item);
+                              setAssignSimModalOpen(true);
+                              setAssignSimTargetGatewayId(item.id);
+                            }}
+                            className="w-full cursor-pointer text-left transition hover:opacity-80"
+                          >
+                            {content}
+                          </button>
+                        );
+                      })()}
                     </Td>
                     <Td>
                       <div className="space-y-0.5">
@@ -952,6 +1014,7 @@ export default function GatewaysIndex() {
                         {canEdit ? (
                           <button
                             type="button"
+                            onClick={() => void openEditModal(item)}
                             className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                           >
                             <Pencil className="h-3 w-3" />
@@ -1081,7 +1144,17 @@ export default function GatewaysIndex() {
                   <OverviewTile label="Firmware" value={selectedGateway.fwVersion || "—"} />
                   <OverviewTile label="Network" value={selectedGateway.networkName || "—"} />
                   <OverviewTile label="Operator" value={selectedGateway.operator || "—"} />
-                  <OverviewTile label="Location Source" value={selectedGateway.locationSource || "—"} />
+                  <OverviewTile label="Region" value={selectedGateway.regionName || "—"} />
+                  <OverviewTile
+                    label="Location Source"
+                    value={
+                      selectedGateway.locationSource === "LORIOT_API"
+                        ? "Automatic (LORIOT API)"
+                        : selectedGateway.locationSource === "MANUAL"
+                          ? "Manual — saved via Edit form"
+                          : selectedGateway.locationSource || "—"
+                    }
+                  />
                   <OverviewTile
                     label="Latitude"
                     value={typeof selectedGateway.lat === "number" ? String(selectedGateway.lat) : "—"}
@@ -1132,9 +1205,24 @@ export default function GatewaysIndex() {
                 </div>
               ) : detailTab === "sim" ? (
                 <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    <CardSim className="h-4 w-4 text-blue-500" />
-                    SIM card assignments
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <CardSim className="h-4 w-4 text-blue-500" />
+                      SIM card assignments
+                    </div>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignSimTargetGatewayId(selectedGateway!.id);
+                          setAssignSimModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        Assign SIM
+                      </button>
+                    ) : null}
                   </div>
                   <div className="mt-3 space-y-2">
                     {simAssignments.length === 0 ? (
@@ -1143,20 +1231,60 @@ export default function GatewaysIndex() {
                       simAssignments.map((assignment) => (
                         <div key={assignment.id} className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="font-mono text-xs text-slate-700 dark:text-slate-200">
-                              {assignment.iccid || `SIM #${assignment.simId}`}
+                            <div className="flex flex-col gap-0.5">
+                              <div className="font-mono text-xs text-slate-700 dark:text-slate-200">
+                                {assignment.simIccid || assignment.iccid || `SIM #${assignment.simId}`}
+                              </div>
+                              {assignment.simMsisdn ? (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                  MSISDN · {assignment.simMsisdn}
+                                </p>
+                              ) : null}
+                              {assignment.reason ? (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  Reason: {assignment.reason}
+                                </p>
+                              ) : null}
                             </div>
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                              assignment.active
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "border-slate-200 bg-slate-100 text-slate-600"
-                            }`}>
-                              {assignment.active ? "Active" : "Inactive"} · Slot {assignment.slotNumber}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                                assignment.active
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-slate-200 bg-slate-100 text-slate-600"
+                              }`}>
+                                {assignment.status || (assignment.active ? "ACTIVE" : "UNASSIGNED")} · Slot {assignment.slotNumber}
+                              </span>
+                              {assignment.active && canEdit ? (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const ok = window.confirm("Unassign this SIM card?");
+                                    if (!ok) return;
+                                    try {
+                                      await axios.post(
+                                        `${API_BASE_URL}/api/v1/gateways/${selectedGateway!.id}/sims/unassign?assignmentId=${assignment.id}`,
+                                        { reason: "Manual unassign from gateway details" },
+                                        { headers }
+                                      );
+                                      if (selectedGateway) {
+                                        void openDetailModal(selectedGateway);
+                                      }
+                                      await Promise.all([fetchSummary(), fetchGateways(currentFetchRef)]);
+                                    } catch (err) {
+                                      console.error(err);
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700"
+                                >
+                                  <Link2Off className="h-3 w-3" />
+                                  Unassign
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                           <div className="mt-2 grid gap-1 text-[11px] text-slate-500 dark:text-slate-400 sm:grid-cols-2">
-                            <p>Assigned: {formatDateTime(assignment.assignedAt)}</p>
-                            <p>Unassigned: {formatDateTime(assignment.unassignedAt)}</p>
+                            <p>Assigned: {formatDateTime(assignment.assignedAt)} {assignment.assignedBy ? `by ${assignment.assignedBy}` : ""}</p>
+                            <p>Unassigned: {formatDateTime(assignment.unassignedAt)} {assignment.unassignedBy ? `by ${assignment.unassignedBy}` : ""}</p>
                           </div>
                         </div>
                       ))
@@ -1188,6 +1316,44 @@ export default function GatewaysIndex() {
           </div>
         )}
       </Modal>
+
+      {editingGateway ? (
+        <EditGatewayModal
+          isOpen={editModalOpen}
+          onClose={closeEditModal}
+          gateway={editingGateway}
+          onSaved={() => {
+            void fetchSummary();
+            void fetchGateways();
+            if (selectedGateway?.id === editingGateway.id)
+              void openDetailModal(editingGateway);
+          }}
+          token={token!}
+          apiBaseUrl={API_BASE_URL}
+          headers={headers!}
+          depotOptions={depotOptions}
+          regionOptions={regionOptions}
+          networkOptions={networkOptions}
+          operatorOptions={operatorOptions}
+        />
+      ) : null}
+
+      {assignSimTargetGatewayId !== null ? (
+        <AssignSimModal
+          isOpen={assignSimModalOpen}
+          onClose={closeAssignSimModal}
+          gatewayId={assignSimTargetGatewayId}
+          onSaved={() => {
+            void fetchSummary();
+            void fetchGateways();
+            if (selectedGateway?.id === assignSimTargetGatewayId) {
+              void openDetailModal(selectedGateway);
+            }
+          }}
+          headers={headers!}
+          apiBaseUrl={API_BASE_URL}
+        />
+      ) : null}
     </div>
   );
 }

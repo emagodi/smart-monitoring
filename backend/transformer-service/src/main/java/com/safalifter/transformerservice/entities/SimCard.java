@@ -56,6 +56,21 @@ public class SimCard {
     @Column(name = "encrypted_puk", length = 512)
     private String encryptedPuk;
 
+    @Column(name = "encrypted_pin2", length = 512)
+    private String encryptedPin2;
+
+    @Column(name = "encrypted_puk2", length = 512)
+    private String encryptedPuk2;
+
+    @Column(name = "ki", length = 256)
+    private String ki;
+
+    @Column(name = "opc", length = 256)
+    private String opc;
+
+    @Column(name = "card_serial_number", length = 256)
+    private String cardSerialNumber;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 32)
     private SimCardStatus status;

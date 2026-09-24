@@ -9,4 +9,6 @@ public class SimCardRevealResponse {
     private Long id;
     private String pin;
     private String puk;
+    private String pin2;
+    private String puk2;
 }

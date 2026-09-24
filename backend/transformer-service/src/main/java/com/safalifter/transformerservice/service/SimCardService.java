@@ -68,7 +68,9 @@ public class SimCardService {
             });
         }
         boolean hasSensitive = (request.getPin() != null && !request.getPin().isBlank())
-                || (request.getPuk() != null && !request.getPuk().isBlank());
+                || (request.getPuk() != null && !request.getPuk().isBlank())
+                || (request.getPin2() != null && !request.getPin2().isBlank())
+                || (request.getPuk2() != null && !request.getPuk2().isBlank());
         if (hasSensitive) {
             encryptionService.requireEncryptionKeyForWrite();
         }
@@ -82,6 +84,11 @@ public class SimCardService {
         sim.setApn(trimToNull(request.getApn()));
         sim.setEncryptedPin(encryptionService.encrypt(trimToNull(request.getPin())));
         sim.setEncryptedPuk(encryptionService.encrypt(trimToNull(request.getPuk())));
+        sim.setEncryptedPin2(encryptionService.encrypt(trimToNull(request.getPin2())));
+        sim.setEncryptedPuk2(encryptionService.encrypt(trimToNull(request.getPuk2())));
+        sim.setKi(trimToNull(request.getKi()));
+        sim.setOpc(trimToNull(request.getOpc()));
+        sim.setCardSerialNumber(trimToNull(request.getCardSerialNumber()));
         sim.setStatus(request.getStatus() != null ? request.getStatus() : SimCardStatus.AVAILABLE);
         sim.setDataPlanGb(request.getDataPlanGb());
         sim.setAllowanceGb(request.getAllowanceGb());
@@ -99,9 +106,37 @@ public class SimCardService {
         forbidSupplierCrud();
         SimCard sim = simCardRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SIM Card not found"));
+        boolean hasSensitive = (request.getPin() != null && !request.getPin().isBlank())
+                || (request.getPuk() != null && !request.getPuk().isBlank())
+                || (request.getPin2() != null && !request.getPin2().isBlank())
+                || (request.getPuk2() != null && !request.getPuk2().isBlank());
+        if (hasSensitive) {
+            encryptionService.requireEncryptionKeyForWrite();
+        }
         sim.setMsisdn(trimToNull(request.getMsisdn()));
         sim.setOperator(trimToNull(request.getOperator()));
         sim.setApn(trimToNull(request.getApn()));
+        if (trimToNull(request.getPin()) != null) {
+            sim.setEncryptedPin(encryptionService.encrypt(trimToNull(request.getPin())));
+        }
+        if (trimToNull(request.getPuk()) != null) {
+            sim.setEncryptedPuk(encryptionService.encrypt(trimToNull(request.getPuk())));
+        }
+        if (trimToNull(request.getPin2()) != null) {
+            sim.setEncryptedPin2(encryptionService.encrypt(trimToNull(request.getPin2())));
+        }
+        if (trimToNull(request.getPuk2()) != null) {
+            sim.setEncryptedPuk2(encryptionService.encrypt(trimToNull(request.getPuk2())));
+        }
+        if (request.getKi() != null) {
+            sim.setKi(trimToNull(request.getKi()));
+        }
+        if (request.getOpc() != null) {
+            sim.setOpc(trimToNull(request.getOpc()));
+        }
+        if (request.getCardSerialNumber() != null) {
+            sim.setCardSerialNumber(trimToNull(request.getCardSerialNumber()));
+        }
         if (request.getStatus() != null) {
             SimCardStatus prev = sim.getStatus();
             if (request.getStatus() != prev) {
@@ -127,6 +162,8 @@ public class SimCardService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SIM Card not found"));
         String pin = null;
         String puk = null;
+        String pin2 = null;
+        String puk2 = null;
         try {
             pin = encryptionService.decrypt(sim.getEncryptedPin());
         } catch (Exception e) {
@@ -137,6 +174,16 @@ public class SimCardService {
         } catch (Exception e) {
             log.warn("Failed to decrypt puk for SIM id={}", id, e);
         }
+        try {
+            pin2 = encryptionService.decrypt(sim.getEncryptedPin2());
+        } catch (Exception e) {
+            log.warn("Failed to decrypt pin2 for SIM id={}", id, e);
+        }
+        try {
+            puk2 = encryptionService.decrypt(sim.getEncryptedPuk2());
+        } catch (Exception e) {
+            log.warn("Failed to decrypt puk2 for SIM id={}", id, e);
+        }
         String actor = accessScopeService.getCurrentUserEmail();
         String reason = trimToNull(request.getReason()) != null ? trimToNull(request.getReason()) : "unspecified";
         log.info("AUDIT SIM_REVEAL actor={} simId={} reason={} iccidTail={}",
@@ -145,7 +192,26 @@ public class SimCardService {
                 .id(sim.getId())
                 .pin(pin)
                 .puk(puk)
+                .pin2(pin2)
+                .puk2(puk2)
                 .build();
+    }
+
+    @Transactional
+    public void retire(Long id) {
+        forbidSupplierCrud();
+        SimCard sim = simCardRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SIM Card not found"));
+        sim.setStatus(SimCardStatus.RETIRED);
+        sim.setUpdatedBy(accessScopeService.getCurrentUserEmail());
+        simCardRepository.save(sim);
+        log.info("Retired SIM id={} iccidTail={} by={}", id, last4(sim.getNormalizedIccid()), accessScopeService.getCurrentUserEmail());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SimCardResponse> findAvailable(Pageable pageable) {
+        forbidSupplier();
+        return simCardRepository.findAvailable(pageable).map(this::toMaskedResponse);
     }
 
     @Transactional
@@ -221,6 +287,27 @@ public class SimCardService {
         return toAssignmentResponse(saved);
     }
 
+    @Transactional
+    public GatewaySimAssignmentResponse unassignBySimId(Long simId, SimUnassignRequest request) {
+        forbidSupplierCrud();
+        GatewaySimAssignment a = assignmentRepository.findActiveBySimId(simId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active assignment found for this SIM"));
+        String actor = accessScopeService.getCurrentUserEmail();
+        Instant now = Instant.now();
+        a.setActive(false);
+        a.setUnassignedAt(now);
+        a.setUnassignedBy(actor);
+        a.setReason(request != null ? trimToNull(request.getReason()) : a.getReason());
+        GatewaySimAssignment saved = assignmentRepository.save(a);
+        simCardRepository.findById(a.getSimId()).ifPresent(sim -> {
+            sim.setStatus(SimCardStatus.AVAILABLE);
+            sim.setUpdatedBy(actor);
+            simCardRepository.save(sim);
+        });
+        log.info("Unassigned (SIM-based) assignment id={} (simId={} gatewayId={}) by={}", saved.getId(), simId, saved.getGatewayId(), actor);
+        return toAssignmentResponse(saved);
+    }
+
     @Transactional(readOnly = true)
     public Page<GatewaySimAssignmentResponse> getAssignmentHistory(Long gatewayId, Pageable pageable) {
         forbidSupplier();
@@ -243,6 +330,11 @@ public class SimCardService {
                 .apn(sim.getApn())
                 .pin("****")
                 .puk("****")
+                .pin2("****")
+                .puk2("****")
+                .ki(maskTail(sim.getKi()))
+                .opc(maskTail(sim.getOpc()))
+                .cardSerialNumber(maskTail(sim.getCardSerialNumber()))
                 .status(sim.getStatus() != null ? sim.getStatus().name() : null)
                 .dataPlanGb(sim.getDataPlanGb())
                 .allowanceGb(sim.getAllowanceGb())
@@ -260,12 +352,14 @@ public class SimCardService {
         SimCard sim = simCardRepository.findById(a.getSimId()).orElse(null);
         String maskedMsisdn = sim != null ? maskMsisdn(sim.getMsisdn()) : null;
         String maskedIccid = sim != null ? maskIccid(sim.getIccid(), sim.getNormalizedIccid()) : null;
+        String assignmentStatus = Boolean.TRUE.equals(a.getActive()) ? "ACTIVE" : "UNASSIGNED";
         return GatewaySimAssignmentResponse.builder()
                 .id(a.getId())
                 .gatewayId(a.getGatewayId())
                 .simId(a.getSimId())
                 .slotNumber(a.getSlotNumber())
                 .active(Boolean.TRUE.equals(a.getActive()))
+                .status(assignmentStatus)
                 .assignedAt(a.getAssignedAt())
                 .unassignedAt(a.getUnassignedAt())
                 .assignedBy(a.getAssignedBy())
@@ -284,7 +378,7 @@ public class SimCardService {
         return "*".repeat(t.length() - 4) + t.substring(t.length() - 4);
     }
 
-    private static String maskIccid(String iccid, String normalized) {
+    public static String maskIccid(String iccid, String normalized) {
         String tail = last4(normalized != null ? normalized : iccid);
         if (tail == null) return null;
         return "************" + tail;
@@ -300,6 +394,13 @@ public class SimCardService {
         if (s == null || s.isBlank()) return null;
         String t = s.trim();
         return t.length() <= 4 ? t : t.substring(t.length() - 4);
+    }
+
+    private static String maskTail(String s) {
+        if (s == null || s.isBlank()) return null;
+        String t = s.trim();
+        if (t.length() <= 4) return "*".repeat(t.length());
+        return "*".repeat(t.length() - 4) + t.substring(t.length() - 4);
     }
 
     private void requirePermission(String authority) {

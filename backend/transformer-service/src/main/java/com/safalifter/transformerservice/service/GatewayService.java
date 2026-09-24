@@ -134,6 +134,11 @@ public class GatewayService {
             g.setLocationSource(request.getLocationSource() != null ? request.getLocationSource() : GatewayLocationSource.MANUAL);
         }
         g.setCustomer(trimToNull(request.getCustomer()));
+        g.setOperator(trimToNull(request.getOperator()));
+        g.setNetworkName(trimToNull(request.getNetworkName()));
+        g.setRegionName(trimToNull(request.getRegionName()));
+        g.setDistrictName(trimToNull(request.getDistrictName()));
+        g.setDepotName(trimToNull(request.getDepotName()));
         g.setRegionId(request.getRegionId());
         g.setDistrictId(request.getDistrictId());
         g.setDepotId(request.getDepotId());
@@ -154,6 +159,11 @@ public class GatewayService {
         g.setDescription(trimToNull(request.getDescription()));
         g.setAddress(trimToNull(request.getAddress()));
         g.setCustomer(trimToNull(request.getCustomer()));
+        g.setOperator(trimToNull(request.getOperator()));
+        g.setNetworkName(trimToNull(request.getNetworkName()));
+        g.setRegionName(trimToNull(request.getRegionName()));
+        g.setDistrictName(trimToNull(request.getDistrictName()));
+        g.setDepotName(trimToNull(request.getDepotName()));
         g.setRegionId(request.getRegionId());
         g.setDistrictId(request.getDistrictId());
         g.setDepotId(request.getDepotId());
@@ -246,8 +256,17 @@ public class GatewayService {
     }
 
     private GatewayResponse toResponse(Gateway g) {
-        String simMsisdn = resolveActiveAssignedMsisdn(g.getId());
         Long activeSimId = resolveActiveAssignedSimId(g.getId());
+        String simMsisdn = null;
+        String simIccidMasked = null;
+        if (activeSimId != null) {
+            Optional<SimCard> simOpt = simCardRepository.findById(activeSimId);
+            if (simOpt.isPresent()) {
+                SimCard s = simOpt.get();
+                simMsisdn = s.getMsisdn();
+                simIccidMasked = SimCardService.maskIccid(s.getIccid(), s.getNormalizedIccid());
+            }
+        }
         Instant lastSeen = latest(g.getLastTrafficSeenAt(), g.getLastLoriotSeenAt());
         return GatewayResponse.builder()
                 .id(g.getId())
@@ -285,6 +304,11 @@ public class GatewayService {
                 .locationVerifiedAt(g.getLocationVerifiedAt())
                 .locationVerifiedBy(g.getLocationVerifiedBy())
                 .customer(g.getCustomer())
+                .operator(g.getOperator())
+                .networkName(g.getNetworkName())
+                .regionName(g.getRegionName())
+                .districtName(g.getDistrictName())
+                .depotName(g.getDepotName())
                 .regionId(g.getRegionId())
                 .districtId(g.getDistrictId())
                 .depotId(g.getDepotId())
@@ -294,7 +318,10 @@ public class GatewayService {
                 .decommissionedAt(g.getDecommissionedAt())
                 .decommissionedReason(g.getDecommissionedReason())
                 .activeSimId(activeSimId)
+                .assignedSimId(activeSimId)
                 .assignedMsisdn(maskMsisdn(simMsisdn))
+                .assignedSimIccid(simIccidMasked)
+                .simAssigned(activeSimId != null)
                 .createdBy(g.getCreatedBy())
                 .createdAt(g.getCreatedAt())
                 .updatedBy(g.getUpdatedBy())

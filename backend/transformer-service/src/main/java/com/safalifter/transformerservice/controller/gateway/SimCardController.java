@@ -79,4 +79,31 @@ public class SimCardController {
     ) {
         return ResponseEntity.ok(simCardService.revealSensitive(id, request));
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Retire (soft-delete) SIM card by setting status to RETIRED")
+    @PreAuthorize("(hasAuthority('sims.edit') OR hasAuthority('DELETE_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN'))")
+    public ResponseEntity<Void> retire(@PathVariable Long id) {
+        simCardService.retire(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/available")
+    @Operation(summary = "List available (unassigned, status AVAILABLE) SIM cards for assign dropdown")
+    @PreAuthorize("hasAuthority('sims.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
+    public ResponseEntity<Page<SimCardResponse>> listAvailable(
+            @PageableDefault(size = 100, sort = "id", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return ResponseEntity.ok(simCardService.findAvailable(pageable));
+    }
+
+    @PostMapping("/{id}/unassign")
+    @Operation(summary = "Unassign a SIM card from any gateway it is currently assigned to (SIM-centric unassign)")
+    @PreAuthorize("(hasAuthority('sims.unassign') OR hasAuthority('sims.edit') OR hasAuthority('WRITE_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN'))")
+    public ResponseEntity<GatewaySimAssignmentResponse> unassignBySimId(
+            @PathVariable Long id,
+            @RequestBody(required = false) SimUnassignRequest request
+    ) {
+        return ResponseEntity.ok(simCardService.unassignBySimId(id, request));
+    }
 }

@@ -13,6 +13,7 @@ public class GatewaySimAssignmentResponse {
     private Long simId;
     private Integer slotNumber;
     private boolean active;
+    private String status;
     private Instant assignedAt;
     private Instant unassignedAt;
     private String assignedBy;

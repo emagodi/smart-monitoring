@@ -137,6 +137,21 @@ public class Gateway {
     @Column(name = "customer", length = 255)
     private String customer;
 
+    @Column(name = "operator", length = 128)
+    private String operator;
+
+    @Column(name = "network_name", length = 128)
+    private String networkName;
+
+    @Column(name = "depot_name", length = 255)
+    private String depotName;
+
+    @Column(name = "region_name", length = 255)
+    private String regionName;
+
+    @Column(name = "district_name", length = 255)
+    private String districtName;
+
     @Column(name = "region_id")
     private Long regionId;
 

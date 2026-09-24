@@ -11,6 +11,13 @@ public class SimCardUpdateRequest {
     private String msisdn;
     private String operator;
     private String apn;
+    private String pin;
+    private String puk;
+    private String pin2;
+    private String puk2;
+    private String ki;
+    private String opc;
+    private String cardSerialNumber;
     private SimCardStatus status;
     private BigDecimal dataPlanGb;
     private BigDecimal allowanceGb;
