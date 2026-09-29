@@ -1206,8 +1206,7 @@ export default function GatewaysIndex() {
           />
         ) : (
           <div className="flex max-h-[82vh] flex-col">
-            <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
                     Gateway Detail
@@ -1219,11 +1218,17 @@ export default function GatewaysIndex() {
                     {selectedGateway.gatewayEui || selectedGateway.mac || selectedGateway.loriotGatewayId || "No identifiers"}
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="mt-3 flex justify-center">
                   <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(selectedGateway.effectiveStatus)}`}>
                     {selectedGateway.effectiveStatus.replace("_", " ")}
                   </span>
-                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="enterprise-chip inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                    <MapPinned className="h-3.5 w-3.5 text-blue-500" />
+                    {selectedGateway.regionName || "No region"} · {selectedGateway.depotName || "No depot"}
+                  </span>
+                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                     <button
                       type="button"
                       onClick={() => setDetailMode(detailMode === "view" ? "edit" : "view")}
@@ -1251,15 +1256,6 @@ export default function GatewaysIndex() {
                   </div>
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <div className="flex flex-wrap gap-2">
-                  <span className="enterprise-chip inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-slate-600 dark:text-slate-300">
-                  <MapPinned className="h-3.5 w-3.5 text-blue-500" />
-                  {selectedGateway.regionName || "No region"} · {selectedGateway.depotName || "No depot"}
-                </span>
-                </div>
-              </div>
-            </div>
 
             <div className="border-b border-slate-200/80 px-5 py-2 dark:border-slate-800">
               <div className="flex flex-wrap gap-1">
