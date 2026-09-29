@@ -172,7 +172,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const hasPermission = (permission?: string | null) => {
     if (!permission) return true;
-    return permissions.includes(permission) || roles.includes('Administrator') || roles.includes('ADMIN');
+    const normalizedRoles = roles.map((r) =>
+      String(r)
+        .toUpperCase()
+        .replace(/^ROLE[_-]/, "")
+    );
+    if (
+      normalizedRoles.includes("ADMIN") ||
+      normalizedRoles.includes("ADMINISTRATOR") ||
+      normalizedRoles.includes("SUPERADMIN") ||
+      normalizedRoles.includes("SUPER_ADMIN")
+    )
+      return true;
+    const target = permission.toLowerCase();
+    return permissions.some((p) => String(p).toLowerCase() === target);
   };
 
   const hasAnyPermission = (requiredPermissions?: Array<string | null | undefined>) => {

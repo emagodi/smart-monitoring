@@ -30,7 +30,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 uri.startsWith("/v3/api-docs") ||
                 uri.startsWith("/swagger") ||
                 uri.contains("swagger-ui") ||
-                uri.startsWith("/webjars");
+                uri.startsWith("/webjars") ||
+                uri.startsWith("/internal/integrations/loriot/");
+    }
+
+    private static boolean looksLikeJwt(String token) {
+        if (token == null) return false;
+        int dotCount = 0;
+        for (int i = 0; i < token.length(); i++) {
+            char c = token.charAt(i);
+            if (c == '.') dotCount++;
+            else if (!(c == '-' || c == '_' || Character.isLetterOrDigit(c))) return false;
+        }
+        return dotCount == 2;
     }
 
     @Override
@@ -51,12 +63,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             jwt = jwtService.getJwtFromCookies(request);
         }
 
-        if (StringUtils.isEmpty(jwt)) {
+        if (StringUtils.isEmpty(jwt) || !looksLikeJwt(jwt)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String userEmail = jwtService.extractUserName(jwt);
+        final String userEmail;
+        try {
+            userEmail = jwtService.extractUserName(jwt);
+        } catch (Exception ex) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         if (!StringUtils.isEmpty(userEmail) && org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() == null) {
             UserAccessProfile accessProfile;
             try {
@@ -75,12 +93,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     accessProfile != null ? accessProfile.getDepotId() : null,
                     authorities
             );
-            if (jwtService.isTokenValid(jwt, principal)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        principal, null, authorities
-                );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authToken);
+            try {
+                if (jwtService.isTokenValid(jwt, principal)) {
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            principal, null, authorities
+                    );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
+            } catch (Exception ignored) {
+                // Invalid JWT signature/claims — proceed unauthenticated
             }
         }
 

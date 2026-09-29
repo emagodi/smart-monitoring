@@ -258,6 +258,8 @@ export default function OculusControlIndex() {
   const [rows, setRows] = useState<OculusTransformerControl[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [depots, setDepots] = useState<Depot[]>([]);
+  const [structureLoading, setStructureLoading] = useState(false);
+  const [structureLoaded, setStructureLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -270,20 +272,35 @@ export default function OculusControlIndex() {
   const [showDetails, setShowDetails] = useState(false);
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
 
+  const fetchStructure = useCallback(async () => {
+    if (structureLoaded || !headers) return;
+    try {
+      setStructureLoading(true);
+      const [regionsRes, depotsRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }),
+        axios.get(`${API_BASE_URL}/api/v1/depots`, { headers }),
+      ]);
+      setRegions(normalizeList<Region>(regionsRes.data));
+      setDepots(normalizeList<Depot>(depotsRes.data));
+      setStructureLoaded(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStructureLoading(false);
+    }
+  }, [API_BASE_URL, headers, structureLoaded]);
+
   const fetchControlRows = useCallback(async (showLoader = true) => {
+    if (!headers) return;
     try {
       if (showLoader) {
         setLoading(true);
       }
       setError(null);
-      const [controlsRes, regionsRes, depotsRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/v1/oculus-control/transformers`, { headers }),
-        axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }),
-        axios.get(`${API_BASE_URL}/api/v1/depots`, { headers }),
-      ]);
-      setRows(normalizeList<OculusTransformerControl>(controlsRes.data));
-      setRegions(normalizeList<Region>(regionsRes.data));
-      setDepots(normalizeList<Depot>(depotsRes.data));
+      const controlsRes = await axios.get(`${API_BASE_URL}/api/v1/oculus-control/transformers`, { headers });
+      const rowsData = normalizeList<OculusTransformerControl>(controlsRes.data);
+      setRows(rowsData);
+      void fetchStructure();
     } catch (fetchError: any) {
       console.error(fetchError);
       setError(fetchError?.response?.data?.message || "Failed to load Oqulus control transformers.");
@@ -292,7 +309,7 @@ export default function OculusControlIndex() {
         setLoading(false);
       }
     }
-  }, [API_BASE_URL, headers]);
+  }, [API_BASE_URL, fetchStructure, headers]);
 
   useEffect(() => {
     if (!token || !canAccess) {

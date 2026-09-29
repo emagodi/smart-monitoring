@@ -1,21 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
-  BarChart3,
-  BellRing,
-  Building2,
-  Gauge,
+  Lock,
   MapPinned,
+  Router,
   Search,
   ShieldCheck,
+  CardSim,
+  Unlock,
   Waves,
-  Warehouse,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import axios from "axios";
-import Chart from "react-apexcharts";
-import type { ApexOptions } from "apexcharts";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -86,6 +84,19 @@ interface AlertItem {
   timestamp?: string;
 }
 
+interface GatewaySummary {
+  total: number;
+  online: number;
+  offline: number;
+  degraded: number;
+  neverSeen: number;
+  unknown: number;
+  missingLocation: number;
+  missingSim: number;
+  lastSyncStatus?: string | null;
+  lastSyncAt?: string | null;
+}
+
 interface SensorUpdate {
   transformer_id: number;
   transformer_name: string;
@@ -127,250 +138,6 @@ type DashboardTransformerRow = Transformer & {
   latestAlertLabel: string;
   latestAlertTime?: string;
 };
-
-const normalizeList = <T,>(payload: unknown): T[] => {
-  if (Array.isArray(payload)) return payload as T[];
-  const obj = payload as Record<string, unknown> | null;
-  if (!obj) return [];
-  for (const key of ["content", "data", "items", "records"]) {
-    const value = obj[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-  return [];
-};
-
-const getPagedTotal = (payload: unknown, fallback: number) => {
-  const obj = payload as Record<string, unknown> | null;
-  if (obj && typeof obj.totalElements === "number") {
-    return obj.totalElements;
-  }
-  return fallback;
-};
-
-const formatTime = (value?: string | number) => {
-  if (!value) return "Unknown";
-  const date = typeof value === "number" ? new Date(value) : new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return date.toLocaleString();
-};
-
-const MetricCard = ({
-  title,
-  value,
-  subtitle,
-  icon,
-  tone,
-}: {
-  title: string;
-  value: number;
-  subtitle: string;
-  icon: React.ReactNode;
-  tone: string;
-}) => (
-  <div className="enterprise-card p-4">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-          {title}
-        </p>
-        <p className="mt-2 text-[30px] font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-          {value.toLocaleString()}
-        </p>
-        <p className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
-      </div>
-      <div className={`rounded-xl p-2.5 ${tone}`}>{icon}</div>
-    </div>
-  </div>
-);
-
-const ExecutiveChartCard = ({
-  eyebrow,
-  title,
-  subtitle,
-  icon,
-  children,
-  footer,
-}: ExecutiveChartCardProps) => (
-  <div className="enterprise-card flex h-full flex-col p-4">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-          {eyebrow}
-        </p>
-        <h3 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">{title}</h3>
-        <p className="mt-1 text-[12px] leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
-      </div>
-      <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">{icon}</div>
-    </div>
-    <div className="mt-4 flex-1">{children}</div>
-    {footer ? <div className="mt-4">{footer}</div> : null}
-  </div>
-);
-
-const buildDonutOptions = (
-  theme: "light" | "dark",
-  labels: string[],
-  colors: string[]
-): ApexOptions => ({
-  chart: {
-    type: "donut",
-    height: 280,
-    toolbar: { show: false },
-    fontFamily: "Inter, Poppins, sans-serif",
-  },
-  labels,
-  colors,
-  dataLabels: { enabled: false },
-  legend: {
-    position: "bottom",
-    fontSize: "12px",
-    labels: {
-      colors: theme === "dark" ? "#CBD5E1" : "#475569",
-    },
-  },
-  stroke: {
-    width: 0,
-  },
-  plotOptions: {
-    pie: {
-      donut: {
-        size: "72%",
-        labels: {
-          show: true,
-          name: {
-            show: true,
-            color: theme === "dark" ? "#CBD5E1" : "#64748B",
-          },
-          value: {
-            show: true,
-            color: theme === "dark" ? "#F8FAFC" : "#0F172A",
-            fontSize: "24px",
-            fontWeight: 700,
-          },
-          total: {
-            show: true,
-            label: "Total",
-            color: theme === "dark" ? "#CBD5E1" : "#64748B",
-            formatter: (w) =>
-              w.globals.seriesTotals.reduce((sum: number, value: number) => sum + value, 0).toLocaleString(),
-          },
-        },
-      },
-    },
-  },
-  tooltip: { theme },
-});
-
-const buildHorizontalBarOptions = (
-  theme: "light" | "dark",
-  categories: string[],
-  colors: string[]
-): ApexOptions => ({
-  chart: {
-    type: "bar",
-    height: 280,
-    toolbar: { show: false },
-    fontFamily: "Inter, Poppins, sans-serif",
-  },
-  colors,
-  plotOptions: {
-    bar: {
-      horizontal: true,
-      borderRadius: 6,
-      barHeight: "56%",
-      distributed: true,
-    },
-  },
-  dataLabels: {
-    enabled: true,
-    style: {
-      fontSize: "11px",
-      fontWeight: 700,
-    },
-  },
-  grid: {
-    borderColor: theme === "dark" ? "#334155" : "#E2E8F0",
-    strokeDashArray: 4,
-    xaxis: {
-      lines: { show: true },
-    },
-  },
-  xaxis: {
-    categories,
-    labels: {
-      style: {
-        colors: theme === "dark" ? "#94A3B8" : "#64748B",
-        fontSize: "12px",
-      },
-    },
-  },
-  yaxis: {
-    labels: {
-      style: {
-        colors: theme === "dark" ? "#94A3B8" : "#64748B",
-        fontSize: "12px",
-      },
-    },
-  },
-  tooltip: {
-    theme,
-  },
-  legend: { show: false },
-});
-
-const buildGroupedBarOptions = (
-  theme: "light" | "dark",
-  categories: string[],
-  colors: string[]
-): ApexOptions => ({
-  chart: {
-    type: "bar",
-    height: 280,
-    toolbar: { show: false },
-    fontFamily: "Inter, Poppins, sans-serif",
-  },
-  colors,
-  plotOptions: {
-    bar: {
-      borderRadius: 7,
-      columnWidth: "48%",
-    },
-  },
-  dataLabels: { enabled: false },
-  grid: {
-    borderColor: theme === "dark" ? "#334155" : "#E2E8F0",
-    strokeDashArray: 4,
-  },
-  xaxis: {
-    categories,
-    labels: {
-      style: {
-        colors: theme === "dark" ? "#94A3B8" : "#64748B",
-        fontSize: "12px",
-      },
-    },
-    axisBorder: { show: false },
-    axisTicks: { show: false },
-  },
-  yaxis: {
-    labels: {
-      style: {
-        colors: theme === "dark" ? "#94A3B8" : "#64748B",
-        fontSize: "12px",
-      },
-    },
-  },
-  tooltip: { theme },
-  legend: {
-    position: "top",
-    horizontalAlign: "right",
-    labels: {
-      colors: theme === "dark" ? "#CBD5E1" : "#475569",
-    },
-  },
-});
 
 const getSupplierLabel = (supplierName?: string | null, supplierCode?: string | null) => {
   if (supplierName?.trim()) return supplierName.trim();
@@ -430,9 +197,89 @@ const normalizedTransformerType = (value?: string | null) => {
   return normalized;
 };
 
+const normalizeList = <T,>(payload: unknown): T[] => {
+  if (Array.isArray(payload)) return payload as T[];
+  const obj = payload as Record<string, unknown> | null;
+  if (!obj) return [];
+  for (const key of ["content", "data", "items", "records"]) {
+    const value = obj[key];
+    if (Array.isArray(value)) {
+      return value as T[];
+    }
+  }
+  return [];
+};
+
+const getPagedTotal = (payload: unknown, fallback: number) => {
+  const obj = payload as Record<string, unknown> | null;
+  if (obj && typeof obj.totalElements === "number") {
+    return obj.totalElements;
+  }
+  return fallback;
+};
+
+const formatTime = (value?: string | number) => {
+  if (!value) return "Unknown";
+  const date = typeof value === "number" ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString();
+};
+
+const StatCard = ({
+  title,
+  value,
+  subtitle,
+  icon,
+  tone,
+  highlight,
+}: {
+  title: string;
+  value: number | string;
+  subtitle: string;
+  icon: React.ReactNode;
+  tone?: string;
+  highlight?: "blue" | "red" | "emerald" | "amber" | "neutral";
+}) => {
+  const hl = highlight || "neutral";
+  const valueTone =
+    hl === "blue"
+      ? "text-blue-700 dark:text-blue-300"
+      : hl === "red"
+        ? "text-red-600 dark:text-red-300"
+        : hl === "emerald"
+          ? "text-emerald-600 dark:text-emerald-300"
+          : hl === "amber"
+            ? "text-amber-600 dark:text-amber-300"
+            : "text-slate-950 dark:text-slate-50";
+  const iconTone =
+    tone ||
+    (hl === "red"
+      ? "border border-red-100 bg-red-50/90 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300"
+      : hl === "emerald"
+        ? "border border-emerald-100 bg-emerald-50/80 text-emerald-600 dark:border-emerald-500/10 dark:bg-emerald-500/10 dark:text-emerald-300"
+        : hl === "amber"
+          ? "border border-amber-100 bg-amber-50/80 text-amber-600 dark:border-amber-500/10 dark:bg-amber-500/10 dark:text-amber-300"
+          : "border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300");
+  return (
+    <div className="enterprise-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+            {title}
+          </p>
+          <p className={`mt-2 text-[28px] font-semibold tracking-tight ${valueTone}`}>
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </p>
+          <p className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
+        </div>
+        <div className={`shrink-0 rounded-xl p-2.5 ${iconTone}`}>{icon}</div>
+      </div>
+    </div>
+  );
+};
+
 export default function DashboardHome() {
   const { token, user, hasPermission } = useAuth();
-  const { theme } = useTheme();
   const { hasNationalAccess, hasRegionAccess, hasDepotAccess, loading: accessLoading } = useUserAccess();
   const { realtimeData } = useRealtimeUpdates(token);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -512,7 +359,11 @@ export default function DashboardHome() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState(() => persistedWatchlistState?.selectedStatusFilter ?? "ALL");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState(() => persistedWatchlistState?.selectedTypeFilter ?? "ALL");
   const [watchlistPage, setWatchlistPage] = useState(() => persistedWatchlistState?.watchlistPage ?? 1);
-  const [loading, setLoading] = useState(true);
+  const [gatewaySummary, setGatewaySummary] = useState<GatewaySummary | null>(null);
+
+  const [fastStatsLoading, setFastStatsLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailsLoaded, setDetailsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const accessLabel = useMemo(() => {
@@ -533,91 +384,213 @@ export default function DashboardHome() {
 
     const headers = { Authorization: `Bearer ${token}` };
 
-    const fetchDashboard = async () => {
+    const safeGet = async <T,>(request: Promise<{ data: T }>, fallback: T) => {
       try {
-        setLoading(true);
-        setError(null);
-
-        const safeGet = async <T,>(request: Promise<{ data: T }>, fallback: T) => {
-          try {
-            const response = await request;
-            return response.data;
-          } catch (requestError) {
-            console.error(requestError);
-            return fallback;
-          }
-        };
-
-        const [regionsData, districtsData, depotsData, transformersData, sensorsData, alertsData, oculusControlData] = await Promise.all([
-          hasPermission("regions.read")
-            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }), [])
-            : Promise.resolve([]),
-          hasPermission("regions.read")
-            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/districts?page=0&size=1000`, { headers }), [])
-            : Promise.resolve([]),
-          hasPermission("depots.read")
-            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/depots`, { headers }), [])
-            : Promise.resolve([]),
-          safeGet(axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers }), []),
-          safeGet(axios.get(`${API_BASE_URL}/api/v1/sensors`, { headers }), []),
-          safeGet(axios.get(`${API_BASE_URL}/api/v1/alerts`, { headers, params: { page: 0, size: 50 } }), { content: [], totalElements: 0 }),
-          hasPermission("controllers.read") || hasPermission("controllers.update")
-            ? safeGet(axios.get(`${API_BASE_URL}/api/v1/oculus-control/transformers`, { headers }), [])
-            : Promise.resolve([]),
-        ]);
-
-        const regionsList = normalizeList<Region>(regionsData);
-        const districtsList = normalizeList<District>(districtsData);
-        const depotsList = normalizeList<Depot>(depotsData);
-        const transformersList = normalizeList<Transformer>(transformersData);
-        const sensorsList = normalizeList<Sensor>(sensorsData);
-        const alertsList = normalizeList<AlertItem>(alertsData);
-        const totalAlerts = getPagedTotal(alertsData, alertsList.length);
-        const oculusControlList = normalizeList<OculusControlSummaryRow>(oculusControlData);
-
-        const activeTransformers = transformersList.filter(
-          (item) => item?.isActive === true || item?.active === true
-        ).length;
-        const activeSensors = sensorsList.filter(
-          (item) => item?.isActive !== false && item?.is_active !== false
-        ).length;
-
-        setRegions(regionsList);
-        setDistricts(districtsList);
-        setDepots(depotsList);
-        setTransformers(transformersList);
-        setControlRows(oculusControlList);
-        setAlerts(alertsList);
-        setRecentAlerts(
-          alertsList
-            .sort(
-              (a, b) =>
-                new Date(b.createdAt || b.timestamp || 0).getTime() -
-                new Date(a.createdAt || a.timestamp || 0).getTime()
-            )
-            .slice(0, 5)
-        );
-
-        setStats({
-          totalRegions: regionsList.length,
-          totalDepots: depotsList.length,
-          totalTransformers: transformersList.length,
-          activeTransformers,
-          offlineTransformers: Math.max(transformersList.length - activeTransformers, 0),
-          totalSensors: sensorsList.length,
-          activeSensors,
-          totalAlerts,
-        });
-      } catch (fetchError) {
-        console.error(fetchError);
-        setError("Failed to load dashboard data.");
-      } finally {
-        setLoading(false);
+        const response = await request;
+        return response.data;
+      } catch (requestError) {
+        console.error(requestError);
+        return fallback;
       }
     };
 
-    fetchDashboard();
-  }, [API_BASE_URL, hasPermission, token]);
+    const abortFast = new AbortController();
+    const fetchFastStats = async () => {
+      try {
+        setFastStatsLoading(true);
+        setError(null);
+
+        const [transformersData, sensorsData] = await Promise.all([
+          safeGet(
+            axios.get(`${API_BASE_URL}/api/v1/transformers`, {
+              headers,
+              params: { page: 0, size: 1 },
+              signal: abortFast.signal,
+            }),
+            { content: [], totalElements: 0 }
+          ),
+          safeGet(
+            axios.get(`${API_BASE_URL}/api/v1/sensors`, {
+              headers,
+              params: { page: 0, size: 1 },
+              signal: abortFast.signal,
+            }),
+            { content: [], totalElements: 0 }
+          ),
+        ]);
+
+        const pageTotalTf = (transformersData as any)?.totalElements;
+        const nestedPageTotalTf = (transformersData as any)?.page?.totalElements;
+        const totalTransformers =
+          typeof pageTotalTf === "number"
+            ? pageTotalTf
+            : typeof nestedPageTotalTf === "number"
+              ? nestedPageTotalTf
+              : normalizeList<Transformer>(transformersData).length;
+
+        const pageTotalSn = (sensorsData as any)?.totalElements;
+        const nestedPageTotalSn = (sensorsData as any)?.page?.totalElements;
+        const totalSensors =
+          typeof pageTotalSn === "number"
+            ? pageTotalSn
+            : typeof nestedPageTotalSn === "number"
+              ? nestedPageTotalSn
+              : normalizeList<Sensor>(sensorsData).length;
+
+        const transformersSample = normalizeList<Transformer>(transformersData);
+        const activeTransformers = transformersSample.filter(
+          (item) => item?.isActive === true || item?.active === true
+        ).length;
+
+        const sensorsSample = normalizeList<Sensor>(sensorsData);
+        const activeSensors = sensorsSample.filter(
+          (item) => item?.isActive !== false && item?.is_active !== false
+        ).length;
+
+        setStats((prev) => ({
+          ...prev,
+          totalTransformers,
+          totalSensors,
+          activeTransformers,
+          offlineTransformers: Math.max(totalTransformers - activeTransformers, 0),
+          activeSensors,
+        }));
+      } catch (fastError) {
+        console.error(fastError);
+      } finally {
+        setFastStatsLoading(false);
+      }
+    };
+
+    void fetchFastStats();
+    return () => abortFast.abort();
+  }, [API_BASE_URL, token]);
+
+  const loadDetailPanel = useCallback(async () => {
+    if (!token) return;
+    if (detailsLoaded) return;
+
+    const headers = { Authorization: `Bearer ${token}` };
+    const safeGet = async <T,>(request: Promise<{ data: T }>, fallback: T) => {
+      try {
+        const response = await request;
+        return response.data;
+      } catch (requestError) {
+        console.error(requestError);
+        return fallback;
+      }
+    };
+
+    try {
+      setDetailLoading(true);
+      setError(null);
+
+      const [
+        regionsData,
+        districtsData,
+        depotsData,
+        transformersData,
+        sensorsData,
+        alertsData,
+        oculusControlData,
+        gatewaysData,
+      ] = await Promise.all([
+        hasPermission("regions.read")
+          ? safeGet(axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }), [])
+          : Promise.resolve([]),
+        hasPermission("regions.read")
+          ? safeGet(axios.get(`${API_BASE_URL}/api/v1/districts?page=0&size=1000`, { headers }), [])
+          : Promise.resolve([]),
+        hasPermission("depots.read")
+          ? safeGet(axios.get(`${API_BASE_URL}/api/v1/depots`, { headers }), [])
+          : Promise.resolve([]),
+        safeGet(axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers }), []),
+        safeGet(axios.get(`${API_BASE_URL}/api/v1/sensors`, { headers }), []),
+        safeGet(
+          axios.get(`${API_BASE_URL}/api/v1/alerts`, {
+            headers,
+            params: { page: 0, size: 50 },
+          }),
+          { content: [], totalElements: 0 }
+        ),
+        hasPermission("controllers.read") || hasPermission("controllers.update")
+          ? safeGet(axios.get(`${API_BASE_URL}/api/v1/oculus-control/transformers`, { headers }), [])
+          : Promise.resolve([]),
+        hasPermission("gateways.view")
+          ? safeGet(axios.get(`${API_BASE_URL}/api/v1/gateways/summary`, { headers }), null)
+          : Promise.resolve(null),
+      ]);
+
+      const regionsList = normalizeList<Region>(regionsData);
+      const districtsList = normalizeList<District>(districtsData);
+      const depotsList = normalizeList<Depot>(depotsData);
+      const transformersList = normalizeList<Transformer>(transformersData);
+      const sensorsList = normalizeList<Sensor>(sensorsData);
+      const alertsList = normalizeList<AlertItem>(alertsData);
+      const totalAlerts = getPagedTotal(alertsData, alertsList.length);
+      const oculusControlList = normalizeList<OculusControlSummaryRow>(oculusControlData);
+
+      const activeTransformers = transformersList.filter(
+        (item) => item?.isActive === true || item?.active === true
+      ).length;
+      const activeSensors = sensorsList.filter(
+        (item) => item?.isActive !== false && item?.is_active !== false
+      ).length;
+
+      setRegions(regionsList);
+      setDistricts(districtsList);
+      setDepots(depotsList);
+      setTransformers(transformersList);
+      setControlRows(oculusControlList);
+      setAlerts(alertsList);
+      setRecentAlerts(
+        [...alertsList]
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt || b.timestamp || 0).getTime() -
+              new Date(a.createdAt || a.timestamp || 0).getTime()
+          )
+          .slice(0, 5)
+      );
+
+      setStats((prev) => ({
+        ...prev,
+        totalRegions: regionsList.length,
+        totalDepots: depotsList.length,
+        totalTransformers: transformersList.length,
+        activeTransformers,
+        offlineTransformers: Math.max(transformersList.length - activeTransformers, 0),
+        totalSensors: sensorsList.length,
+        activeSensors,
+        totalAlerts,
+      }));
+
+      if (gatewaysData) {
+        const gw = gatewaysData as Partial<GatewaySummary>;
+        setGatewaySummary({
+          total: typeof gw.total === "number" ? gw.total : 0,
+          online: typeof gw.online === "number" ? gw.online : 0,
+          offline: typeof gw.offline === "number" ? gw.offline : 0,
+          degraded: typeof gw.degraded === "number" ? gw.degraded : 0,
+          neverSeen: typeof gw.neverSeen === "number" ? gw.neverSeen : 0,
+          unknown: typeof gw.unknown === "number" ? gw.unknown : 0,
+          missingLocation: typeof gw.missingLocation === "number" ? gw.missingLocation : 0,
+          missingSim: typeof gw.missingSim === "number" ? gw.missingSim : 0,
+          lastSyncStatus: gw.lastSyncStatus ?? null,
+          lastSyncAt: gw.lastSyncAt ?? null,
+        });
+      } else {
+        setGatewaySummary(null);
+      }
+
+      setDetailsLoaded(true);
+    } catch (fetchError) {
+      console.error(fetchError);
+      setError("Failed to load dashboard details.");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [API_BASE_URL, detailsLoaded, hasPermission, token]);
 
   const districtToRegion = useMemo(() => {
     return new Map(
@@ -1015,8 +988,12 @@ export default function DashboardHome() {
     }
   }, [selectedTransformerId, transformerOperations]);
 
-  if (loading || accessLoading) {
-    return <div className="enterprise-card px-5 py-10 text-sm text-slate-500 dark:text-slate-300">Loading dashboard...</div>;
+  if (fastStatsLoading || accessLoading) {
+    return (
+      <div className="enterprise-card px-5 py-10 text-sm text-slate-500 dark:text-slate-300">
+        Loading dashboard overview...
+      </div>
+    );
   }
 
   if (error) {
@@ -1100,34 +1077,34 @@ export default function DashboardHome() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard
           title="Total Transformers"
           value={stats.totalTransformers}
           subtitle="Monitored utility assets across the network."
-          icon={<Zap className="h-5 w-5 text-blue-600 dark:text-blue-300" />}
-          tone="border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300"
+          icon={<Zap className="h-5 w-5" />}
+          highlight="blue"
         />
-        <MetricCard
+        <StatCard
           title="Online"
           value={stats.activeTransformers}
           subtitle="Active transformer nodes reporting as healthy."
-          icon={<Activity className="h-5 w-5 text-blue-600 dark:text-blue-300" />}
-          tone="border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300"
+          icon={<Activity className="h-5 w-5" />}
+          highlight="emerald"
         />
-        <MetricCard
+        <StatCard
           title="Offline"
           value={stats.offlineTransformers}
           subtitle="Assets requiring communication or field attention."
-          icon={<Waves className="h-5 w-5 text-red-600 dark:text-red-300" />}
-          tone="border border-red-100 bg-red-50/90 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300"
+          icon={<Waves className="h-5 w-5" />}
+          highlight="amber"
         />
-        <MetricCard
-          title="Critical Alerts"
-          value={Math.max(stats.totalAlerts, liveAlertCount)}
-          subtitle="Alarm activity requiring operator awareness."
-          icon={<AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-300" />}
-          tone="border border-red-100 bg-red-50/90 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300"
+        <StatCard
+          title="Live Alerts"
+          value={detailsLoaded ? Math.max(stats.totalAlerts, liveAlertCount) : liveAlertCount}
+          subtitle={detailsLoaded ? "Alarm activity requiring operator awareness." : "Live events only — click below for history."}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          highlight="red"
         />
       </section>
 
@@ -1250,154 +1227,95 @@ export default function DashboardHome() {
 
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-        <ExecutiveChartCard
-          eyebrow="Transformer Control"
-          title="Armed and disarmed estate"
-          subtitle="Executive control-state view across monitored control-enabled transformers."
-          icon={<Gauge className="h-4.5 w-4.5" />}
-          footer={
-            <div className="grid grid-cols-2 gap-2">
-              <div className="enterprise-subtle-card px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Monitored</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{controlStateSummary.monitored}</p>
-              </div>
-              <div className="enterprise-subtle-card px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Controlled</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{controlStateSummary.controlEstate}</p>
-              </div>
-            </div>
-          }
-        >
-          {controlStateSummary.controlEstate === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              Control-state analytics will appear when Oqulus-controlled transformers are available in the visible estate.
-            </div>
-          ) : (
-            <Chart
-              type="donut"
-              height={280}
-              options={buildDonutOptions(theme, ["Armed", "Disarmed", "Unknown"], ["#2563EB", "#EF4444", "#CBD5E1"])}
-              series={[controlStateSummary.armed, controlStateSummary.disarmed, controlStateSummary.unknown]}
-            />
-          )}
-        </ExecutiveChartCard>
-
-        <ExecutiveChartCard
-          eyebrow="Supplier Portfolio"
-          title="Suppliers with highest monitored estate"
-          subtitle="Shows supplier coverage as the platform grows beyond Oqulus."
-          icon={<Building2 className="h-4.5 w-4.5" />}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <span className="enterprise-chip inline-flex items-center px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300">
-                Suppliers: {supplierRanking.totalSuppliers}
-              </span>
-              <span className="enterprise-chip inline-flex items-center px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300">
-                Leader: {supplierRanking.leadingSupplier?.name || "No supplier data"}
-              </span>
-            </div>
-          }
-        >
-          {supplierRanking.topSuppliers.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              Supplier analytics become available after transformers with supplier ownership are loaded.
-            </div>
-          ) : (
-            <Chart
-              type="bar"
-              height={280}
-              options={buildHorizontalBarOptions(
-                theme,
-                supplierRanking.topSuppliers.map((item) => item.name),
-                ["#1D4ED8", "#2563EB", "#3B82F6", "#DC2626", "#F87171"]
-              )}
-              series={[{ name: "Transformers", data: supplierRanking.topSuppliers.map((item) => item.total) }]}
-            />
-          )}
-        </ExecutiveChartCard>
-
-        <ExecutiveChartCard
-          eyebrow="Alert Intelligence"
-          title="Alert pressure and severity mix"
-          subtitle="Operational alert mix across critical, warning, and informational activity."
-          icon={<BellRing className="h-4.5 w-4.5" />}
-          footer={
-            <div className="grid grid-cols-3 gap-2">
-              <div className="enterprise-subtle-card px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Total</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{alertSummary.total}</p>
-              </div>
-              <div className="enterprise-subtle-card px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Live</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{alertSummary.live}</p>
-              </div>
-              <div className="enterprise-subtle-card px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">Recent</p>
-                <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">{alertSummary.recent}</p>
-              </div>
-            </div>
-          }
-        >
-          {alertSummary.total === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              Alert analytics will populate when alarm history is available.
-            </div>
-          ) : (
-            <Chart
-              type="donut"
-              height={280}
-              options={buildDonutOptions(theme, ["Critical", "Warning", "Informational"], ["#DC2626", "#F87171", "#2563EB"])}
-              series={[alertSummary.critical, alertSummary.warning, alertSummary.informational]}
-            />
-          )}
-        </ExecutiveChartCard>
-
-        <ExecutiveChartCard
-          eyebrow="Regional Coverage"
-          title="Transformers and alerts by region"
-          subtitle="Highlights where monitored estate concentration and alert activity are currently highest."
-          icon={<BarChart3 className="h-4.5 w-4.5" />}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <span className="enterprise-chip inline-flex items-center px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300">
-                Regions tracked: {stats.totalRegions}
-              </span>
-              <span className="enterprise-chip inline-flex items-center px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300">
-                Depots: {stats.totalDepots}
-              </span>
-            </div>
-          }
-        >
-          {topRegionalCoverage.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              Regional coverage analytics appear after region, depot, and transformer data loads.
-            </div>
-          ) : (
-            <Chart
-              type="bar"
-              height={280}
-              options={buildGroupedBarOptions(
-                theme,
-                topRegionalCoverage.map((region) => region.name),
-                ["#2563EB", "#EF4444"]
-              )}
-              series={[
-                {
-                  name: "Transformers",
-                  data: topRegionalCoverage.map((region) => region.transformers),
-                },
-                {
-                  name: "Alerts",
-                  data: topRegionalCoverage.map((region) => region.alerts),
-                },
-              ]}
-            />
-          )}
-        </ExecutiveChartCard>
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <StatCard
+          title="Regions"
+          value={detailsLoaded ? stats.totalRegions : "—"}
+          subtitle={detailsLoaded ? "Operational coverage" : "Click below to load"}
+          icon={<MapPinned className="h-4.5 w-4.5" />}
+          highlight="blue"
+        />
+        <StatCard
+          title="Depots"
+          value={detailsLoaded ? stats.totalDepots : "—"}
+          subtitle={detailsLoaded ? "Field service hubs" : "Click below to load"}
+          icon={<Waves className="h-4.5 w-4.5" />}
+          highlight="blue"
+        />
+        <StatCard
+          title="Online Ctl"
+          value={detailsLoaded ? controlStateSummary.onlineControllers : "—"}
+          subtitle="Controllers currently online"
+          icon={<Activity className="h-4.5 w-4.5" />}
+          highlight="emerald"
+        />
+        <StatCard
+          title="Offline Ctl"
+          value={detailsLoaded ? controlStateSummary.offlineControllers : "—"}
+          subtitle="Controllers currently offline"
+          icon={<AlertTriangle className="h-4.5 w-4.5" />}
+          highlight="amber"
+        />
+        <StatCard
+          title="Armed"
+          value={detailsLoaded ? watchlistSummary.armed : "—"}
+          subtitle={detailsLoaded ? "Control estate armed" : "Click below to load"}
+          icon={<Lock className="h-4.5 w-4.5" />}
+          highlight="blue"
+        />
+        <StatCard
+          title="Disarmed"
+          value={detailsLoaded ? watchlistSummary.disarmed : "—"}
+          subtitle={detailsLoaded ? "Control estate disarmed" : "Click below to load"}
+          icon={<Unlock className="h-4.5 w-4.5" />}
+          highlight="red"
+        />
       </section>
 
-      <section className="enterprise-card p-4">
+      {!detailsLoaded ? (
+        <section className="enterprise-card p-5">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <p className="powertel-section-eyebrow text-[11px] font-semibold uppercase tracking-[0.2em]">
+                Supplier & Watchlist Details
+              </p>
+              <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                Estate operations and supplier monitoring
+              </h3>
+              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+                The heavy transformer/supplier/depot/alert matrix is loaded on demand so your dashboard overview renders instantly.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadDetailPanel()}
+                disabled={detailLoading}
+                className="powertel-blue-button inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white transition disabled:opacity-60"
+              >
+                {detailLoading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Loading supplier matrix...
+                  </>
+                ) : (
+                  <>
+                    <Activity className="h-4 w-4" />
+                    Load estate & supplier details
+                  </>
+                )}
+              </button>
+              <Link
+                to="/oculus-control"
+                className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 transition hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-300"
+              >
+                Go to Oqulus Control →
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="enterprise-card p-4">
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <button
@@ -1448,6 +1366,126 @@ export default function DashboardHome() {
                 <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Control estate currently disarmed</p>
               </button>
           </div>
+
+          {gatewaySummary && gatewaySummary.total > 0 ? (
+            <div className="space-y-3 rounded-[22px] border border-blue-100/70 bg-gradient-to-r from-blue-50/60 via-white to-red-50/50 p-3 dark:border-blue-500/15 dark:from-blue-500/8 dark:via-slate-950 dark:to-red-500/8">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200/80 bg-white px-3 py-1 text-[11px] font-semibold text-blue-700 dark:border-blue-500/20 dark:bg-slate-900 dark:text-blue-300">
+                    <Router className="h-3.5 w-3.5" />
+                    Gateway Estate
+                  </span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                    LoRaWAN monitoring
+                  </span>
+                </div>
+                <Link
+                  to="/gateways"
+                  className="enterprise-chip inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold text-slate-600 transition hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-300"
+                >
+                  Open Gateways →
+                </Link>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Link
+                  to="/gateways?status=ONLINE"
+                  className="enterprise-subtle-card flex items-center justify-between gap-2 px-3 py-2 transition hover:border-emerald-200 hover:bg-emerald-50/60"
+                >
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Online</p>
+                    <p className="mt-0.5 text-xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-300">{gatewaySummary.online}</p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-2 text-emerald-600 dark:border-emerald-500/10 dark:bg-emerald-500/10 dark:text-emerald-300">
+                    <Activity className="h-4 w-4" />
+                  </div>
+                </Link>
+
+                <Link
+                  to="/gateways?status=OFFLINE"
+                  className="enterprise-subtle-card flex items-center justify-between gap-2 px-3 py-2 transition hover:border-red-200 hover:bg-red-50/60"
+                >
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Offline</p>
+                    <p className="mt-0.5 text-xl font-semibold tracking-tight text-red-600 dark:text-red-300">{gatewaySummary.offline}</p>
+                  </div>
+                  <div className="rounded-xl border border-red-100 bg-red-50/80 p-2 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                </Link>
+
+                <Link
+                  to="/gateways?status=DEGRADED"
+                  className="enterprise-subtle-card flex items-center justify-between gap-2 px-3 py-2 transition hover:border-amber-200 hover:bg-amber-50/60"
+                >
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Degraded</p>
+                    <p className="mt-0.5 text-xl font-semibold tracking-tight text-amber-600 dark:text-amber-300">{gatewaySummary.degraded}</p>
+                  </div>
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/80 p-2 text-amber-600 dark:border-amber-500/10 dark:bg-amber-500/10 dark:text-amber-300">
+                    <Waves className="h-4 w-4" />
+                  </div>
+                </Link>
+              </div>
+
+              {(gatewaySummary.offline > 0 || gatewaySummary.degraded > 0 || gatewaySummary.missingSim > 0) ? (
+                <div className="rounded-[20px] border border-white/70 bg-white/85 p-3 dark:border-slate-800 dark:bg-slate-950/80">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="h-3.5 w-3.5 text-red-600 dark:text-red-300" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">
+                        Requiring attention
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {gatewaySummary.offline > 0 ? (
+                      <Link
+                        to="/gateways?status=OFFLINE"
+                        className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/70 px-3 py-1.5 text-xs transition hover:bg-red-50 dark:border-red-500/20 dark:bg-red-500/10"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                          <span className="font-medium text-slate-700 dark:text-slate-200">{gatewaySummary.offline} gateway{gatewaySummary.offline === 1 ? "" : "s"} offline — needs comms or field attention</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-600 dark:text-red-300">
+                          Filter →
+                        </span>
+                      </Link>
+                    ) : null}
+                    {gatewaySummary.degraded > 0 ? (
+                      <Link
+                        to="/gateways?status=DEGRADED"
+                        className="flex items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-1.5 text-xs transition hover:bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          <span className="font-medium text-slate-700 dark:text-slate-200">{gatewaySummary.degraded} gateway{gatewaySummary.degraded === 1 ? "" : "s"} degraded — grace period holding</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-300">
+                          Filter →
+                        </span>
+                      </Link>
+                    ) : null}
+                    {gatewaySummary.missingSim > 0 ? (
+                      <Link
+                        to="/sims"
+                        className="flex items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-1.5 text-xs transition hover:bg-blue-50 dark:border-blue-500/20 dark:bg-blue-500/10"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <CardSim className="h-3 w-3 text-blue-600 dark:text-blue-300" />
+                          <span className="font-medium text-slate-700 dark:text-slate-200">{gatewaySummary.missingSim} gateway{gatewaySummary.missingSim === 1 ? "" : "s"} missing active SIM assignment</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-300">
+                          SIMs →
+                        </span>
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="space-y-3">
             <div className="sticky top-3 z-10 -mx-1 rounded-3xl border border-slate-200/80 bg-white/90 px-3 py-3 shadow-sm backdrop-blur-sm">
@@ -1767,6 +1805,7 @@ export default function DashboardHome() {
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }
