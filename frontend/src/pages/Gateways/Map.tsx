@@ -60,13 +60,38 @@ interface GatewayItem extends GoogleAssetMapPoint {
   assignedSimIccid?: string | null;
 }
 
+const normalizeGatewayItem = (raw: any): GatewayItem => {
+  const base = { ...(raw || {}) } as Record<string, unknown>;
+  if (!("lat" in base) || typeof base.lat !== "number") {
+    const lat = Number(base.latitude ?? base.lat);
+    if (Number.isFinite(lat)) (base as any).lat = lat;
+  }
+  if (!("lng" in base) || typeof base.lng !== "number") {
+    const lng = Number(base.longitude ?? base.lng);
+    if (Number.isFinite(lng)) (base as any).lng = lng;
+  }
+  return base as GatewayItem;
+};
+
 const normalizeList = <T,>(payload: unknown): T[] => {
-  if (Array.isArray(payload)) return payload as T[];
+  if (Array.isArray(payload)) {
+    return (payload as unknown[]).map((it) =>
+      typeof it === "object" && it !== null && ((it as any).latitude !== undefined || (it as any).longitude !== undefined)
+        ? (normalizeGatewayItem(it) as unknown as T)
+        : (it as T)
+    );
+  }
   const obj = payload as Record<string, unknown> | null;
   if (!obj) return [];
   for (const key of ["data", "content", "items", "records"]) {
     const value = obj[key];
-    if (Array.isArray(value)) return value as T[];
+    if (Array.isArray(value)) {
+      return value.map((it) =>
+        typeof it === "object" && it !== null && ((it as any).latitude !== undefined || (it as any).longitude !== undefined)
+          ? (normalizeGatewayItem(it) as unknown as T)
+          : (it as T)
+      );
+    }
   }
   return [];
 };
@@ -178,6 +203,9 @@ const getMarkerColors = (point: GatewayItem): { fillColor: string; strokeColor: 
   }
 };
 
+const ZIMBABWE_CENTER = { lat: -19.0154, lng: 29.1549 };
+const DEFAULT_ZOOM = 6;
+
 export default function GatewaysMapIndex() {
   const { token, hasPermission } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -214,6 +242,8 @@ export default function GatewaysMapIndex() {
   const [lastSeenTo, setLastSeenTo] = useState<string>("");
 
   const [selectedMapPointId, setSelectedMapPointId] = useState<number | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
+  const [userLocationSource, setUserLocationSource] = useState<"browser" | "zim-default" | null>(null);
 
   const canSync = hasPermission("gateways.sync");
 
@@ -278,6 +308,41 @@ export default function GatewaysMapIndex() {
       void fetchGateways();
     }
   }, [fetchSummary, fetchGateways, token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const applyDefault = () => {
+      if (cancelled) return;
+      setUserLocation({ ...ZIMBABWE_CENTER });
+      setUserLocationSource("zim-default");
+    };
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      applyDefault();
+      return undefined;
+    }
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (cancelled) return;
+          const lat = Number(position?.coords?.latitude);
+          const lng = Number(position?.coords?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setUserLocation({ lat, lng, accuracy: Number(position.coords.accuracy) || undefined });
+            setUserLocationSource("browser");
+          } else {
+            applyDefault();
+          }
+        },
+        () => applyDefault(),
+        { enableHighAccuracy: false, timeout: 6000, maximumAge: 60 * 1000 }
+      );
+    } catch {
+      applyDefault();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const nextParams = new URLSearchParams(searchParams);
@@ -353,6 +418,14 @@ export default function GatewaysMapIndex() {
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex rounded-full border px-3 py-1.5 text-[11px] font-semibold ${syncStatusTone(summary.lastSyncStatus)}`}>
               {syncStatusLabel(summary.lastSyncStatus)} sync · {formatDateTime(summary.lastSyncAt)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-300">
+              <MapPinned className="h-3.5 w-3.5" />
+              {userLocationSource === "browser"
+                ? "Your current location (GPS)"
+                : userLocationSource === "zim-default"
+                ? "Default: Harare, Zimbabwe"
+                : "Locating you..."}
             </span>
             <button
               type="button"
@@ -561,6 +634,14 @@ export default function GatewaysMapIndex() {
                 apiKey={GOOGLE_MAPS_API_KEY}
                 className="h-[520px]"
                 points={mapPoints}
+                defaultCenter={userLocation ?? ZIMBABWE_CENTER}
+                defaultZoom={userLocationSource === "browser" ? 11 : DEFAULT_ZOOM}
+                userLocation={userLocation}
+                userLocationLabel={
+                  userLocationSource === "browser"
+                    ? "Your current location"
+                    : "Default centre: Harare, Zimbabwe"
+                }
                 selectedPointId={selectedMapPointId}
                 onPointSelect={(point) => setSelectedMapPointId(Number(point.id))}
                 emptyLabel="No gateway coordinates are available for the current filters."
