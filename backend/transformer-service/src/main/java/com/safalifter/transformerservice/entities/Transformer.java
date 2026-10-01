@@ -38,8 +38,10 @@ public class Transformer {
     @Enumerated(EnumType.STRING)
     private TransformerType type;
 
+    @Column(name = "lat", precision = 12, scale = 8)
     private BigDecimal lat;
 
+    @Column(name = "lng", precision = 12, scale = 8)
     private BigDecimal lng;
 
     @CreationTimestamp

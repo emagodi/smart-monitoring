@@ -112,14 +112,37 @@ type PagePayload<T> = {
   size?: number;
 };
 
+const normalizeGatewayItem = <T,>(raw: any): T => {
+  const base = { ...(raw || {}) } as Record<string, unknown>;
+  if (!("lat" in base) || typeof base.lat !== "number") {
+    const lat = Number(base.latitude ?? base.lat);
+    if (Number.isFinite(lat)) (base as any).lat = lat;
+  }
+  if (!("lng" in base) || typeof base.lng !== "number") {
+    const lng = Number(base.longitude ?? base.lng);
+    if (Number.isFinite(lng)) (base as any).lng = lng;
+  }
+  return base as T;
+};
+
 const normalizeList = <T,>(payload: unknown): T[] => {
-  if (Array.isArray(payload)) return payload as T[];
+  if (Array.isArray(payload)) {
+    return (payload as unknown[]).map((it) =>
+      typeof it === "object" && it !== null
+        ? normalizeGatewayItem<T>(it)
+        : (it as T)
+    );
+  }
   const obj = payload as Record<string, unknown> | null;
   if (!obj) return [];
-  for (const key of ["data", "content", "items", "records"]) {
+  for (const key of ["data", "content", "value", "items", "records"]) {
     const value = obj[key];
     if (Array.isArray(value)) {
-      return value as T[];
+      return value.map((it) =>
+        typeof it === "object" && it !== null
+          ? normalizeGatewayItem<T>(it)
+          : (it as T)
+      );
     }
   }
   return [];
@@ -258,18 +281,18 @@ const StatCard = ({
             ? "border border-slate-200 bg-slate-100/80 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
             : "border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300";
   return (
-    <div className="enterprise-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+    <div className="enterprise-card p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
             {title}
           </p>
-          <p className={`mt-2 text-[28px] font-semibold tracking-tight ${valueTone}`}>
+          <p className={`mt-1 text-xl font-semibold leading-tight tracking-tight ${valueTone}`}>
             {typeof value === "number" ? value.toLocaleString() : value}
           </p>
-          <p className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
+          <p className="mt-1 text-[11px] leading-[1.25rem] text-slate-500 dark:text-slate-400">{subtitle}</p>
         </div>
-        <div className={`shrink-0 rounded-xl p-2.5 ${iconTone}`}>{icon}</div>
+        <div className={`shrink-0 rounded-lg p-1.5 ${iconTone}`}>{icon}</div>
       </div>
     </div>
   );
@@ -651,15 +674,12 @@ export default function GatewaysIndex() {
     }
   };
 
-  const paginatedItems = useMemo(() => {
-    const start = page * pageSize;
-    return filteredItems.slice(start, start + pageSize);
-  }, [filteredItems, page, pageSize]);
+  const paginatedItems = filteredItems;
 
-  const pageStart = filteredItems.length === 0 ? 0 : page * pageSize + 1;
-  const pageEnd = filteredItems.length === 0 ? 0 : Math.min(page * pageSize + pageSize, filteredItems.length);
-  const totalFiltered = filteredItems.length;
-  const totalPagesComputed = Math.max(Math.ceil(Math.max(totalFiltered, 1) / pageSize), 1);
+  const pageStart = totalElements === 0 ? 0 : page * pageSize + 1;
+  const pageEnd = totalElements === 0 ? 0 : Math.min(page * pageSize + pageSize, totalElements);
+  const totalFiltered = totalElements;
+  const totalPagesComputed = Math.max(totalPages, 1);
 
   return (
     <div className="space-y-4">
@@ -695,71 +715,68 @@ export default function GatewaysIndex() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Total Gateways"
           value={summary.total}
           subtitle="Registered gateway devices tracked in inventory."
-          icon={<Router className="h-5 w-5" />}
+          icon={<Router className="h-4 w-4" />}
           highlight="blue"
         />
         <StatCard
           title="Online"
           value={summary.online}
           subtitle="Gateways reporting as healthy and reachable."
-          icon={<Wifi className="h-5 w-5" />}
+          icon={<Wifi className="h-4 w-4" />}
           highlight="emerald"
         />
         <StatCard
           title="Degraded"
           value={summary.degraded}
           subtitle="Grace-period held offline, likely to flip soon."
-          icon={<AlertTriangle className="h-5 w-5" />}
+          icon={<AlertTriangle className="h-4 w-4" />}
           highlight="amber"
         />
         <StatCard
           title="Last Sync"
           value={syncStatusLabel(summary.lastSyncStatus)}
           subtitle={`Ran ${formatDateTime(summary.lastSyncAt)}`}
-          icon={summary.lastSyncStatus === "FAILED" ? <ServerCrash className="h-5 w-5" /> : <Server className="h-5 w-5" />}
+          icon={summary.lastSyncStatus === "FAILED" ? <ServerCrash className="h-4 w-4" /> : <Server className="h-4 w-4" />}
           highlight={summary.lastSyncStatus === "FAILED" ? "red" : summary.lastSyncStatus === "PARTIAL" ? "amber" : "emerald"}
         />
-      </section>
-
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5">
         <StatCard
           title="Offline"
           value={summary.offline}
           subtitle="Offline beyond grace period — needs attention."
-          icon={<WifiOff className="h-5 w-5" />}
+          icon={<WifiOff className="h-4 w-4" />}
           highlight="red"
         />
         <StatCard
           title="Never Seen"
           value={summary.neverSeen}
           subtitle="Created but never observed via LORIOT or traffic."
-          icon={<CloudOff className="h-5 w-5" />}
+          icon={<CloudOff className="h-4 w-4" />}
           highlight="slate"
         />
         <StatCard
           title="Unknown"
           value={summary.unknown}
           subtitle="No signal, no uplink, no manual status."
-          icon={<HelpCircle className="h-5 w-5" />}
+          icon={<HelpCircle className="h-4 w-4" />}
           highlight="slate"
         />
         <StatCard
           title="Missing Location"
           value={summary.missingLocation}
           subtitle="Gateways without lat/lng coordinates set."
-          icon={<MapPinOff className="h-5 w-5" />}
+          icon={<MapPinOff className="h-4 w-4" />}
           highlight="amber"
         />
         <StatCard
           title="Missing SIM"
           value={summary.missingSim}
           subtitle="Gateways without an active SIM assignment."
-          icon={<CardSim className="h-5 w-5" />}
+          icon={<CardSim className="h-4 w-4" />}
           highlight="red"
         />
       </section>

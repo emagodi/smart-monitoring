@@ -215,12 +215,33 @@ export default function TransformersIndex() {
 
   // --- Helpers ---
 
+  const normalizeTransformerItem = (raw: any): any => {
+    const base = { ...(raw || {}) } as Record<string, unknown>;
+    if (!("lat" in base) || typeof base.lat !== "number") {
+      const lat = Number(base.latitude ?? base.lat);
+      if (Number.isFinite(lat)) (base as any).lat = lat;
+    }
+    if (!("lng" in base) || typeof base.lng !== "number") {
+      const lng = Number(base.longitude ?? base.lng);
+      if (Number.isFinite(lng)) (base as any).lng = lng;
+    }
+    return base;
+  };
+
   const normalizeList = (payload: unknown): any[] => {
-    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload)) {
+      return payload.map((it) =>
+        typeof it === "object" && it !== null ? normalizeTransformerItem(it) : it
+      );
+    }
     const obj = payload as Record<string, unknown>;
-    const candidates = ['content', 'data', 'items', 'records', 'sensorReadings', 'readings', 'controllerReadings'];
+    const candidates = ['content', 'data', 'value', 'items', 'records', 'sensorReadings', 'readings', 'controllerReadings'];
     for (const key of candidates) {
-      if (Array.isArray(obj?.[key])) return obj[key] as any[];
+      if (Array.isArray(obj?.[key])) {
+        return (obj[key] as any[]).map((it) =>
+          typeof it === "object" && it !== null ? normalizeTransformerItem(it) : it
+        );
+      }
     }
     return [];
   };

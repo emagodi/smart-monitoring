@@ -36,6 +36,8 @@ type GoogleAssetMapProps<T extends GoogleAssetMapPoint> = {
   actionLabel?: string;
   getMarkerColors?: (point: T, isSelected: boolean) => MarkerColors;
   renderDetails?: (point: T) => ReactNode;
+  userLocation?: { lat: number; lng: number; accuracy?: number } | null;
+  userLocationLabel?: string;
 };
 
 const GOOGLE_MAP_SCRIPT_ID = "powertel-google-maps-script";
@@ -128,10 +130,15 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
   actionLabel,
   getMarkerColors,
   renderDetails,
+  userLocation,
+  userLocationLabel = "Your current location",
 }: GoogleAssetMapProps<T>) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<Map<number | string, any>>(new Map());
+  const userMarkerRef = useRef<any>(null);
+  const userAccuracyCircleRef = useRef<any>(null);
+  const userInfoWindowRef = useRef<any>(null);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [internalSelectedId, setInternalSelectedId] = useState<number | string | null>(null);
@@ -211,41 +218,128 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
     if (!points.length) {
       map.setCenter(defaultCenter);
       map.setZoom(defaultZoom);
-      return;
+    } else {
+      const bounds = new googleMaps.LatLngBounds();
+
+      if (userLocation) {
+        bounds.extend({ lat: userLocation.lat, lng: userLocation.lng });
+      }
+
+      points.forEach((point) => {
+        const position = { lat: point.lat, lng: point.lng };
+        const marker = new googleMaps.Marker({
+          map,
+          position,
+          title: point.name,
+          icon: buildMarkerIcon(
+            googleMaps,
+            (getMarkerColors ?? defaultMarkerColors)(point, point.id === activeSelectedId),
+            point.id === activeSelectedId
+          ),
+        });
+
+        marker.addListener("click", () => {
+          setInternalSelectedId(point.id);
+          onPointSelect?.(point);
+        });
+
+        markersRef.current.set(point.id, marker);
+        bounds.extend(position);
+      });
+
+      if (points.length === 1 && !userLocation) {
+        map.setCenter({ lat: points[0].lat, lng: points[0].lng });
+        map.setZoom(Math.max(defaultZoom + 3, 10));
+      } else {
+        map.fitBounds(bounds, 72);
+        const listener = googleMaps.event.addListenerOnce(map, "idle", () => {
+          if (map.getZoom() > (userLocation ? 14 : 18)) {
+            map.setZoom(userLocation ? 14 : 18);
+          }
+          if (userLocation) {
+            map.panTo({ lat: userLocation.lat, lng: userLocation.lng });
+          }
+          googleMaps.event.removeListener(listener);
+        });
+      }
+    }
+  }, [activeSelectedId, defaultCenter, defaultZoom, getMarkerColors, loadState, onPointSelect, points, userLocation]);
+
+  useEffect(() => {
+    if (loadState !== "ready" || !mapRef.current || !window.google?.maps) return;
+
+    const googleMaps = window.google.maps;
+    const map = mapRef.current;
+
+    if (userMarkerRef.current) {
+      googleMaps.event.clearInstanceListeners(userMarkerRef.current);
+      userMarkerRef.current.setMap(null);
+      userMarkerRef.current = null;
+    }
+    if (userAccuracyCircleRef.current) {
+      userAccuracyCircleRef.current.setMap(null);
+      userAccuracyCircleRef.current = null;
+    }
+    if (userInfoWindowRef.current) {
+      userInfoWindowRef.current.close();
+      userInfoWindowRef.current = null;
     }
 
-    const bounds = new googleMaps.LatLngBounds();
+    if (!userLocation) return undefined;
 
-    points.forEach((point) => {
-      const position = { lat: point.lat, lng: point.lng };
-      const marker = new googleMaps.Marker({
+    const position = { lat: userLocation.lat, lng: userLocation.lng };
+
+    if (typeof userLocation.accuracy === "number" && Number.isFinite(userLocation.accuracy)) {
+      userAccuracyCircleRef.current = new googleMaps.Circle({
         map,
-        position,
-        title: point.name,
-        icon: buildMarkerIcon(
-          googleMaps,
-          (getMarkerColors ?? defaultMarkerColors)(point, point.id === activeSelectedId),
-          point.id === activeSelectedId
-        ),
+        center: position,
+        radius: userLocation.accuracy,
+        strokeColor: "#2563eb",
+        strokeOpacity: 0.35,
+        strokeWeight: 1,
+        fillColor: "#3b82f6",
+        fillOpacity: 0.1,
+        clickable: false,
       });
+    }
 
-      marker.addListener("click", () => {
-        setInternalSelectedId(point.id);
-        onPointSelect?.(point);
-      });
+    const userIcon = buildMarkerIcon(
+      googleMaps,
+      { fillColor: "#2563eb", strokeColor: "#1d4ed8" },
+      true
+    );
+    userIcon.scale = 1.55;
 
-      markersRef.current.set(point.id, marker);
-      bounds.extend(position);
+    userMarkerRef.current = new googleMaps.Marker({
+      map,
+      position,
+      title: userLocationLabel,
+      icon: userIcon,
+      zIndex: googleMaps.Marker.MAX_ZINDEX + 10,
     });
 
-    if (points.length === 1) {
-      map.setCenter({ lat: points[0].lat, lng: points[0].lng });
-      map.setZoom(Math.max(defaultZoom + 3, 10));
-      return;
-    }
+    const info = new googleMaps.InfoWindow({
+      content: `<div style="font-family: ui-sans-serif, system-ui, sans-serif; padding: 4px 4px;">
+        <div style="font-weight: 600; color: #0f172a; font-size: 13px;">${userLocationLabel}</div>
+        <div style="margin-top: 4px; font-size: 11px; color: #475569;">
+          ${userLocation.lat.toFixed(5)}, ${userLocation.lng.toFixed(5)}${
+            typeof userLocation.accuracy === "number" && Number.isFinite(userLocation.accuracy)
+              ? `<br/>Accuracy: ±${Math.round(userLocation.accuracy)} m`
+              : ""
+          }
+        </div>
+      </div>`,
+    });
+    userInfoWindowRef.current = info;
 
-    map.fitBounds(bounds, 72);
-  }, [activeSelectedId, defaultCenter, defaultZoom, getMarkerColors, loadState, onPointSelect, points]);
+    userMarkerRef.current.addListener("click", () => {
+      info.open(map, userMarkerRef.current);
+    });
+
+    setTimeout(() => info.open(map, userMarkerRef.current), 150);
+
+    return undefined;
+  }, [loadState, userLocation, userLocationLabel]);
 
   useEffect(() => {
     if (loadState !== "ready" || !mapRef.current || !window.google?.maps) return;

@@ -8,9 +8,9 @@ services:
       MYSQL_DATABASE: tms
       TZ: Africa/Harare
     ports:
-      - "3307:3306"
+      - "3308:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - smart-monitoring_mysql_data:/var/lib/mysql
       - ./backend/db-init:/docker-entrypoint-initdb.d:ro
 
   phpmyadmin:
@@ -156,7 +156,7 @@ services:
     container_name: transformer-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3001:80"
     depends_on:
       - gateway
     
@@ -177,5 +177,7 @@ services:
       - config-server
 
 volumes:
+  smart-monitoring_mysql_data:
+    external: true
   mysql_data:
   frontend_node_modules:

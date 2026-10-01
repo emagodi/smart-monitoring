@@ -179,6 +179,9 @@ const compactAlertLabel = (message?: string) => {
   return `${message.slice(0, 51)}...`;
 };
 
+const ZIMBABWE_CENTER = { lat: -19.0154, lng: 29.1549 };
+const DEFAULT_ZOOM = 6;
+
 const WATCHLIST_STORAGE_KEY = "dashboard-transformer-watchlist";
 
 const normalizedTransformerType = (value?: string | null) => {
@@ -197,14 +200,37 @@ const normalizedTransformerType = (value?: string | null) => {
   return normalized;
 };
 
+const normalizeTransformer = <T,>(raw: any): T => {
+  const base = { ...(raw || {}) } as Record<string, unknown>;
+  if (!("lat" in base) || typeof base.lat !== "number") {
+    const lat = Number(base.latitude ?? base.lat);
+    if (Number.isFinite(lat)) (base as any).lat = lat;
+  }
+  if (!("lng" in base) || typeof base.lng !== "number") {
+    const lng = Number(base.longitude ?? base.lng);
+    if (Number.isFinite(lng)) (base as any).lng = lng;
+  }
+  return base as T;
+};
+
 const normalizeList = <T,>(payload: unknown): T[] => {
-  if (Array.isArray(payload)) return payload as T[];
+  if (Array.isArray(payload)) {
+    return (payload as unknown[]).map((it) =>
+      typeof it === "object" && it !== null
+        ? normalizeTransformer<T>(it)
+        : (it as T)
+    );
+  }
   const obj = payload as Record<string, unknown> | null;
   if (!obj) return [];
-  for (const key of ["content", "data", "items", "records"]) {
+  for (const key of ["content", "data", "value", "items", "records"]) {
     const value = obj[key];
     if (Array.isArray(value)) {
-      return value as T[];
+      return value.map((it) =>
+        typeof it === "object" && it !== null
+          ? normalizeTransformer<T>(it)
+          : (it as T)
+      );
     }
   }
   return [];
@@ -360,6 +386,8 @@ export default function DashboardHome() {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState(() => persistedWatchlistState?.selectedTypeFilter ?? "ALL");
   const [watchlistPage, setWatchlistPage] = useState(() => persistedWatchlistState?.watchlistPage ?? 1);
   const [gatewaySummary, setGatewaySummary] = useState<GatewaySummary | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
+  const [userLocationSource, setUserLocationSource] = useState<"browser" | "zim-default" | null>(null);
 
   const [fastStatsLoading, setFastStatsLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -976,6 +1004,34 @@ export default function DashboardHome() {
       .slice(0, 60);
   }, [transformerOperations]);
 
+  const getTransformerMarkerColors = useCallback(
+    (point: any, isSelected: boolean) => {
+      const online = String(point?.onlineLabel || "").toLowerCase();
+      const arm = String(point?.armState || "").toLowerCase();
+      const hasAlert = Boolean(point?.latestAlertLabel && point.latestAlertLabel !== "—" && !/no alerts?|none/i.test(String(point.latestAlertLabel)));
+      let fill = "#64748b";
+      let stroke = "#475569";
+      if (online === "online") {
+        fill = hasAlert ? "#f59e0b" : "#22c55e";
+        stroke = hasAlert ? "#b45309" : "#15803d";
+      } else if (online === "offline") {
+        fill = "#ef4444";
+        stroke = "#b91c1c";
+      } else if (online === "delayed") {
+        fill = "#f59e0b";
+        stroke = "#b45309";
+      } else if (arm === "unknown") {
+        fill = "#94a3b8";
+        stroke = "#64748b";
+      }
+      if (isSelected) {
+        stroke = "#1d4ed8";
+      }
+      return { fillColor: fill, strokeColor: stroke };
+    },
+    []
+  );
+
   const selectedTransformer = useMemo(() => {
     if (selectedTransformerId == null) return null;
     return transformerOperations.find((item) => item.id === selectedTransformerId) || null;
@@ -987,6 +1043,41 @@ export default function DashboardHome() {
       setSelectedTransformerId(null);
     }
   }, [selectedTransformerId, transformerOperations]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const applyDefault = () => {
+      if (cancelled) return;
+      setUserLocation({ ...ZIMBABWE_CENTER });
+      setUserLocationSource("zim-default");
+    };
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      applyDefault();
+      return undefined;
+    }
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (cancelled) return;
+          const lat = Number(position?.coords?.latitude);
+          const lng = Number(position?.coords?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setUserLocation({ lat, lng, accuracy: Number(position.coords.accuracy) || undefined });
+            setUserLocationSource("browser");
+          } else {
+            applyDefault();
+          }
+        },
+        () => applyDefault(),
+        { enableHighAccuracy: false, timeout: 6000, maximumAge: 60 * 1000 }
+      );
+    } catch {
+      applyDefault();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (fastStatsLoading || accessLoading) {
     return (
@@ -1120,8 +1211,17 @@ export default function DashboardHome() {
               </h3>
               <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
                 Visualize monitored sites and transform grid coverage into a field operations view.
+                <span className="ml-2 text-slate-400">ONLINE = green · OFFLINE = red · DELAYED = amber · UNKNOWN = slate</span>
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${userLocationSource === "browser" ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-300" : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600/40 dark:bg-slate-500/10 dark:text-slate-300"}`}>
+                  <MapPinned className="h-3.5 w-3.5" />
+                  {userLocationSource === "browser"
+                    ? "Your current location (GPS)"
+                    : userLocationSource === "zim-default"
+                    ? "Default centre: Harare, Zimbabwe"
+                    : "Locating you..."}
+                </span>
                 {topRegionalCoverage.length === 0 ? (
                   <span className="enterprise-chip inline-flex items-center px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400">
                     Region coverage appears after transformer and depot data loads.
@@ -1193,9 +1293,18 @@ export default function DashboardHome() {
               apiKey={GOOGLE_MAPS_API_KEY}
               className="h-[460px]"
               points={mapPoints}
+              defaultCenter={userLocation ?? ZIMBABWE_CENTER}
+              defaultZoom={userLocationSource === "browser" ? 11 : DEFAULT_ZOOM}
+              userLocation={userLocation}
+              userLocationLabel={
+                userLocationSource === "browser"
+                  ? "Your current location"
+                  : "Default centre: Harare, Zimbabwe"
+              }
               selectedPointId={selectedTransformerId}
               onPointSelect={(item) => setSelectedTransformerId(Number(item.id))}
               emptyLabel="No transformer coordinates are available for the current dashboard scope."
+              getMarkerColors={getTransformerMarkerColors}
               renderDetails={(item) => (
                 <div className="space-y-1.5 text-sm text-slate-600">
                   <p>
