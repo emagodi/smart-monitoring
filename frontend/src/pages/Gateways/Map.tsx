@@ -83,7 +83,7 @@ const normalizeList = <T,>(payload: unknown): T[] => {
   }
   const obj = payload as Record<string, unknown> | null;
   if (!obj) return [];
-  for (const key of ["data", "content", "items", "records"]) {
+  for (const key of ["data", "content", "value", "items", "records"]) {
     const value = obj[key];
     if (Array.isArray(value)) {
       return value.map((it) =>
