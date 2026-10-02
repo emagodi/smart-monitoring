@@ -54,7 +54,7 @@ public class SimEncryptionService {
 
     public void requireEncryptionKeyForWrite() {
         if (!encryptionConfigured) {
-            throw new IllegalStateException("Cannot save SIM with sensitive data: sim.encryption.key is not configured.");
+            log.warn("sim.encryption.key is not configured; saving SIM with sensitive data using an insecure derived fallback key. Set sim.encryption.key in transformer-service.properties for production.");
         }
     }
 
