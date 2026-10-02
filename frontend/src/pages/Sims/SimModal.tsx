@@ -267,9 +267,45 @@ export function SimModal({
 
       onSaved();
       onClose();
-    } catch (submitError) {
+    } catch (submitError: any) {
       console.error(submitError);
-      setError(isEdit ? "Failed to save SIM changes." : "Failed to create SIM card.");
+      const fallback = isEdit ? "Failed to save SIM changes." : "Failed to create SIM card.";
+      let detail: string | null = null;
+      try {
+        const resp = submitError?.response;
+        const data = resp?.data;
+        if (data) {
+          if (typeof data === "string" && data.length > 0) detail = data;
+          else if (typeof data === "object") {
+            for (const k of ["message", "error", "detail", "title", "reason"]) {
+              const v = (data as Record<string, unknown>)[k];
+              if (typeof v === "string" && v.length > 0) {
+                detail = v;
+                break;
+              }
+            }
+            if (!detail) {
+              const keys = ["errors", "validation", "fieldErrors"];
+              for (const k of keys) {
+                const v = (data as Record<string, unknown>)[k];
+                if (v && typeof v === "object") {
+                  const firstMsg = Object.values(v as Record<string, unknown>).flat()[0];
+                  if (typeof firstMsg === "string") {
+                    detail = firstMsg;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (!detail && resp?.statusText && typeof resp.statusText === "string" && resp.statusText.length > 0) {
+          detail = `HTTP ${resp.status} ${resp.statusText}`;
+        }
+      } catch {
+        detail = null;
+      }
+      setError(detail ? `${fallback} ${detail}` : fallback);
     } finally {
       setSubmitting(false);
     }
