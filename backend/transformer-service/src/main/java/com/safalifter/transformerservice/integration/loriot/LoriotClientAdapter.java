@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
@@ -207,8 +208,28 @@ public class LoriotClientAdapter {
             if (response.getStatusCode().is5xxServerError() || response.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
                 throw new HttpServerErrorException(response.getStatusCode(), "Server error from LORIOT");
             }
-            return response.getBody();
+            String body = response.getBody() == null ? "" : response.getBody();
+            String contentType = response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE);
+            boolean looksJson = (contentType != null && contentType.toLowerCase(Locale.ROOT).contains("json"))
+                    || (body.startsWith("{") || body.startsWith("["));
+            if (!looksJson) {
+                log.warn("LORIOT REST HTTP {} to {} returned non-JSON Content-Type={}; first 200 chars: {}",
+                        response.getStatusCodeValue(),
+                        redactUrl(url),
+                        contentType == null ? "none" : contentType,
+                        body.length() <= 200 ? body : body.substring(0, 200) + "...");
+            } else if (body.isBlank()) {
+                log.warn("LORIOT REST HTTP {} to {} returned empty JSON body; check auth token / permissions",
+                        response.getStatusCodeValue(), redactUrl(url));
+            }
+            return body;
         } catch (HttpClientErrorException e) {
+            log.warn("LORIOT REST HTTP {} to {}: response body = {}",
+                    e.getStatusCode().value(),
+                    redactUrl(url),
+                    e.getResponseBodyAsString().length() <= 400
+                            ? e.getResponseBodyAsString()
+                            : e.getResponseBodyAsString().substring(0, 400) + "...");
             if (e.getStatusCode().is4xxClientError() && !e.getStatusCode().equals(HttpStatus.TOO_MANY_REQUESTS)) {
                 throw e;
             }
@@ -228,6 +249,10 @@ public class LoriotClientAdapter {
     }
 
     private String authHeader() {
+        String override = properties.getRestAuthorization();
+        if (override != null && !override.isBlank()) {
+            return override.trim();
+        }
         String pattern = properties.getUserApiAuthPattern();
         String key = properties.getUserApiKey();
         if (pattern == null || pattern.isBlank()) {

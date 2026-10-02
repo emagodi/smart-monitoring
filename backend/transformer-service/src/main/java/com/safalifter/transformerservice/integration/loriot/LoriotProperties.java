@@ -26,6 +26,9 @@ public class LoriotProperties {
 
     private String userApiAuthPattern = "Bearer {}";
 
+    @ToString.Exclude
+    private String restAuthorization = "";
+
     private Path paths = new Path();
 
     private Retry retry = new Retry();
