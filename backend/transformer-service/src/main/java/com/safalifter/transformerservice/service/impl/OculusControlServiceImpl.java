@@ -234,11 +234,10 @@ public class OculusControlServiceImpl implements OculusControlService {
         Controller primaryController = resolvePrimaryController(controllers);
         Optional<ControllerReading> latestReading = primaryController == null || primaryController.getId() == null
                 ? Optional.empty()
-                : Optional.ofNullable(latestReadingByControllerId.get(primaryController.getId()))
-                    .or(() -> controllerReadingRepository.findTopByControllerIdOrderByCreatedAtDesc(primaryController.getId()));
+                : Optional.ofNullable(latestReadingByControllerId.get(primaryController.getId()));
         Optional<ControllerCommand> latestCommandOpt = latestCommand != null
                 ? Optional.of(latestCommand)
-                : controllerCommandRepository.findTopByTransformerIdOrderByCreatedAtDesc(transformer.getId());
+                : Optional.empty();
 
 
         boolean controlAvailable = primaryController != null && isControllableController(primaryController);
@@ -302,7 +301,7 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         Optional<ControllerReading> latestReading = prefetchedLatestReading != null
                 ? Optional.of(prefetchedLatestReading)
-                : (controllerId != null ? controllerReadingRepository.findTopByControllerIdOrderByCreatedAtDesc(controllerId) : Optional.empty());
+                : Optional.empty();
         ArmState armState = latestReading.map(this::extractArmState).orElse(ArmState.UNKNOWN);
         LocalDateTime latestTelemetryAt = latestReading.map(ControllerReading::getCreatedAt).orElse(null);
         String controllerStatus = resolveControllerStatus(latestTelemetryAt);
