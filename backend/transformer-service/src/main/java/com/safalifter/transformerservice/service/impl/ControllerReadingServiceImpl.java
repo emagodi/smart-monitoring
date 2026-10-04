@@ -48,8 +48,37 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     @Override
     public ControllerReading save(ControllerReading reading) {
         ControllerReading saved = repository.save(reading);
+        updateControllerDenormFromReading(saved);
         processTriggers(saved);
         return saved;
+    }
+
+    private void updateControllerDenormFromReading(ControllerReading reading) {
+        if (reading == null || reading.getControllerId() == null) return;
+        try {
+            controllerRepository.findById(reading.getControllerId()).ifPresent(controller -> {
+                controller.setLastReadingAt(reading.getCreatedAt() != null ? reading.getCreatedAt() : LocalDateTime.now());
+                controller.setLastReadingDi1(reading.getDi1());
+                controller.setLastReadingDi2(reading.getDi2());
+                controller.setLastReadingBattery(reading.getBattery());
+                controller.setLastReadingRssi(reading.getRssi());
+                controller.setLastReadingSnr(reading.getSnr());
+                controller.setLastReadingDecodedPayload(reading.getDecodedPayload());
+                controllerRepository.save(controller);
+
+                if (controller.getTransformerId() != null) {
+                    transformerRepository.findById(controller.getTransformerId()).ifPresent(transformer -> {
+                        LocalDateTime readingTs = reading.getCreatedAt() != null ? reading.getCreatedAt() : LocalDateTime.now();
+                        if (transformer.getLastTelemetryAt() == null || readingTs.isAfter(transformer.getLastTelemetryAt())) {
+                            transformer.setLastTelemetryAt(readingTs);
+                            transformerRepository.save(transformer);
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Denorm update failed for reading controller={}: {}", reading.getControllerId(), e.getMessage());
+        }
     }
 
     private void processTriggers(ControllerReading reading) {

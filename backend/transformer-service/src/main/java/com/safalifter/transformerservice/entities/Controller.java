@@ -37,6 +37,42 @@ public class Controller {
     @Column(name = "transformer_id")
     private Long transformerId;
 
+    @Column(name = "last_reading_at")
+    private LocalDateTime lastReadingAt;
+
+    @Column(name = "last_reading_di1")
+    private Boolean lastReadingDi1;
+
+    @Column(name = "last_reading_di2")
+    private Boolean lastReadingDi2;
+
+    @Column(name = "last_reading_battery")
+    private Integer lastReadingBattery;
+
+    @Column(name = "last_reading_rssi")
+    private Integer lastReadingRssi;
+
+    @Column(name = "last_reading_snr")
+    private Integer lastReadingSnr;
+
+    @Lob
+    @Column(name = "last_reading_decoded_payload", columnDefinition = "TEXT")
+    private String lastReadingDecodedPayload;
+
+    @Column(name = "last_command_at")
+    private LocalDateTime lastCommandAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_command_action")
+    private com.safalifter.transformerservice.enums.ControllerCommandAction lastCommandAction;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_command_status")
+    private com.safalifter.transformerservice.enums.ControllerCommandStatus lastCommandStatus;
+
+    @Column(name = "last_command_requested_by")
+    private String lastCommandRequestedBy;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -44,6 +80,29 @@ public class Controller {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    public LocalDateTime getLastReadingAt() { return lastReadingAt; }
+    public void setLastReadingAt(LocalDateTime lastReadingAt) { this.lastReadingAt = lastReadingAt; }
+    public Boolean getLastReadingDi1() { return lastReadingDi1; }
+    public void setLastReadingDi1(Boolean lastReadingDi1) { this.lastReadingDi1 = lastReadingDi1; }
+    public Boolean getLastReadingDi2() { return lastReadingDi2; }
+    public void setLastReadingDi2(Boolean lastReadingDi2) { this.lastReadingDi2 = lastReadingDi2; }
+    public Integer getLastReadingBattery() { return lastReadingBattery; }
+    public void setLastReadingBattery(Integer lastReadingBattery) { this.lastReadingBattery = lastReadingBattery; }
+    public Integer getLastReadingRssi() { return lastReadingRssi; }
+    public void setLastReadingRssi(Integer lastReadingRssi) { this.lastReadingRssi = lastReadingRssi; }
+    public Integer getLastReadingSnr() { return lastReadingSnr; }
+    public void setLastReadingSnr(Integer lastReadingSnr) { this.lastReadingSnr = lastReadingSnr; }
+    public String getLastReadingDecodedPayload() { return lastReadingDecodedPayload; }
+    public void setLastReadingDecodedPayload(String p) { this.lastReadingDecodedPayload = p; }
+    public LocalDateTime getLastCommandAt() { return lastCommandAt; }
+    public void setLastCommandAt(LocalDateTime t) { this.lastCommandAt = t; }
+    public com.safalifter.transformerservice.enums.ControllerCommandAction getLastCommandAction() { return lastCommandAction; }
+    public void setLastCommandAction(com.safalifter.transformerservice.enums.ControllerCommandAction a) { this.lastCommandAction = a; }
+    public com.safalifter.transformerservice.enums.ControllerCommandStatus getLastCommandStatus() { return lastCommandStatus; }
+    public void setLastCommandStatus(com.safalifter.transformerservice.enums.ControllerCommandStatus s) { this.lastCommandStatus = s; }
+    public String getLastCommandRequestedBy() { return lastCommandRequestedBy; }
+    public void setLastCommandRequestedBy(String u) { this.lastCommandRequestedBy = u; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
