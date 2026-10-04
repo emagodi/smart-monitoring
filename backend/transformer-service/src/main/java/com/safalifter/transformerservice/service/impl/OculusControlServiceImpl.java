@@ -84,28 +84,51 @@ public class OculusControlServiceImpl implements OculusControlService {
     public List<OculusTransformerControlResponse> listTransformers() {
         ensureOculusControlAccess();
 
-        List<Controller> oculusControllers = controllerRepository.findAllBySupplierCode(OCULUS_SUPPLIER_CODE).stream()
-                .filter(controller -> controller.getTransformerId() != null)
-                .collect(Collectors.toList());
+        List<Controller> allOculusControllers = controllerRepository.findAllBySupplierCode(OCULUS_SUPPLIER_CODE);
+        List<OculusTransformerControlResponse> result = new ArrayList<>();
 
-        LinkedHashMap<Long, List<Controller>> controllersByTransformer = new LinkedHashMap<>();
-        for (Controller controller : oculusControllers) {
-            controllersByTransformer
-                    .computeIfAbsent(controller.getTransformerId(), ignored -> new ArrayList<>())
+        Map<Long, Transformer> transformersById = Collections.emptyMap();
+        LinkedHashMap<Long, List<Controller>> linkedByTransformer = new LinkedHashMap<>();
+        List<Controller> unassignedControllers = new ArrayList<>();
+
+        for (Controller controller : allOculusControllers) {
+            Long tfId = controller.getTransformerId();
+            if (tfId == null) {
+                unassignedControllers.add(controller);
+                continue;
+            }
+            linkedByTransformer
+                    .computeIfAbsent(tfId, ignored -> new ArrayList<>())
                     .add(controller);
         }
 
-        Map<Long, Transformer> transformersById = transformerRepository.findAllById(controllersByTransformer.keySet()).stream()
-                .collect(Collectors.toMap(Transformer::getId, transformer -> transformer));
+        if (!linkedByTransformer.isEmpty()) {
+            transformersById = transformerRepository.findAllById(linkedByTransformer.keySet()).stream()
+                    .collect(Collectors.toMap(Transformer::getId, t -> t));
+        }
 
-        return controllersByTransformer.entrySet().stream()
-                .map(entry -> buildTransformerResponse(transformersById.get(entry.getKey()), entry.getValue()))
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(
-                        OculusTransformerControlResponse::getTransformerName,
-                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
-                ))
-                .toList();
+        for (Map.Entry<Long, List<Controller>> entry : linkedByTransformer.entrySet()) {
+            Transformer transformer = transformersById.get(entry.getKey());
+            if (transformer == null) {
+                for (Controller orphan : entry.getValue()) {
+                    unassignedControllers.add(orphan);
+                }
+                continue;
+            }
+            OculusTransformerControlResponse built = buildTransformerResponse(transformer, entry.getValue());
+            if (built != null) result.add(built);
+        }
+
+        for (Controller unassigned : unassignedControllers) {
+            OculusTransformerControlResponse built = buildUnassignedControllerResponse(unassigned);
+            if (built != null) result.add(built);
+        }
+
+        result.sort(Comparator.comparing(
+                OculusTransformerControlResponse::getTransformerName,
+                Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
+        ));
+        return result;
     }
 
     @Override
@@ -176,6 +199,75 @@ public class OculusControlServiceImpl implements OculusControlService {
                 .lastCommandRequestedBy(latestCommand.map(ControllerCommand::getRequestedByEmail).orElse(null))
                 .supplierCode(OCULUS_SUPPLIER_CODE)
                 .supplierName(OCULUS_SUPPLIER_NAME)
+                .build();
+    }
+
+    private OculusTransformerControlResponse buildUnassignedControllerResponse(Controller controller) {
+        if (controller == null) return null;
+        Long controllerId = controller.getId();
+        String devEui = controller.getDevEui();
+        String shortEui = (devEui != null && devEui.length() > 8)
+                ? devEui.substring(devEui.length() - 8)
+                : devEui;
+        String displayName = "Unassigned — Controller " + (shortEui != null ? shortEui : ("#" + controllerId));
+
+        Optional<ControllerReading> latestReading = controllerReadingRepository.findTopByControllerIdOrderByCreatedAtDesc(controllerId);
+        ArmState armState = latestReading.map(this::extractArmState).orElse(ArmState.UNKNOWN);
+        LocalDateTime latestTelemetryAt = latestReading.map(ControllerReading::getCreatedAt).orElse(null);
+        String controllerStatus = resolveControllerStatus(latestTelemetryAt);
+        Long minutesSinceLastTelemetry = calculateMinutesSince(latestTelemetryAt);
+        String controllerType = controller.getType();
+        TransformerType defaultTransformerType = TransformerType.GROUND_MOUNTED;
+        String transformerTypeLabel = resolveTransformerTypeLabel(defaultTransformerType);
+        Boolean motionDetected = latestReading.map(ControllerReading::getDi1).orElse(null);
+        Boolean secondaryAlertDetected = latestReading.map(ControllerReading::getDi2).orElse(null);
+        String secondaryAlertLabel = resolveSecondaryAlertLabel(defaultTransformerType);
+        String activeAlertSummary = buildActiveAlertSummary(defaultTransformerType, motionDetected, secondaryAlertDetected);
+
+        String confirmationStatus = latestReading == null
+                ? "PENDING_TELEMETRY"
+                : armState == ArmState.UNKNOWN ? "NO_ARM_PAYLOAD" : "TELEMETRY_OK";
+        String availabilityReason = "Assign controller to a transformer in New Controllers → Edit to enable arm/disarm control.";
+        boolean controllable = isControllableController(controller);
+        if (!controllable && controller.getTransformerId() != null) {
+            availabilityReason = "Controller type " + controllerType + " cannot issue arm/disarm; assign a controllable Dragino LT22222-style device.";
+        } else if (!controllable) {
+            availabilityReason = "Assign controller to a transformer in New Controllers → Edit and use a controllable Dragino LT22222-style device to enable arm/disarm.";
+        }
+
+        return OculusTransformerControlResponse.builder()
+                .transformerId(null)
+                .transformerName(displayName)
+                .transformerType("Unassigned " + (controllerType != null ? controllerType : "device"))
+                .depotId(null)
+                .controllerCount(1)
+                .controllerId(controllerId)
+                .controllerName(controller.getName())
+                .controllerDevEui(devEui)
+                .controllerType(controllerType)
+                .controlAvailable(false)
+                .availabilityReason(availabilityReason)
+                .armState(armState.name())
+                .armed(armState == ArmState.UNKNOWN ? null : armState == ArmState.ARMED)
+                .effectiveArmState(armState.name())
+                .effectiveArmed(armState == ArmState.UNKNOWN ? null : armState == ArmState.ARMED)
+                .effectiveStateSource(latestReading == null ? "NONE" : "TELEMETRY")
+                .confirmationStatus(confirmationStatus)
+                .controllerStatus(controllerStatus)
+                .minutesSinceLastTelemetry(minutesSinceLastTelemetry)
+                .motionDetected(motionDetected)
+                .motionStatusLabel(resolveMotionStatusLabel(motionDetected))
+                .secondaryAlertDetected(secondaryAlertDetected)
+                .secondaryAlertLabel(secondaryAlertLabel)
+                .secondaryAlertStatusLabel(resolveSecondaryAlertStatusLabel(defaultTransformerType, secondaryAlertDetected))
+                .activeAlertSummary(activeAlertSummary)
+                .lastTelemetryAt(toIso(latestTelemetryAt))
+                .lastCommandAction(null)
+                .lastCommandStatus(null)
+                .lastCommandAt(null)
+                .lastCommandRequestedBy(null)
+                .supplierCode(controller.getSupplierCode() != null ? controller.getSupplierCode() : OCULUS_SUPPLIER_CODE)
+                .supplierName(controller.getSupplierName() != null ? controller.getSupplierName() : OCULUS_SUPPLIER_NAME)
                 .build();
     }
 
