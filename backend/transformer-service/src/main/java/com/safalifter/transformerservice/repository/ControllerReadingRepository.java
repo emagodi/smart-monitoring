@@ -4,8 +4,6 @@ import com.safalifter.transformerservice.entities.ControllerReading;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -21,6 +19,5 @@ public interface ControllerReadingRepository extends JpaRepository<ControllerRea
     Page<ControllerReading> findByControllerIdAndCreatedAtBetween(Long controllerId, LocalDateTime start, LocalDateTime end, Pageable pageable);
     Optional<ControllerReading> findTopByControllerIdOrderByCreatedAtDesc(Long controllerId);
 
-    @Query("SELECT r FROM ControllerReading r WHERE r.controllerId IN :ids ORDER BY r.createdAt DESC")
-    List<ControllerReading> findRecentByControllerIdInLimit(@Param("ids") Set<Long> controllerIds, Pageable pageable);
+    List<ControllerReading> findTop30000ByControllerIdInOrderByCreatedAtDesc(Set<Long> controllerIds);
 }

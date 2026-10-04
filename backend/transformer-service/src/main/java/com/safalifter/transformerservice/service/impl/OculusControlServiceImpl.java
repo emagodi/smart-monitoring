@@ -21,7 +21,6 @@ import com.safalifter.transformerservice.service.OculusControlService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -119,14 +118,14 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         Set<Long> alreadyIncludedTransformerIds = new HashSet<>(validLinkedIds);
 
-        // ================= BATCH: fetch ALL latest readings & commands in 2 FAST index scans + Java dedupe (no subqueries!) =================
+        // ================= BATCH: fetch ALL latest readings & commands in 2 FAST index scans + Java dedupe (no subqueries, no @Query JPQL!) =================
         long t0 = System.currentTimeMillis();
         Map<Long, ControllerReading> latestReadingByControllerId = new HashMap<>();
         if (!allControllerIds.isEmpty()) {
             try {
-                final int SCAN_LIMIT_READINGS = Math.max(20000, allControllerIds.size() * 30);
+                final int TOP_LIMIT_READINGS = 30000;
                 List<ControllerReading> recentScan = controllerReadingRepository
-                        .findRecentByControllerIdInLimit(allControllerIds, PageRequest.of(0, SCAN_LIMIT_READINGS));
+                        .findTop30000ByControllerIdInOrderByCreatedAtDesc(allControllerIds);
                 if (recentScan != null) {
                     int duplicates = 0;
                     for (ControllerReading r : recentScan) {
@@ -139,8 +138,8 @@ public class OculusControlServiceImpl implements OculusControlService {
                         }
                         if (latestReadingByControllerId.size() >= allControllerIds.size()) break;
                     }
-                    log.info("listTransformers: readings index scan returned {}, deduped to latest-per-controller for {} / {} controllers (duplicates={}, scanLimit={})",
-                            recentScan.size(), latestReadingByControllerId.size(), allControllerIds.size(), duplicates, SCAN_LIMIT_READINGS);
+                    log.info("listTransformers: readings index scan returned {}, deduped to latest-per-controller for {} / {} controllers (duplicates={}, topLimit={})",
+                            recentScan.size(), latestReadingByControllerId.size(), allControllerIds.size(), duplicates, TOP_LIMIT_READINGS);
                 }
             } catch (Exception ex) {
                 log.warn("listTransformers: batch readings scan fallback to per-controller (slow): {}", ex.getMessage());
@@ -152,9 +151,9 @@ public class OculusControlServiceImpl implements OculusControlService {
         Map<Long, ControllerCommand> latestCommandByTransformerId = new HashMap<>();
         if (!allTransformerIdsForCommands.isEmpty()) {
             try {
-                final int SCAN_LIMIT_COMMANDS = Math.max(2000, allTransformerIdsForCommands.size() * 20);
+                final int TOP_LIMIT_COMMANDS = 5000;
                 List<ControllerCommand> recentCmds = controllerCommandRepository
-                        .findRecentByTransformerIdInLimit(allTransformerIdsForCommands, PageRequest.of(0, SCAN_LIMIT_COMMANDS));
+                        .findTop5000ByTransformerIdInOrderByCreatedAtDesc(allTransformerIdsForCommands);
                 if (recentCmds != null) {
                     for (ControllerCommand c : recentCmds) {
                         if (c == null || c.getTransformerId() == null) continue;
@@ -163,8 +162,8 @@ public class OculusControlServiceImpl implements OculusControlService {
                         }
                         if (latestCommandByTransformerId.size() >= allTransformerIdsForCommands.size()) break;
                     }
-                    log.info("listTransformers: commands index scan returned {}, deduped to latest-per-transformer for {} / {} transformers",
-                            recentCmds.size(), latestCommandByTransformerId.size(), allTransformerIdsForCommands.size());
+                    log.info("listTransformers: commands index scan returned {}, deduped to latest-per-transformer for {} / {} transformers (topLimit={})",
+                            recentCmds.size(), latestCommandByTransformerId.size(), allTransformerIdsForCommands.size(), TOP_LIMIT_COMMANDS);
                 }
             } catch (Exception ex) {
                 log.warn("listTransformers: batch commands scan fallback (slow): {}", ex.getMessage());
