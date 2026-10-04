@@ -21,6 +21,7 @@ import com.safalifter.transformerservice.service.OculusControlService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -84,6 +85,7 @@ public class OculusControlServiceImpl implements OculusControlService {
 
     @Override
     public List<OculusTransformerControlResponse> listTransformers() {
+        final long overallStart = System.currentTimeMillis();
         ensureOculusControlAccess();
 
         List<Controller> allOculusControllers = controllerRepository.findAllBySupplierCode(OCULUS_SUPPLIER_CODE);
@@ -117,42 +119,61 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         Set<Long> alreadyIncludedTransformerIds = new HashSet<>(validLinkedIds);
 
-        // ================= BATCH: fetch ALL latest readings & commands in ONLY 2 SQLs (eliminate N+1) =================
+        // ================= BATCH: fetch ALL latest readings & commands in 2 FAST index scans + Java dedupe (no subqueries!) =================
+        long t0 = System.currentTimeMillis();
         Map<Long, ControllerReading> latestReadingByControllerId = new HashMap<>();
         if (!allControllerIds.isEmpty()) {
             try {
-                List<ControllerReading> batchReadings = controllerReadingRepository.findLatestPerControllerIdIn(allControllerIds);
-                if (batchReadings != null) {
-                    for (ControllerReading r : batchReadings) {
-                        if (r != null && r.getControllerId() != null) {
+                final int SCAN_LIMIT_READINGS = Math.max(20000, allControllerIds.size() * 30);
+                List<ControllerReading> recentScan = controllerReadingRepository
+                        .findRecentByControllerIdInLimit(allControllerIds, PageRequest.of(0, SCAN_LIMIT_READINGS));
+                if (recentScan != null) {
+                    int duplicates = 0;
+                    for (ControllerReading r : recentScan) {
+                        if (r == null || r.getControllerId() == null) continue;
+                        ControllerReading existing = latestReadingByControllerId.get(r.getControllerId());
+                        if (existing == null) {
                             latestReadingByControllerId.put(r.getControllerId(), r);
+                        } else {
+                            duplicates++;
                         }
+                        if (latestReadingByControllerId.size() >= allControllerIds.size()) break;
                     }
+                    log.info("listTransformers: readings index scan returned {}, deduped to latest-per-controller for {} / {} controllers (duplicates={}, scanLimit={})",
+                            recentScan.size(), latestReadingByControllerId.size(), allControllerIds.size(), duplicates, SCAN_LIMIT_READINGS);
                 }
-                log.info("listTransformers: batched latest readings loaded for {} / {} controllers", latestReadingByControllerId.size(), allControllerIds.size());
             } catch (Exception ex) {
-                log.warn("listTransformers: batch readings query failed, falling back to per-controller lazy load (may be slow): {}", ex.getMessage());
+                log.warn("listTransformers: batch readings scan fallback to per-controller (slow): {}", ex.getMessage());
             }
         }
+        long t1 = System.currentTimeMillis();
 
         Set<Long> allTransformerIdsForCommands = new HashSet<>(transformersById.keySet());
         Map<Long, ControllerCommand> latestCommandByTransformerId = new HashMap<>();
         if (!allTransformerIdsForCommands.isEmpty()) {
             try {
-                List<ControllerCommand> batchCommands = controllerCommandRepository.findLatestPerTransformerIdIn(allTransformerIdsForCommands);
-                if (batchCommands != null) {
-                    for (ControllerCommand c : batchCommands) {
-                        if (c != null && c.getTransformerId() != null) {
+                final int SCAN_LIMIT_COMMANDS = Math.max(2000, allTransformerIdsForCommands.size() * 20);
+                List<ControllerCommand> recentCmds = controllerCommandRepository
+                        .findRecentByTransformerIdInLimit(allTransformerIdsForCommands, PageRequest.of(0, SCAN_LIMIT_COMMANDS));
+                if (recentCmds != null) {
+                    for (ControllerCommand c : recentCmds) {
+                        if (c == null || c.getTransformerId() == null) continue;
+                        if (!latestCommandByTransformerId.containsKey(c.getTransformerId())) {
                             latestCommandByTransformerId.put(c.getTransformerId(), c);
                         }
+                        if (latestCommandByTransformerId.size() >= allTransformerIdsForCommands.size()) break;
                     }
+                    log.info("listTransformers: commands index scan returned {}, deduped to latest-per-transformer for {} / {} transformers",
+                            recentCmds.size(), latestCommandByTransformerId.size(), allTransformerIdsForCommands.size());
                 }
-                log.info("listTransformers: batched latest transformer commands loaded for {} / {} transformers", latestCommandByTransformerId.size(), allTransformerIdsForCommands.size());
             } catch (Exception ex) {
-                log.warn("listTransformers: batch commands query failed, fallback per-transformer (slow): {}", ex.getMessage());
+                log.warn("listTransformers: batch commands scan fallback (slow): {}", ex.getMessage());
             }
         }
-        // ============================================================================================================
+        long t2 = System.currentTimeMillis();
+        log.info("listTransformers: batch load timing: readings={}ms, commands={}ms  (total DB-side so far={}ms)",
+                (t1 - t0), (t2 - t1), (t2 - t0));
+        // ================================================================================================================================
 
         for (Map.Entry<Long, List<Controller>> entry : linkedByTransformer.entrySet()) {
             Transformer transformer = transformersById.get(entry.getKey());
@@ -187,7 +208,9 @@ public class OculusControlServiceImpl implements OculusControlService {
                 OculusTransformerControlResponse::getTransformerName,
                 Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
         ));
-        log.info("listTransformers: returning {} entries total (valid-linked + supplier=oculus empty + unassigned controllers)", result.size());
+        long overallMs = System.currentTimeMillis() - overallStart;
+        log.info("listTransformers: returning {} entries total (valid-linked + supplier=oculus empty + unassigned controllers) in {} ms ({} s)",
+                result.size(), overallMs, String.format("%.2f", overallMs / 1000.0));
         return result;
     }
 
