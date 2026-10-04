@@ -62,14 +62,18 @@ interface GatewayItem extends GoogleAssetMapPoint {
 
 const normalizeGatewayItem = (raw: any): GatewayItem => {
   const base = { ...(raw || {}) } as Record<string, unknown>;
-  if (!("lat" in base) || typeof base.lat !== "number") {
-    const lat = Number(base.latitude ?? base.lat);
-    if (Number.isFinite(lat)) (base as any).lat = lat;
+  let lat: unknown = base.latitude ?? base.lat ?? base.latitudeNumber;
+  if (typeof lat === "string" && lat.trim() !== "") {
+    lat = Number(lat.trim().replace(/[^\d.\-+eE]/g, ""));
   }
-  if (!("lng" in base) || typeof base.lng !== "number") {
-    const lng = Number(base.longitude ?? base.lng);
-    if (Number.isFinite(lng)) (base as any).lng = lng;
+  const latNum = typeof lat === "number" && Number.isFinite(lat) ? lat : NaN;
+  if (Number.isFinite(latNum)) (base as any).lat = latNum;
+  let lng: unknown = base.longitude ?? base.lng ?? base.lon ?? base.longitudeNumber;
+  if (typeof lng === "string" && lng.trim() !== "") {
+    lng = Number(lng.trim().replace(/[^\d.\-+eE]/g, ""));
   }
+  const lngNum = typeof lng === "number" && Number.isFinite(lng) ? lng : NaN;
+  if (Number.isFinite(lngNum)) (base as any).lng = lngNum;
   return base as GatewayItem;
 };
 
@@ -203,8 +207,8 @@ const getMarkerColors = (point: GatewayItem): { fillColor: string; strokeColor: 
   }
 };
 
-const ZIMBABWE_CENTER = { lat: -19.0154, lng: 29.1549 };
-const DEFAULT_ZOOM = 6;
+const ZIMBABWE_CENTER = { lat: -18.75, lng: 30.0 };
+const DEFAULT_ZOOM = 7;
 
 export default function GatewaysMapIndex() {
   const { token, hasPermission } = useAuth();

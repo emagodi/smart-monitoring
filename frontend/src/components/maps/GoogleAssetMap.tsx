@@ -29,6 +29,9 @@ type GoogleAssetMapProps<T extends GoogleAssetMapPoint> = {
   className?: string;
   defaultCenter?: { lat: number; lng: number };
   defaultZoom?: number;
+  minZoom?: number;
+  maxZoom?: number;
+  restriction?: { north: number; south: number; west: number; east: number } | null;
   selectedPointId?: number | string | null;
   emptyLabel?: string;
   onPointSelect?: (point: T) => void;
@@ -122,7 +125,10 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
   points,
   className = "h-[460px]",
   defaultCenter = DEFAULT_CENTER,
-  defaultZoom = 6,
+  defaultZoom = 7,
+  minZoom = 6,
+  maxZoom = 18,
+  restriction = { north: -15.5, south: -22.5, west: 25.2, east: 33.2 },
   selectedPointId,
   emptyLabel = "No mapped assets are available for this view.",
   onPointSelect,
@@ -194,14 +200,26 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
     mapRef.current = new googleMaps.Map(mapContainerRef.current, {
       center: defaultCenter,
       zoom: defaultZoom,
+      minZoom,
+      maxZoom,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
       clickableIcons: false,
       gestureHandling: "greedy",
       styles: DEFAULT_MAP_STYLES,
+      restriction:
+        restriction == null
+          ? undefined
+          : {
+              latLngBounds: new googleMaps.LatLngBounds(
+                { lat: restriction.south, lng: restriction.west },
+                { lat: restriction.north, lng: restriction.east }
+              ),
+              strictBounds: true,
+            },
     });
-  }, [defaultCenter, defaultZoom, loadState]);
+  }, [defaultCenter, defaultZoom, loadState, maxZoom, minZoom, restriction]);
 
   useEffect(() => {
     if (loadState !== "ready" || !mapRef.current || !window.google?.maps) return;
