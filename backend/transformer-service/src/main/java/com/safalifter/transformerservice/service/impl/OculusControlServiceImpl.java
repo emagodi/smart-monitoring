@@ -94,8 +94,10 @@ public class OculusControlServiceImpl implements OculusControlService {
         Map<Long, Transformer> transformersById = new HashMap<>();
         LinkedHashMap<Long, List<Controller>> linkedByTransformer = new LinkedHashMap<>();
         List<Controller> unassignedControllers = new ArrayList<>();
+        Set<Long> allControllerIds = new HashSet<>();
 
         for (Controller controller : allOculusControllers) {
+            if (controller.getId() != null) allControllerIds.add(controller.getId());
             Long tfId = controller.getTransformerId();
             if (tfId == null) {
                 unassignedControllers.add(controller);
@@ -115,6 +117,43 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         Set<Long> alreadyIncludedTransformerIds = new HashSet<>(validLinkedIds);
 
+        // ================= BATCH: fetch ALL latest readings & commands in ONLY 2 SQLs (eliminate N+1) =================
+        Map<Long, ControllerReading> latestReadingByControllerId = new HashMap<>();
+        if (!allControllerIds.isEmpty()) {
+            try {
+                List<ControllerReading> batchReadings = controllerReadingRepository.findLatestPerControllerIdIn(allControllerIds);
+                if (batchReadings != null) {
+                    for (ControllerReading r : batchReadings) {
+                        if (r != null && r.getControllerId() != null) {
+                            latestReadingByControllerId.put(r.getControllerId(), r);
+                        }
+                    }
+                }
+                log.info("listTransformers: batched latest readings loaded for {} / {} controllers", latestReadingByControllerId.size(), allControllerIds.size());
+            } catch (Exception ex) {
+                log.warn("listTransformers: batch readings query failed, falling back to per-controller lazy load (may be slow): {}", ex.getMessage());
+            }
+        }
+
+        Set<Long> allTransformerIdsForCommands = new HashSet<>(transformersById.keySet());
+        Map<Long, ControllerCommand> latestCommandByTransformerId = new HashMap<>();
+        if (!allTransformerIdsForCommands.isEmpty()) {
+            try {
+                List<ControllerCommand> batchCommands = controllerCommandRepository.findLatestPerTransformerIdIn(allTransformerIdsForCommands);
+                if (batchCommands != null) {
+                    for (ControllerCommand c : batchCommands) {
+                        if (c != null && c.getTransformerId() != null) {
+                            latestCommandByTransformerId.put(c.getTransformerId(), c);
+                        }
+                    }
+                }
+                log.info("listTransformers: batched latest transformer commands loaded for {} / {} transformers", latestCommandByTransformerId.size(), allTransformerIdsForCommands.size());
+            } catch (Exception ex) {
+                log.warn("listTransformers: batch commands query failed, fallback per-transformer (slow): {}", ex.getMessage());
+            }
+        }
+        // ============================================================================================================
+
         for (Map.Entry<Long, List<Controller>> entry : linkedByTransformer.entrySet()) {
             Transformer transformer = transformersById.get(entry.getKey());
             if (transformer == null) {
@@ -123,7 +162,11 @@ public class OculusControlServiceImpl implements OculusControlService {
                 }
                 continue;
             }
-            OculusTransformerControlResponse built = buildTransformerResponse(transformer, entry.getValue());
+            OculusTransformerControlResponse built = buildTransformerResponse(
+                    transformer, entry.getValue(),
+                    latestReadingByControllerId,
+                    latestCommandByTransformerId.get(transformer.getId())
+            );
             if (built != null) result.add(built);
         }
 
@@ -136,7 +179,7 @@ public class OculusControlServiceImpl implements OculusControlService {
         }
 
         for (Controller unassigned : unassignedControllers) {
-            OculusTransformerControlResponse built = buildUnassignedControllerResponse(unassigned);
+            OculusTransformerControlResponse built = buildUnassignedControllerResponse(unassigned, latestReadingByControllerId.get(unassigned.getId()));
             if (built != null) result.add(built);
         }
 
@@ -158,25 +201,32 @@ public class OculusControlServiceImpl implements OculusControlService {
         return sendCommand(transformerId, ControllerCommandAction.DISARM, ArmState.DISARMED, DISARM_HEX);
     }
 
-    private OculusTransformerControlResponse buildTransformerResponse(Transformer transformer, List<Controller> controllers) {
+    private OculusTransformerControlResponse buildTransformerResponse(Transformer transformer,
+                                                                      List<Controller> controllers,
+                                                                      Map<Long, ControllerReading> latestReadingByControllerId,
+                                                                      ControllerCommand latestCommand) {
         if (transformer == null) {
             return null;
         }
 
         Controller primaryController = resolvePrimaryController(controllers);
-        Optional<ControllerReading> latestReading = primaryController == null
+        Optional<ControllerReading> latestReading = primaryController == null || primaryController.getId() == null
                 ? Optional.empty()
-                : controllerReadingRepository.findTopByControllerIdOrderByCreatedAtDesc(primaryController.getId());
-        Optional<ControllerCommand> latestCommand = controllerCommandRepository.findTopByTransformerIdOrderByCreatedAtDesc(transformer.getId());
+                : Optional.ofNullable(latestReadingByControllerId.get(primaryController.getId()))
+                    .or(() -> controllerReadingRepository.findTopByControllerIdOrderByCreatedAtDesc(primaryController.getId()));
+        Optional<ControllerCommand> latestCommandOpt = latestCommand != null
+                ? Optional.of(latestCommand)
+                : controllerCommandRepository.findTopByTransformerIdOrderByCreatedAtDesc(transformer.getId());
+
 
         boolean controlAvailable = primaryController != null && isControllableController(primaryController);
         ArmState armState = latestReading.map(this::extractArmState).orElse(ArmState.UNKNOWN);
         LocalDateTime latestTelemetryAt = latestReading.map(ControllerReading::getCreatedAt).orElse(null);
         String controllerStatus = resolveControllerStatus(latestTelemetryAt);
         Long minutesSinceLastTelemetry = calculateMinutesSince(latestTelemetryAt);
-        ArmState effectiveArmState = resolveEffectiveArmState(armState, latestCommand.orElse(null), latestTelemetryAt);
+        ArmState effectiveArmState = resolveEffectiveArmState(armState, latestCommandOpt.orElse(null), latestTelemetryAt);
         String effectiveStateSource = effectiveArmState == armState ? "TELEMETRY" : "COMMAND";
-        String confirmationStatus = resolveConfirmationStatus(armState, latestCommand.orElse(null), latestTelemetryAt);
+        String confirmationStatus = resolveConfirmationStatus(armState, latestCommandOpt.orElse(null), latestTelemetryAt);
         String transformerType = resolveTransformerTypeLabel(transformer.getType());
         Boolean motionDetected = latestReading.map(ControllerReading::getDi1).orElse(null);
         Boolean secondaryAlertDetected = latestReading.map(ControllerReading::getDi2).orElse(null);
@@ -210,16 +260,16 @@ public class OculusControlServiceImpl implements OculusControlService {
                 .secondaryAlertStatusLabel(resolveSecondaryAlertStatusLabel(transformer.getType(), secondaryAlertDetected))
                 .activeAlertSummary(activeAlertSummary)
                 .lastTelemetryAt(toIso(latestTelemetryAt))
-                .lastCommandAction(latestCommand.map(command -> command.getAction().name()).orElse(null))
-                .lastCommandStatus(latestCommand.map(command -> command.getCommandStatus().name()).orElse(null))
-                .lastCommandAt(latestCommand.map(command -> toIso(command.getCreatedAt())).orElse(null))
-                .lastCommandRequestedBy(latestCommand.map(ControllerCommand::getRequestedByEmail).orElse(null))
+                .lastCommandAction(latestCommandOpt.map(command -> command.getAction().name()).orElse(null))
+                .lastCommandStatus(latestCommandOpt.map(command -> command.getCommandStatus().name()).orElse(null))
+                .lastCommandAt(latestCommandOpt.map(command -> toIso(command.getCreatedAt())).orElse(null))
+                .lastCommandRequestedBy(latestCommandOpt.map(ControllerCommand::getRequestedByEmail).orElse(null))
                 .supplierCode(OCULUS_SUPPLIER_CODE)
                 .supplierName(OCULUS_SUPPLIER_NAME)
                 .build();
     }
 
-    private OculusTransformerControlResponse buildUnassignedControllerResponse(Controller controller) {
+    private OculusTransformerControlResponse buildUnassignedControllerResponse(Controller controller, ControllerReading prefetchedLatestReading) {
         if (controller == null) return null;
         Long controllerId = controller.getId();
         String devEui = controller.getDevEui();
@@ -228,7 +278,9 @@ public class OculusControlServiceImpl implements OculusControlService {
                 : devEui;
         String displayName = "Unassigned — Controller " + (shortEui != null ? shortEui : ("#" + controllerId));
 
-        Optional<ControllerReading> latestReading = controllerReadingRepository.findTopByControllerIdOrderByCreatedAtDesc(controllerId);
+        Optional<ControllerReading> latestReading = prefetchedLatestReading != null
+                ? Optional.of(prefetchedLatestReading)
+                : (controllerId != null ? controllerReadingRepository.findTopByControllerIdOrderByCreatedAtDesc(controllerId) : Optional.empty());
         ArmState armState = latestReading.map(this::extractArmState).orElse(ArmState.UNKNOWN);
         LocalDateTime latestTelemetryAt = latestReading.map(ControllerReading::getCreatedAt).orElse(null);
         String controllerStatus = resolveControllerStatus(latestTelemetryAt);
