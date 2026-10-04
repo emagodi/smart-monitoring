@@ -21,7 +21,6 @@ public interface ControllerReadingRepository extends JpaRepository<ControllerRea
     Page<ControllerReading> findByControllerIdAndCreatedAtBetween(Long controllerId, LocalDateTime start, LocalDateTime end, Pageable pageable);
     Optional<ControllerReading> findTopByControllerIdOrderByCreatedAtDesc(Long controllerId);
 
-    @Query("SELECT r FROM ControllerReading r WHERE r.controllerId IN :ids AND r.createdAt = " +
-           "(SELECT MAX(r2.createdAt) FROM ControllerReading r2 WHERE r2.controllerId = r.controllerId)")
-    List<ControllerReading> findLatestPerControllerIdIn(@Param("ids") Set<Long> controllerIds);
+    @Query("SELECT r FROM ControllerReading r WHERE r.controllerId IN :ids ORDER BY r.createdAt DESC")
+    List<ControllerReading> findRecentByControllerIdInLimit(@Param("ids") Set<Long> controllerIds, Pageable pageable);
 }
