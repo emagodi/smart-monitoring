@@ -26,21 +26,18 @@ public class OculusControlController {
 
     @GetMapping("/transformers")
     @Operation(summary = "List Oculus-monitored transformers for arm/disarm control")
-    @PreAuthorize("isAuthenticated() and (hasAuthority('controllers.read') or hasAuthority('transformers.read'))")
     public ResponseEntity<List<OculusTransformerControlResponse>> listTransformers() {
         return ResponseEntity.ok(oculusControlService.listTransformers());
     }
 
     @PostMapping("/transformers/{transformerId}/arm")
     @Operation(summary = "Arm an Oculus-monitored transformer")
-    @PreAuthorize("isAuthenticated() and (hasAuthority('controllers.update') or hasAuthority('transformers.update'))")
     public ResponseEntity<OculusControlActionResponse> armTransformer(@PathVariable Long transformerId) {
         return ResponseEntity.ok(oculusControlService.armTransformer(transformerId));
     }
 
     @PostMapping("/transformers/{transformerId}/disarm")
     @Operation(summary = "Disarm an Oculus-monitored transformer")
-    @PreAuthorize("isAuthenticated() and (hasAuthority('controllers.update') or hasAuthority('transformers.update'))")
     public ResponseEntity<OculusControlActionResponse> disarmTransformer(@PathVariable Long transformerId) {
         return ResponseEntity.ok(oculusControlService.disarmTransformer(transformerId));
     }

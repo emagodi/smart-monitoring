@@ -19,6 +19,7 @@ import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.OculusControlService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class OculusControlServiceImpl implements OculusControlService {
 
     private static final String OCULUS_SUPPLIER_CODE = "oculus";
@@ -85,6 +87,8 @@ public class OculusControlServiceImpl implements OculusControlService {
         ensureOculusControlAccess();
 
         List<Controller> allOculusControllers = controllerRepository.findAllBySupplierCode(OCULUS_SUPPLIER_CODE);
+        log.info("listTransformers: oculus controllers raw count = {}", allOculusControllers.size());
+
         List<OculusTransformerControlResponse> result = new ArrayList<>();
 
         Map<Long, Transformer> transformersById = new HashMap<>();
@@ -140,6 +144,7 @@ public class OculusControlServiceImpl implements OculusControlService {
                 OculusTransformerControlResponse::getTransformerName,
                 Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
         ));
+        log.info("listTransformers: returning {} entries total (valid-linked + supplier=oculus empty + unassigned controllers)", result.size());
         return result;
     }
 
@@ -411,9 +416,13 @@ public class OculusControlServiceImpl implements OculusControlService {
 
     private void ensureOculusControlAccess() {
         String supplierCode = accessScopeService.getCurrentSupplierCode();
+        String userType = accessScopeService.getCurrentUserType();
+        log.info("ensureOculusControlAccess: currentSupplierCode={} userType={}", supplierCode, userType);
         if (supplierCode != null && !OCULUS_SUPPLIER_CODE.equalsIgnoreCase(supplierCode)) {
+            log.warn("ensureOculusControlAccess: DENY user with supplier={} (required supplier={})", supplierCode, OCULUS_SUPPLIER_CODE);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Oculus control is only available to Oculus supplier users");
         }
+        log.info("ensureOculusControlAccess: ALLOW access (supplierCode={} userType={})", supplierCode, userType);
     }
 
     private void validateLoriotConfiguration() {
