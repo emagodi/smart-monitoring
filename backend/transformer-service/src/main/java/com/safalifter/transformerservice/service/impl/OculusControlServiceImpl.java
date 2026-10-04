@@ -87,7 +87,7 @@ public class OculusControlServiceImpl implements OculusControlService {
         List<Controller> allOculusControllers = controllerRepository.findAllBySupplierCode(OCULUS_SUPPLIER_CODE);
         List<OculusTransformerControlResponse> result = new ArrayList<>();
 
-        Map<Long, Transformer> transformersById = Collections.emptyMap();
+        Map<Long, Transformer> transformersById = new HashMap<>();
         LinkedHashMap<Long, List<Controller>> linkedByTransformer = new LinkedHashMap<>();
         List<Controller> unassignedControllers = new ArrayList<>();
 
@@ -102,10 +102,14 @@ public class OculusControlServiceImpl implements OculusControlService {
                     .add(controller);
         }
 
+        Set<Long> validLinkedIds = new HashSet<>();
         if (!linkedByTransformer.isEmpty()) {
             transformersById = transformerRepository.findAllById(linkedByTransformer.keySet()).stream()
+                    .peek(t -> validLinkedIds.add(t.getId()))
                     .collect(Collectors.toMap(Transformer::getId, t -> t));
         }
+
+        Set<Long> alreadyIncludedTransformerIds = new HashSet<>(validLinkedIds);
 
         for (Map.Entry<Long, List<Controller>> entry : linkedByTransformer.entrySet()) {
             Transformer transformer = transformersById.get(entry.getKey());
@@ -117,6 +121,14 @@ public class OculusControlServiceImpl implements OculusControlService {
             }
             OculusTransformerControlResponse built = buildTransformerResponse(transformer, entry.getValue());
             if (built != null) result.add(built);
+        }
+
+        List<Transformer> oculusSuppliedTransformers = transformerRepository.findAllBySupplierCode(OCULUS_SUPPLIER_CODE);
+        for (Transformer t : oculusSuppliedTransformers) {
+            if (alreadyIncludedTransformerIds.contains(t.getId())) continue;
+            OculusTransformerControlResponse built = buildEmptyTransformerEntry(t);
+            if (built != null) result.add(built);
+            alreadyIncludedTransformerIds.add(t.getId());
         }
 
         for (Controller unassigned : unassignedControllers) {
@@ -268,6 +280,50 @@ public class OculusControlServiceImpl implements OculusControlService {
                 .lastCommandRequestedBy(null)
                 .supplierCode(controller.getSupplierCode() != null ? controller.getSupplierCode() : OCULUS_SUPPLIER_CODE)
                 .supplierName(controller.getSupplierName() != null ? controller.getSupplierName() : OCULUS_SUPPLIER_NAME)
+                .build();
+    }
+
+    private OculusTransformerControlResponse buildEmptyTransformerEntry(Transformer transformer) {
+        if (transformer == null) return null;
+        String transformerTypeLabel = resolveTransformerTypeLabel(transformer.getType());
+        String secondaryAlertLabel = resolveSecondaryAlertLabel(transformer.getType());
+        String alertSummary = buildActiveAlertSummary(transformer.getType(), null, null);
+        String secondaryStatus = resolveSecondaryAlertStatusLabel(transformer.getType(), null);
+        String availabilityReason = "No Oculus controller assigned yet. Plug in a Dragino LT22222 controller via LORIOT websocket or assign one in New Controllers → Edit.";
+
+        return OculusTransformerControlResponse.builder()
+                .transformerId(transformer.getId())
+                .transformerName(transformer.getName())
+                .transformerType(transformerTypeLabel)
+                .depotId(transformer.getDepotId())
+                .controllerCount(0)
+                .controllerId(null)
+                .controllerName(null)
+                .controllerDevEui(null)
+                .controllerType(null)
+                .controlAvailable(false)
+                .availabilityReason(availabilityReason)
+                .armState(ArmState.UNKNOWN.name())
+                .armed(null)
+                .effectiveArmState(ArmState.UNKNOWN.name())
+                .effectiveArmed(null)
+                .effectiveStateSource("NONE")
+                .confirmationStatus("NO_CONTROLLER")
+                .controllerStatus("NO_KEEPALIVE")
+                .minutesSinceLastTelemetry(null)
+                .motionDetected(null)
+                .motionStatusLabel(resolveMotionStatusLabel(null))
+                .secondaryAlertDetected(null)
+                .secondaryAlertLabel(secondaryAlertLabel)
+                .secondaryAlertStatusLabel(secondaryStatus)
+                .activeAlertSummary(alertSummary)
+                .lastTelemetryAt(null)
+                .lastCommandAction(null)
+                .lastCommandStatus(null)
+                .lastCommandAt(null)
+                .lastCommandRequestedBy(null)
+                .supplierCode(transformer.getSupplierCode() != null ? transformer.getSupplierCode() : OCULUS_SUPPLIER_CODE)
+                .supplierName(transformer.getSupplierName() != null ? transformer.getSupplierName() : OCULUS_SUPPLIER_NAME)
                 .build();
     }
 
