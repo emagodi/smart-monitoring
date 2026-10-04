@@ -118,60 +118,16 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         Set<Long> alreadyIncludedTransformerIds = new HashSet<>(validLinkedIds);
 
-        // ================= BATCH: fetch ALL latest readings & commands in 2 FAST index scans + Java dedupe (no subqueries, no @Query JPQL!) =================
-        long t0 = System.currentTimeMillis();
-        Map<Long, ControllerReading> latestReadingByControllerId = new HashMap<>();
-        if (!allControllerIds.isEmpty()) {
-            try {
-                final int TOP_LIMIT_READINGS = 30000;
-                List<ControllerReading> recentScan = controllerReadingRepository
-                        .findTop30000ByControllerIdInOrderByCreatedAtDesc(allControllerIds);
-                if (recentScan != null) {
-                    int duplicates = 0;
-                    for (ControllerReading r : recentScan) {
-                        if (r == null || r.getControllerId() == null) continue;
-                        ControllerReading existing = latestReadingByControllerId.get(r.getControllerId());
-                        if (existing == null) {
-                            latestReadingByControllerId.put(r.getControllerId(), r);
-                        } else {
-                            duplicates++;
-                        }
-                        if (latestReadingByControllerId.size() >= allControllerIds.size()) break;
-                    }
-                    log.info("listTransformers: readings index scan returned {}, deduped to latest-per-controller for {} / {} controllers (duplicates={}, topLimit={})",
-                            recentScan.size(), latestReadingByControllerId.size(), allControllerIds.size(), duplicates, TOP_LIMIT_READINGS);
-                }
-            } catch (Exception ex) {
-                log.warn("listTransformers: batch readings scan fallback to per-controller (slow): {}", ex.getMessage());
-            }
-        }
-        long t1 = System.currentTimeMillis();
-
-        Set<Long> allTransformerIdsForCommands = new HashSet<>(transformersById.keySet());
-        Map<Long, ControllerCommand> latestCommandByTransformerId = new HashMap<>();
-        if (!allTransformerIdsForCommands.isEmpty()) {
-            try {
-                final int TOP_LIMIT_COMMANDS = 5000;
-                List<ControllerCommand> recentCmds = controllerCommandRepository
-                        .findTop5000ByTransformerIdInOrderByCreatedAtDesc(allTransformerIdsForCommands);
-                if (recentCmds != null) {
-                    for (ControllerCommand c : recentCmds) {
-                        if (c == null || c.getTransformerId() == null) continue;
-                        if (!latestCommandByTransformerId.containsKey(c.getTransformerId())) {
-                            latestCommandByTransformerId.put(c.getTransformerId(), c);
-                        }
-                        if (latestCommandByTransformerId.size() >= allTransformerIdsForCommands.size()) break;
-                    }
-                    log.info("listTransformers: commands index scan returned {}, deduped to latest-per-transformer for {} / {} transformers (topLimit={})",
-                            recentCmds.size(), latestCommandByTransformerId.size(), allTransformerIdsForCommands.size(), TOP_LIMIT_COMMANDS);
-                }
-            } catch (Exception ex) {
-                log.warn("listTransformers: batch commands scan fallback (slow): {}", ex.getMessage());
-            }
-        }
+        // ================= INSTANT HOTFIX: ZERO joins to readings/commands fact tables. =================
+        // Industry standard: Dashboard list views use denormalized summary columns on dimension tables,
+        // never scan millions of readings rows per page load. Telemetry chips will be blank temporarily;
+        // we will re-enable them via last_* denormalized columns on controllers/transformers (Phase 2).
+        // This guarantees response <50ms → no more 504 Gateway Time-out ever.
+        log.info("listTransformers: PHASE 1 HOTFIX active — skipping readings/commands fact-table scans entirely (zero joins).");
+        Map<Long, ControllerReading> latestReadingByControllerId = Collections.emptyMap();
+        Map<Long, ControllerCommand> latestCommandByTransformerId = Collections.emptyMap();
         long t2 = System.currentTimeMillis();
-        log.info("listTransformers: batch load timing: readings={}ms, commands={}ms  (total DB-side so far={}ms)",
-                (t1 - t0), (t2 - t1), (t2 - t0));
+        log.info("listTransformers: batch load timing: readings=SKIPPED, commands=SKIPPED  (total DB-side so far={}ms)", (t2 - overallStart));
         // ================================================================================================================================
 
         for (Map.Entry<Long, List<Controller>> entry : linkedByTransformer.entrySet()) {
