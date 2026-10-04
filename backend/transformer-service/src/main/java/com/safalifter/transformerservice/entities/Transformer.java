@@ -44,6 +44,12 @@ public class Transformer {
     @Column(name = "lng", precision = 12, scale = 8)
     private BigDecimal lng;
 
+    @Column(name = "last_telemetry_at")
+    private LocalDateTime lastTelemetryAt;
+
+    @Column(name = "last_command_at")
+    private LocalDateTime lastCommandAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -66,6 +72,10 @@ public class Transformer {
     public void setLat(BigDecimal lat) { this.lat = lat; }
     public BigDecimal getLng() { return lng; }
     public void setLng(BigDecimal lng) { this.lng = lng; }
+    public LocalDateTime getLastTelemetryAt() { return lastTelemetryAt; }
+    public void setLastTelemetryAt(LocalDateTime t) { this.lastTelemetryAt = t; }
+    public LocalDateTime getLastCommandAt() { return lastCommandAt; }
+    public void setLastCommandAt(LocalDateTime t) { this.lastCommandAt = t; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
