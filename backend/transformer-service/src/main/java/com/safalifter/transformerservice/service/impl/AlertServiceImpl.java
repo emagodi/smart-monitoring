@@ -10,13 +10,20 @@ import com.safalifter.transformerservice.enums.AlertCaseStatus;
 import com.safalifter.transformerservice.payload.request.AlertCaseUpdateRequest;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.payload.response.AlertCaseActivityResponse;
+import com.safalifter.transformerservice.payload.response.AlertRaiseResult;
 import com.safalifter.transformerservice.payload.response.AlertResponse;
+import com.safalifter.transformerservice.payload.response.AlertSummaryResponse;
+import com.safalifter.transformerservice.payload.response.TransformerAlertStateResponse;
 import com.safalifter.transformerservice.repository.AlertCaseActivityRepository;
 import com.safalifter.transformerservice.repository.AlertCaseRepository;
+import com.safalifter.transformerservice.repository.AlertQueryRepository;
 import com.safalifter.transformerservice.repository.AlertRepository;
 import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.AlertService;
+import com.safalifter.transformerservice.service.AlertStateService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -36,16 +43,78 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class AlertServiceImpl implements AlertService {
+
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final int SENSOR_HISTORY_LIMIT = 100;
 
     private final AlertRepository alertRepository;
     private final SensorRepository sensorRepository;
     private final AlertCaseRepository alertCaseRepository;
     private final AlertCaseActivityRepository alertCaseActivityRepository;
     private final AccessScopeService accessScopeService;
+    private final AlertQueryRepository alertQueryRepository;
+    private final AlertStateService alertStateService;
+
+    /** While an alert stays open, repeat triggers re-notify at most once per this many minutes. */
+    @Value("${alerts.renotify-minutes:30}")
+    private long renotifyMinutes = 30;
 
     @Override
     public AlertResponse create(AlertRequest request) {
+        alertStateService.lockTransformer(request.getTransformerId());
+        AlertResponse response = insertAlert(request);
+        alertStateService.refresh(request.getTransformerId());
+        return response;
+    }
+
+    @Override
+    public AlertRaiseResult raise(AlertRequest request) {
+        // Row lock per transformer: concurrent uplinks for one transformer are serialised so
+        // they cannot both decide "no open alert" and insert duplicates.
+        alertStateService.lockTransformer(request.getTransformerId());
+
+        Long openAlertId = alertQueryRepository.findOpenAlertId(
+                request.getTransformerId(), request.getSensorId(), request.getDeviceId(), request.getSensorType()
+        ).orElse(null);
+
+        if (openAlertId != null) {
+            Alert open = alertRepository.findById(openAlertId).orElse(null);
+            if (open != null) {
+                LocalDateTime now = LocalDateTime.now();
+                int occurrences = open.getOccurrenceCount() != null ? open.getOccurrenceCount() : 1;
+                open.setOccurrenceCount(occurrences + 1);
+                open.setLastSeenAt(now);
+                if (request.getValue() != null) {
+                    open.setValue(request.getValue());
+                }
+                if (request.getMessage() != null) {
+                    open.setMessage(request.getMessage());
+                }
+                boolean renotify = open.getLastNotifiedAt() == null
+                        || open.getLastNotifiedAt().isBefore(now.minusMinutes(renotifyMinutes));
+                if (renotify) {
+                    open.setLastNotifiedAt(now);
+                }
+                Alert saved = alertRepository.save(open);
+                alertStateService.refresh(saved.getTransformerId());
+                log.debug("Folded trigger into open alert {} (occurrences={}, renotify={})",
+                        saved.getId(), saved.getOccurrenceCount(), renotify);
+                return AlertRaiseResult.builder()
+                        .alert(toResponse(saved, alertCaseRepository.findByAlertId(saved.getId()).orElse(null)))
+                        .created(false)
+                        .shouldNotify(renotify)
+                        .build();
+            }
+        }
+
+        AlertResponse created = insertAlert(request);
+        alertStateService.refresh(request.getTransformerId());
+        return AlertRaiseResult.builder().alert(created).created(true).shouldNotify(true).build();
+    }
+
+    private AlertResponse insertAlert(AlertRequest request) {
         Sensor sensor = null;
         if (request.getSensorId() != null) {
             sensor = findSensorOrThrow(request.getSensorId());
@@ -80,6 +149,9 @@ public class AlertServiceImpl implements AlertService {
                 .supplierCode(supplierCode)
                 .supplierName(supplierName)
                 .imageUrl(request.getImageUrl())
+                .occurrenceCount(1)
+                .lastSeenAt(LocalDateTime.now())
+                .lastNotifiedAt(LocalDateTime.now())
                 .build();
         Alert saved = alertRepository.save(alert);
         AlertCase alertCase = createInitialCase(saved);
@@ -96,23 +168,71 @@ public class AlertServiceImpl implements AlertService {
     @Override
     @Transactional(readOnly = true)
     public Page<AlertResponse> getAll(int page, int size) {
+        return search(page, size, null, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AlertResponse> search(int page, int size, String status, Long transformerId, String query) {
         int sanitizedPage = Math.max(page, 0);
-        int sanitizedSize = Math.min(Math.max(size, 1), 100);
+        int sanitizedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
-        Page<Alert> alerts = listScopedAlerts(pageable);
-        Map<Long, AlertCase> casesByAlertId = loadCasesByAlertId(alerts.getContent());
-        List<AlertResponse> content = alerts.getContent().stream()
-                .map(alert -> toResponse(alert, casesByAlertId.get(alert.getId())))
-                .toList();
-        return new PageImpl<>(content, pageable, alerts.getTotalElements());
+        AlertQueryRepository.AlertFilter filter = new AlertQueryRepository.AlertFilter(
+                accessScopeService.getCurrentSupplierCode(),
+                accessScopeService.getCurrentDepotId(),
+                status,
+                transformerId,
+                query
+        );
+        List<AlertResponse> content = alertQueryRepository.findPage(filter, sanitizedPage, sanitizedSize);
+        long total = alertQueryRepository.count(filter);
+        return new PageImpl<>(content, pageable, total);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AlertSummaryResponse summary() {
+        AlertSummaryResponse summary = alertQueryRepository.summary(
+                accessScopeService.getCurrentSupplierCode(), accessScopeService.getCurrentDepotId());
+        summary.setTransformersWithOpenAlerts(transformerStates(true).size());
+        return summary;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TransformerAlertStateResponse> transformerStates(boolean openOnly) {
+        return alertStateService.list(
+                accessScopeService.getCurrentSupplierCode(), accessScopeService.getCurrentDepotId(), openOnly);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TransformerAlertStateResponse transformerState(Long transformerId) {
+        TransformerAlertStateResponse state = alertStateService.get(transformerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No alerts recorded for transformer " + transformerId));
+        String supplierCode = accessScopeService.getCurrentSupplierCode();
+        Long depotId = accessScopeService.getCurrentDepotId();
+        boolean visible = (supplierCode == null || supplierCode.equalsIgnoreCase(String.valueOf(state.getSupplierCode())))
+                && (depotId == null || depotId.equals(state.getDepotId()));
+        if (!visible) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No alerts recorded for transformer " + transformerId);
+        }
+        return state;
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public int rebuildTransformerStates() {
+        return alertStateService.rebuildAll();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AlertResponse> listBySensorId(Long sensorId) {
+        Pageable newest = PageRequest.of(0, SENSOR_HISTORY_LIMIT);
         List<Alert> alerts = accessScopeService.isSupplierScoped()
-                ? alertRepository.findBySensorIdAndSupplierCode(sensorId, accessScopeService.getCurrentSupplierCode())
-                : alertRepository.findBySensorId(sensorId);
+                ? alertRepository.findBySensorIdAndSupplierCodeOrderByIdDesc(sensorId, accessScopeService.getCurrentSupplierCode(), newest)
+                : alertRepository.findBySensorIdOrderByIdDesc(sensorId, newest);
         List<Alert> visibleAlerts = alerts.stream()
                 .filter(this::isVisibleToCurrentUser)
                 .sorted((left, right) -> compareCreatedAtDesc(left.getCreatedAt(), right.getCreatedAt()))
@@ -179,12 +299,14 @@ public class AlertServiceImpl implements AlertService {
             createActivity(savedCase.getId(), AlertCaseActivityType.NOTE_ADDED, savedCase.getStatus(), savedCase.getStatus(), note);
         }
 
+        alertStateService.refresh(alert.getTransformerId());
         return toResponse(alert, savedCase);
     }
 
     @Override
     public AlertResponse update(Long id, AlertRequest request) {
         Alert alert = findAlertOrThrow(id);
+        Long previousTransformerId = alert.getTransformerId();
         Sensor sensor = null;
         if (request.getSensorId() != null) {
             sensor = findSensorOrThrow(request.getSensorId());
@@ -213,6 +335,10 @@ public class AlertServiceImpl implements AlertService {
             alert.setSupplierName(accessScopeService.getCurrentSupplierName());
         }
         Alert saved = alertRepository.save(alert);
+        alertStateService.refresh(saved.getTransformerId());
+        if (previousTransformerId != null && !previousTransformerId.equals(saved.getTransformerId())) {
+            alertStateService.refresh(previousTransformerId);
+        }
         return toResponse(saved, alertCaseRepository.findByAlertId(saved.getId()).orElse(null));
     }
 
@@ -224,21 +350,8 @@ public class AlertServiceImpl implements AlertService {
             alertCaseRepository.delete(alertCase);
         });
         alertRepository.delete(alert);
-    }
-
-    private Page<Alert> listScopedAlerts(Pageable pageable) {
-        String supplierCode = accessScopeService.getCurrentSupplierCode();
-        Long depotId = accessScopeService.getCurrentDepotId();
-        if (supplierCode != null && depotId != null) {
-            return alertRepository.findAllBySupplierCodeAndDepotIdOrderByCreatedAtDesc(supplierCode, depotId, pageable);
-        }
-        if (supplierCode != null) {
-            return alertRepository.findAllBySupplierCodeOrderByCreatedAtDesc(supplierCode, pageable);
-        }
-        if (depotId != null) {
-            return alertRepository.findAllByDepotIdOrderByCreatedAtDesc(depotId, pageable);
-        }
-        return alertRepository.findAllByOrderByCreatedAtDesc(pageable);
+        alertRepository.flush();
+        alertStateService.refresh(alert.getTransformerId());
     }
 
     private Map<Long, AlertCase> loadCasesByAlertId(List<Alert> alerts) {
@@ -385,6 +498,9 @@ public class AlertServiceImpl implements AlertService {
                 .lastActionByEmail(alertCase != null ? alertCase.getLastActionByEmail() : null)
                 .lastActionByName(alertCase != null ? alertCase.getLastActionByName() : null)
                 .lastActionNote(alertCase != null ? alertCase.getLastActionNote() : null)
+                .occurrenceCount(alert.getOccurrenceCount())
+                .lastSeenAt(alert.getLastSeenAt())
+                .lastNotifiedAt(alert.getLastNotifiedAt())
                 .build();
     }
 

@@ -84,6 +84,16 @@ interface AlertItem {
   timestamp?: string;
 }
 
+interface TransformerAlertState {
+  transformerId: number;
+  openAlertCount: number;
+  totalEventCount?: number;
+  lastAlertId?: number | null;
+  lastAlertAt?: string | null;
+  lastAlertMessage?: string | null;
+  lastCaseStatus?: string | null;
+}
+
 interface GatewaySummary {
   total: number;
   online: number;
@@ -384,6 +394,7 @@ export default function DashboardHome() {
   const [controlRows, setControlRows] = useState<OculusControlSummaryRow[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<AlertItem[]>([]);
+  const [alertStates, setAlertStates] = useState<TransformerAlertState[]>([]);
   const [selectedTransformerId, setSelectedTransformerId] = useState<number | null>(null);
   const [transformerSearch, setTransformerSearch] = useState(() => persistedWatchlistState?.transformerSearch ?? "");
   const [selectedDepotFilter, setSelectedDepotFilter] = useState(() => persistedWatchlistState?.selectedDepotFilter ?? "ALL");
@@ -561,6 +572,8 @@ export default function DashboardHome() {
         alertsData,
         oculusControlData,
         gatewaysData,
+        alertStatesData,
+        alertSummaryData,
       ] = await Promise.all([
         hasPermission("regions.read")
           ? safeGet(axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }), [])
@@ -576,7 +589,7 @@ export default function DashboardHome() {
         safeGet(
           axios.get(`${API_BASE_URL}/api/v1/alerts`, {
             headers,
-            params: { page: 0, size: 50 },
+            params: { page: 0, size: 10 },
           }),
           { content: [], totalElements: 0 }
         ),
@@ -586,6 +599,9 @@ export default function DashboardHome() {
         hasPermission("gateways.view")
           ? safeGet(axios.get(`${API_BASE_URL}/api/v1/gateways/summary`, { headers }), null)
           : Promise.resolve(null),
+        // One pre-computed row per transformer (open count + latest alert); never scans the alerts table.
+        safeGet(axios.get(`${API_BASE_URL}/api/v1/alerts/transformers`, { headers }), []),
+        safeGet(axios.get(`${API_BASE_URL}/api/v1/alerts/summary`, { headers }), null),
       ]);
 
       const regionsList = normalizeList<Region>(regionsData);
@@ -594,7 +610,11 @@ export default function DashboardHome() {
       const transformersList = normalizeList<Transformer>(transformersData);
       const sensorsList = normalizeList<Sensor>(sensorsData);
       const alertsList = normalizeList<AlertItem>(alertsData);
-      const totalAlerts = getPagedTotal(alertsData, alertsList.length);
+      const alertSummaryOpen = (alertSummaryData as { open?: number } | null)?.open;
+      // "Live alerts" = open cases, not the lifetime row count.
+      const totalAlerts =
+        typeof alertSummaryOpen === "number" ? alertSummaryOpen : getPagedTotal(alertsData, alertsList.length);
+      setAlertStates(normalizeList<TransformerAlertState>(alertStatesData));
       const oculusControlList = normalizeList<OculusControlSummaryRow>(oculusControlData);
 
       const activeTransformers = transformersList.filter(
@@ -668,6 +688,11 @@ export default function DashboardHome() {
     );
   }, [districts]);
 
+  const alertStateByTransformerId = useMemo(
+    () => new Map(alertStates.map((state) => [state.transformerId, state])),
+    [alertStates]
+  );
+
   const regionalSummary = useMemo(() => {
     const summary = regions.map((region) => {
       const regionDistricts = districts.filter(
@@ -681,11 +706,10 @@ export default function DashboardHome() {
       const regionTransformers = transformers.filter((transformer) =>
         depotIds.has(transformer.depotId ?? transformer.depot_id ?? -1)
       );
-      const regionAlerts = recentAlerts.filter((alert) => {
-        if (!alert.transformerId) return false;
-        const transformer = transformers.find((item) => item.id === alert.transformerId);
-        return depotIds.has(transformer?.depotId ?? transformer?.depot_id ?? -1);
-      });
+      const regionAlerts = regionTransformers.reduce(
+        (sum, transformer) => sum + (alertStateByTransformerId.get(transformer.id)?.openAlertCount ?? 0),
+        0
+      );
 
       return {
         id: region.id,
@@ -693,14 +717,14 @@ export default function DashboardHome() {
         districts: regionDistricts.length,
         depots: regionDepots.length,
         transformers: regionTransformers.length,
-        alerts: regionAlerts.length,
+        alerts: regionAlerts,
       };
     });
 
     return summary
       .sort((a, b) => b.transformers - a.transformers)
       .slice(0, 5);
-  }, [regions, districts, depots, transformers, recentAlerts]);
+  }, [regions, districts, depots, transformers, alertStateByTransformerId]);
 
   const supplierRanking = useMemo(() => {
     const supplierMap = new Map<string, number>();
@@ -779,6 +803,17 @@ export default function DashboardHome() {
 
   const latestAlertByTransformerId = useMemo(() => {
     const latest = new Map<number, AlertItem>();
+    alertStates.forEach((state) => {
+      if (!state.lastAlertAt && !state.lastAlertMessage) return;
+      latest.set(state.transformerId, {
+        id: state.lastAlertId ?? 0,
+        transformerId: state.transformerId,
+        message: state.lastAlertMessage ?? undefined,
+        createdAt: state.lastAlertAt ?? undefined,
+      });
+    });
+    if (latest.size > 0) return latest;
+    // Fallback while the snapshot endpoint is unavailable: derive from the recent page.
     [...alerts]
       .sort(
         (a, b) =>
@@ -790,7 +825,7 @@ export default function DashboardHome() {
         latest.set(alert.transformerId, alert);
       });
     return latest;
-  }, [alerts]);
+  }, [alertStates, alerts]);
 
   const controlRowByTransformerId = useMemo(() => {
     return new Map(controlRows.map((row) => [row.transformerId, row]));

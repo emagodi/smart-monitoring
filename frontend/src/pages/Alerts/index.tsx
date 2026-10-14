@@ -52,6 +52,48 @@ type AlertItem = {
   falseAlarmAt?: string | null;
   lastActionAt?: string | null;
   lastActionNote?: string | null;
+  occurrenceCount?: number | null;
+  lastSeenAt?: string | null;
+};
+
+type AlertSummary = {
+  total: number;
+  open: number;
+  newCount: number;
+  acknowledged: number;
+  dispatched: number;
+  resolved: number;
+  falseAlarm: number;
+  unassigned: number;
+  last24h: number;
+  totalEvents: number;
+  transformersWithOpenAlerts: number;
+};
+
+const EMPTY_SUMMARY: AlertSummary = {
+  total: 0,
+  open: 0,
+  newCount: 0,
+  acknowledged: 0,
+  dispatched: 0,
+  resolved: 0,
+  falseAlarm: 0,
+  unassigned: 0,
+  last24h: 0,
+  totalEvents: 0,
+  transformersWithOpenAlerts: 0,
+};
+
+// Filter chips map 1:1 to the backend `status` query param, so filtering happens in SQL
+// across all alerts instead of only on the rows of the current page.
+const FILTER_TO_STATUS: Record<string, string | undefined> = {
+  all: undefined,
+  new: "NEW",
+  acknowledged: "ACKNOWLEDGED",
+  dispatched: "DISPATCHED",
+  resolved: "RESOLVED",
+  falseAlarm: "FALSE_ALARM",
+  unassigned: "unassigned",
 };
 
 type TimelineItem = {
@@ -187,6 +229,8 @@ export default function AlertsIndex() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [summary, setSummary] = useState<AlertSummary>(EMPTY_SUMMARY);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -203,13 +247,36 @@ export default function AlertsIndex() {
     [token]
   );
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => window.clearTimeout(handle);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filterMode, debouncedSearch]);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/v1/alerts/summary`, { headers });
+      setSummary({ ...EMPTY_SUMMARY, ...(response.data as Partial<AlertSummary>) });
+    } catch (summaryError) {
+      console.error(summaryError);
+    }
+  }, [API_BASE_URL, headers]);
+
   const fetchAlerts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await axios.get(`${API_BASE_URL}/api/v1/alerts`, {
         headers,
-        params: { page, size: pageSize },
+        params: {
+          page,
+          size: pageSize,
+          status: FILTER_TO_STATUS[filterMode],
+          q: debouncedSearch || undefined,
+        },
       });
       const normalized = normalizePage<AlertItem>(response.data);
       setItems(normalized.items);
@@ -221,7 +288,7 @@ export default function AlertsIndex() {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers, page, pageSize]);
+  }, [API_BASE_URL, debouncedSearch, filterMode, headers, page, pageSize]);
 
   const fetchDetails = useCallback(
     async (alertId: number) => {
@@ -253,65 +320,19 @@ export default function AlertsIndex() {
     }
   }, [fetchAlerts, token]);
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return items.filter((item) => {
-      const status = getCaseStatus(item);
-      const matchesFilter =
-        filterMode === "all"
-          ? true
-          : filterMode === "new"
-            ? status === "NEW"
-            : filterMode === "acknowledged"
-              ? status === "ACKNOWLEDGED"
-              : filterMode === "dispatched"
-                ? status === "DISPATCHED"
-                : filterMode === "resolved"
-                  ? status === "RESOLVED"
-                  : filterMode === "falseAlarm"
-                    ? status === "FALSE_ALARM"
-                    : !item.assignedToEmail && !item.assignedToName;
+  useEffect(() => {
+    if (token) {
+      void fetchSummary();
+    }
+  }, [fetchSummary, token]);
 
-      const matchesQuery =
-        !query ||
-        (item.message || "").toLowerCase().includes(query) ||
-        (item.transformerName || "").toLowerCase().includes(query) ||
-        (item.deviceName || "").toLowerCase().includes(query) ||
-        (item.deviceId || "").toLowerCase().includes(query) ||
-        (item.assignedToName || "").toLowerCase().includes(query) ||
-        (item.assignedToEmail || "").toLowerCase().includes(query) ||
-        (item.depotName || "").toLowerCase().includes(query) ||
-        (item.supplierName || "").toLowerCase().includes(query);
+  const refreshAll = () => {
+    void fetchAlerts();
+    void fetchSummary();
+  };
 
-      return matchesFilter && matchesQuery;
-    });
-  }, [filterMode, items, search]);
-
-  const stats = useMemo(() => {
-    const statusCounts = {
-      total: totalElements,
-      openCases: 0,
-      acknowledged: 0,
-      dispatched: 0,
-      resolved: 0,
-      falseAlarm: 0,
-      unassigned: 0,
-    };
-
-    items.forEach((item) => {
-      const status = getCaseStatus(item);
-      if (status === "NEW") statusCounts.openCases += 1;
-      if (status === "ACKNOWLEDGED") statusCounts.acknowledged += 1;
-      if (status === "DISPATCHED") statusCounts.dispatched += 1;
-      if (status === "RESOLVED") statusCounts.resolved += 1;
-      if (status === "FALSE_ALARM") statusCounts.falseAlarm += 1;
-      if (!item.assignedToEmail && !item.assignedToName && status !== "RESOLVED" && status !== "FALSE_ALARM") {
-        statusCounts.unassigned += 1;
-      }
-    });
-
-    return statusCounts;
-  }, [items, totalElements]);
+  // Status filter and search are applied by the backend; the page already holds the result.
+  const filtered = items;
 
   const deliverySummary = useMemo(() => {
     const delivered = notifications.filter((item) =>
@@ -362,6 +383,7 @@ export default function AlertsIndex() {
       setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setSelectedAlert(updated);
       setSelectedStatus(getCaseStatus(updated));
+      void fetchSummary();
       await fetchDetails(updated.id);
     } catch (saveError) {
       console.error(saveError);
@@ -393,12 +415,13 @@ export default function AlertsIndex() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <InfoPill label="National total" value={stats.total.toLocaleString()} icon={<BellRing className="h-3.5 w-3.5" />} />
-            <InfoPill label="On page" value={filtered.length.toLocaleString()} icon={<ShieldAlert className="h-3.5 w-3.5" />} />
-            <InfoPill label="Unassigned" value={stats.unassigned.toLocaleString()} icon={<AlertTriangle className="h-3.5 w-3.5" />} />
+            <InfoPill label="Alerts" value={summary.total.toLocaleString()} icon={<BellRing className="h-3.5 w-3.5" />} />
+            <InfoPill label="Trigger events" value={summary.totalEvents.toLocaleString()} icon={<History className="h-3.5 w-3.5" />} />
+            <InfoPill label="Last 24h" value={summary.last24h.toLocaleString()} icon={<ShieldAlert className="h-3.5 w-3.5" />} />
+            <InfoPill label="Unassigned" value={summary.unassigned.toLocaleString()} icon={<AlertTriangle className="h-3.5 w-3.5" />} />
             <button
               type="button"
-              onClick={() => void fetchAlerts()}
+              onClick={refreshAll}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
             >
               <RefreshCcw className="h-3.5 w-3.5" />
@@ -409,12 +432,12 @@ export default function AlertsIndex() {
       </section>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-6">
-        <MetricTile label="Open" value={stats.openCases} tone="red" />
-        <MetricTile label="Acknowledged" value={stats.acknowledged} tone="amber" />
-        <MetricTile label="Dispatched" value={stats.dispatched} tone="blue" />
-        <MetricTile label="Resolved" value={stats.resolved} tone="emerald" />
-        <MetricTile label="False Alarm" value={stats.falseAlarm} tone="slate" />
-        <MetricTile label="Visible Range" value={pageEnd === 0 ? "0" : `${pageStart}-${pageEnd}`} tone="blue" />
+        <MetricTile label="New" value={summary.newCount} tone="red" />
+        <MetricTile label="Acknowledged" value={summary.acknowledged} tone="amber" />
+        <MetricTile label="Dispatched" value={summary.dispatched} tone="blue" />
+        <MetricTile label="Resolved" value={summary.resolved} tone="emerald" />
+        <MetricTile label="False Alarm" value={summary.falseAlarm} tone="slate" />
+        <MetricTile label="Transformers Alerting" value={summary.transformersWithOpenAlerts} tone="red" />
       </section>
 
       <section className="enterprise-card overflow-hidden">
@@ -453,7 +476,7 @@ export default function AlertsIndex() {
               </div>
 
               <div className="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-                <span>Rows are paged from the backend. Detail, timeline, and recipient audit load only when opened.</span>
+                <span>Filters and search run on the server. Repeat triggers on an open case are grouped into one row.</span>
                 <label className="inline-flex items-center gap-2">
                   <span>Rows</span>
                   <select
@@ -513,7 +536,17 @@ export default function AlertsIndex() {
                       </Td>
                       <Td>
                         <div className="max-w-[340px]">
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">{item.transformerName || "Unassigned transformer"}</p>
+                          <p className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                            <span>{item.transformerName || "Unassigned transformer"}</span>
+                            {(item.occurrenceCount ?? 1) > 1 ? (
+                              <span
+                                title={`${item.occurrenceCount} trigger events grouped into this case`}
+                                className="inline-flex rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                              >
+                                ×{(item.occurrenceCount ?? 1).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </p>
                           <p className="mt-1 line-clamp-2 text-slate-500 dark:text-slate-400">{item.message || item.value || "Operational event"}</p>
                         </div>
                       </Td>
@@ -524,7 +557,12 @@ export default function AlertsIndex() {
                         </div>
                       </Td>
                       <Td>{item.supplierName || item.supplierCode || "ZESA"}</Td>
-                      <Td>{formatDateTime(item.createdAt)}</Td>
+                      <Td>
+                        <div>{formatDateTime(item.createdAt)}</div>
+                        {item.lastSeenAt && (item.occurrenceCount ?? 1) > 1 ? (
+                          <div className="mt-0.5 text-[10px] text-slate-400">Last: {formatDateTime(item.lastSeenAt)}</div>
+                        ) : null}
+                      </Td>
                       <Td>{item.assignedToName || item.assignedToEmail || "Unassigned"}</Td>
                       <Td className="text-right">
                         <button
@@ -625,8 +663,11 @@ export default function AlertsIndex() {
             <div className="space-y-4 overflow-y-auto px-5 py-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <SummaryTile label="Detected" value={formatDateTime(selectedAlert.createdAt)} />
+                <SummaryTile
+                  label="Trigger Events"
+                  value={`${(selectedAlert.occurrenceCount ?? 1).toLocaleString()} · last ${formatDateTime(selectedAlert.lastSeenAt || selectedAlert.createdAt)}`}
+                />
                 <SummaryTile label="Last Action" value={formatDateTime(selectedAlert.lastActionAt)} />
-                <SummaryTile label="Depot" value={selectedAlert.depotName || "Unscoped"} />
                 <SummaryTile label="Supplier" value={selectedAlert.supplierName || selectedAlert.supplierCode || "ZESA"} />
               </div>
 

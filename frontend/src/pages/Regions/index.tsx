@@ -51,13 +51,14 @@ interface Transformer {
   active?: boolean;
 }
 
-interface AlertItem {
-  id: number;
-  transformerId?: number;
-  message?: string;
-  createdAt?: string;
-  timestamp?: string;
+/** Row of GET /api/v1/alerts/transformers (pre-computed per-transformer alert snapshot). */
+interface TransformerAlertState {
+  transformerId: number;
+  openAlertCount: number;
+  totalAlertCount?: number;
 }
+
+type MonthlyAlertCount = { month: string; alerts: number; events: number };
 
 type RegionRollup = {
   id: number;
@@ -245,7 +246,8 @@ export default function RegionsIndex() {
   const [districts, setDistricts] = useState<District[]>([]);
   const [depots, setDepots] = useState<Depot[]>([]);
   const [transformers, setTransformers] = useState<Transformer[]>([]);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [alertStates, setAlertStates] = useState<TransformerAlertState[]>([]);
+  const [monthlyAlerts, setMonthlyAlerts] = useState<MonthlyAlertCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -283,20 +285,25 @@ export default function RegionsIndex() {
     try {
       setLoading(true);
       setError(null);
-      const [regionsRes, districtsRes, depotsRes, transformersRes, alertsRes] =
+      const [regionsRes, districtsRes, depotsRes, transformersRes, alertStatesRes, alertSummaryRes] =
         await Promise.all([
           axios.get(`${API_BASE_URL}/api/v1/regions`, { headers }),
           axios.get(`${API_BASE_URL}/api/v1/districts?page=0&size=1000`, { headers }),
           axios.get(`${API_BASE_URL}/api/v1/depots`, { headers }),
           axios.get(`${API_BASE_URL}/api/v1/transformers`, { headers }),
-          axios.get(`${API_BASE_URL}/api/v1/alerts`, { headers }),
+          // Alert numbers come from the per-transformer snapshot + summary endpoints,
+          // so this page never pulls raw alert rows.
+          axios.get(`${API_BASE_URL}/api/v1/alerts/transformers`, { headers }).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE_URL}/api/v1/alerts/summary`, { headers }).catch(() => ({ data: null })),
         ]);
 
       setRegions(normalizeList<Region>(regionsRes.data));
       setDistricts(normalizeList<District>(districtsRes.data));
       setDepots(normalizeList<Depot>(depotsRes.data));
       setTransformers(normalizeList<Transformer>(transformersRes.data));
-      setAlerts(normalizeList<AlertItem>(alertsRes.data));
+      setAlertStates(normalizeList<TransformerAlertState>(alertStatesRes.data));
+      const monthly = (alertSummaryRes.data as { monthly?: MonthlyAlertCount[] } | null)?.monthly;
+      setMonthlyAlerts(Array.isArray(monthly) ? monthly : []);
     } catch {
       setError("Failed to fetch regions");
     } finally {
@@ -462,6 +469,11 @@ export default function RegionsIndex() {
     [districts]
   );
 
+  const openAlertsByTransformerId = useMemo(
+    () => new Map(alertStates.map((state) => [state.transformerId, state.openAlertCount ?? 0])),
+    [alertStates]
+  );
+
   const regionRollups = useMemo<RegionRollup[]>(() => {
     return regions.map((region) => {
       const regionDistricts = districts.filter(
@@ -478,11 +490,10 @@ export default function RegionsIndex() {
       const activeTransformers = regionTransformers.filter(
         (transformer) => transformer.isActive === true || transformer.active === true
       ).length;
-      const regionAlerts = alerts.filter((alert) => {
-        if (!alert.transformerId) return false;
-        const transformer = transformers.find((item) => item.id === alert.transformerId);
-        return depotIds.has(transformer?.depotId ?? transformer?.depot_id ?? -1);
-      });
+      const regionAlertCount = regionTransformers.reduce(
+        (sum, transformer) => sum + (openAlertsByTransformerId.get(transformer.id) ?? 0),
+        0
+      );
       const transformerCount = regionTransformers.length;
       const healthScore = transformerCount
         ? Math.round((activeTransformers / transformerCount) * 100)
@@ -497,17 +508,17 @@ export default function RegionsIndex() {
         depots: regionDepots.length,
         transformers: transformerCount,
         activeTransformers,
-        alerts: regionAlerts.length,
+        alerts: regionAlertCount,
         healthScore,
         status:
           transformerCount === 0
             ? "Idle"
-            : regionAlerts.length > 0 || healthScore < 70
+            : regionAlertCount > 0 || healthScore < 70
               ? "Monitoring"
               : "Active",
       };
     });
-  }, [alerts, depots, districts, regions, transformers]);
+  }, [openAlertsByTransformerId, depots, districts, regions, transformers]);
 
   const filtered = regionRollups.filter((region) => {
     const query = search.trim().toLowerCase();
@@ -552,17 +563,12 @@ export default function RegionsIndex() {
   );
 
   const monthlyFaults = useMemo(() => {
-    const grouped = new Map<string, number>();
-    alerts.forEach((alert) => {
-      const label = formatMonth(alert.createdAt || alert.timestamp);
-      grouped.set(label, (grouped.get(label) || 0) + 1);
-    });
-    const entries = Array.from(grouped.entries()).slice(-6);
+    const entries = monthlyAlerts.slice(-6);
     return {
-      labels: entries.map(([label]) => label),
-      data: entries.map(([, value]) => value),
+      labels: entries.map((entry) => formatMonth(`${entry.month}-01T00:00:00`)),
+      data: entries.map((entry) => entry.alerts),
     };
-  }, [alerts]);
+  }, [monthlyAlerts]);
 
   const regionWithMostAlerts = useMemo(
     () => regionRollups.slice().sort((a, b) => b.alerts - a.alerts)[0],

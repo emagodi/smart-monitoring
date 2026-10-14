@@ -48,4 +48,7 @@ public class AlertResponse {
     private String lastActionByEmail;
     private String lastActionByName;
     private String lastActionNote;
+    private Integer occurrenceCount;
+    private LocalDateTime lastSeenAt;
+    private LocalDateTime lastNotifiedAt;
 }

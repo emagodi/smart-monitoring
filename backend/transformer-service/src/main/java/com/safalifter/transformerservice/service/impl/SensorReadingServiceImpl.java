@@ -20,6 +20,7 @@ import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.SensorReadingService;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.payload.response.AlertRaiseResult;
 import com.safalifter.transformerservice.clients.NotificationClient;
 import com.safalifter.transformerservice.payload.client.NotificationType;
 import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
@@ -316,9 +317,19 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                     .supplierName(tf != null ? tf.getSupplierName() : null)
                     .build();
             Long alertId = null;
+            boolean shouldNotify = true;
+            boolean created = true;
             try {
-                alertId = alertService.create(ar).getId();
+                // Folds repeats into the open alert for this sensor (see AlertService#raise)
+                // instead of inserting one alert row per uplink.
+                AlertRaiseResult raised = alertService.raise(ar);
+                alertId = raised.getAlert() != null ? raised.getAlert().getId() : null;
+                shouldNotify = raised.isShouldNotify();
+                created = raised.isCreated();
             } catch (Exception ignored) {}
+            if (!shouldNotify) {
+                return;
+            }
             try {
                 notificationClient.send(SendNotificationRequest.builder()
                         .notificationType(NotificationType.CRITICAL_ALERT)
@@ -326,7 +337,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                         .depotId(tf != null ? tf.getDepotId() : null)
                         .sourceSystem("transformer-service")
                         .referenceId(alertId != null ? String.valueOf(alertId) : null)
-                        .subject("Sensor trigger detected")
+                        .subject(created ? "Sensor trigger detected" : "Sensor trigger repeated (case still open)")
                         .message(message)
                         .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(tf, eventLabel, reading.getCreatedAt()))
                         .build());

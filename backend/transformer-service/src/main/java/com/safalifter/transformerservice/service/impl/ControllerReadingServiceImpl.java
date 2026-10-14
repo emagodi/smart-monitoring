@@ -8,6 +8,8 @@ import com.safalifter.transformerservice.clients.NotificationClient;
 import com.safalifter.transformerservice.payload.client.NotificationType;
 import com.safalifter.transformerservice.payload.client.SendNotificationRequest;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
+import com.safalifter.transformerservice.payload.response.AlertRaiseResult;
+import com.safalifter.transformerservice.payload.response.AlertResponse;
 import com.safalifter.transformerservice.payload.response.ControllerReadingDetailResponse;
 import com.safalifter.transformerservice.repository.ControllerReadingRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
@@ -48,48 +50,64 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     @Override
     public ControllerReading save(ControllerReading reading) {
         ControllerReading saved = repository.save(reading);
-        updateControllerDenormFromReading(saved);
-        processTriggers(saved);
+        Controller controller = saved.getControllerId() != null
+                ? controllerRepository.findById(saved.getControllerId()).orElse(null)
+                : null;
+        // Capture the previous DI state BEFORE the denormalised columns are overwritten,
+        // so triggers can be edge-detected (false -> true) instead of level-detected.
+        Boolean previousDi1 = controller != null ? controller.getLastReadingDi1() : null;
+        Boolean previousDi2 = controller != null ? controller.getLastReadingDi2() : null;
+        updateControllerDenormFromReading(saved, controller);
+        processTriggers(saved, controller, previousDi1, previousDi2);
         return saved;
     }
 
-    private void updateControllerDenormFromReading(ControllerReading reading) {
-        if (reading == null || reading.getControllerId() == null) return;
+    private void updateControllerDenormFromReading(ControllerReading reading, Controller controller) {
+        if (reading == null || controller == null) return;
         try {
-            controllerRepository.findById(reading.getControllerId()).ifPresent(controller -> {
-                controller.setLastReadingAt(reading.getCreatedAt() != null ? reading.getCreatedAt() : LocalDateTime.now());
-                controller.setLastReadingDi1(reading.getDi1());
-                controller.setLastReadingDi2(reading.getDi2());
-                controller.setLastReadingBattery(reading.getBattery());
-                controller.setLastReadingRssi(reading.getRssi());
-                controller.setLastReadingSnr(reading.getSnr());
-                controller.setLastReadingDecodedPayload(reading.getDecodedPayload());
-                controllerRepository.save(controller);
+            controller.setLastReadingAt(reading.getCreatedAt() != null ? reading.getCreatedAt() : LocalDateTime.now());
+            controller.setLastReadingDi1(reading.getDi1());
+            controller.setLastReadingDi2(reading.getDi2());
+            controller.setLastReadingBattery(reading.getBattery());
+            controller.setLastReadingRssi(reading.getRssi());
+            controller.setLastReadingSnr(reading.getSnr());
+            controller.setLastReadingDecodedPayload(reading.getDecodedPayload());
+            controllerRepository.save(controller);
 
-                if (controller.getTransformerId() != null) {
-                    transformerRepository.findById(controller.getTransformerId()).ifPresent(transformer -> {
-                        LocalDateTime readingTs = reading.getCreatedAt() != null ? reading.getCreatedAt() : LocalDateTime.now();
-                        if (transformer.getLastTelemetryAt() == null || readingTs.isAfter(transformer.getLastTelemetryAt())) {
-                            transformer.setLastTelemetryAt(readingTs);
-                            transformerRepository.save(transformer);
-                        }
-                    });
-                }
-            });
+            if (controller.getTransformerId() != null) {
+                transformerRepository.findById(controller.getTransformerId()).ifPresent(transformer -> {
+                    LocalDateTime readingTs = reading.getCreatedAt() != null ? reading.getCreatedAt() : LocalDateTime.now();
+                    if (transformer.getLastTelemetryAt() == null || readingTs.isAfter(transformer.getLastTelemetryAt())) {
+                        transformer.setLastTelemetryAt(readingTs);
+                        transformerRepository.save(transformer);
+                    }
+                });
+            }
         } catch (Exception e) {
             log.warn("Denorm update failed for reading controller={}: {}", reading.getControllerId(), e.getMessage());
         }
     }
 
-    private void processTriggers(ControllerReading reading) {
-        if (!Boolean.TRUE.equals(reading.getDi1()) && !Boolean.TRUE.equals(reading.getDi2())) {
+    /**
+     * Raise an alert only when an input goes from not-triggered to triggered.
+     *
+     * Devices report the DI level on every uplink. A door left open or a motion input held
+     * high used to create a new alert + case + activity + WhatsApp/email on EVERY uplink,
+     * which is what filled the alerts table with millions of rows. Repeats while the input
+     * stays high are now ignored; new edges while a case is still open are folded into that
+     * case by AlertService#raise.
+     */
+    private void processTriggers(ControllerReading reading, Controller controller, Boolean previousDi1, Boolean previousDi2) {
+        boolean di1Rising = Boolean.TRUE.equals(reading.getDi1()) && !Boolean.TRUE.equals(previousDi1);
+        boolean di2Rising = Boolean.TRUE.equals(reading.getDi2()) && !Boolean.TRUE.equals(previousDi2);
+        if (!di1Rising && !di2Rising) {
             return;
         }
-
-        controllerRepository.findById(reading.getControllerId())
-                .filter(controller -> controller.getTransformerId() != null)
-                .ifPresent(controller -> transformerRepository.findById(controller.getTransformerId())
-                        .ifPresent(transformer -> createAlert(transformer, controller, reading)));
+        if (controller == null || controller.getTransformerId() == null) {
+            return;
+        }
+        transformerRepository.findById(controller.getTransformerId())
+                .ifPresent(transformer -> createAlert(transformer, controller, reading));
     }
 
     private void createAlert(Transformer transformer, Controller controller, ControllerReading reading) {
@@ -111,16 +129,27 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                 .value(triggerSummary)
                 .message("Controller trigger detected on " + transformer.getName() + " (" + resolveTransformerTypeLabel(transformer.getType()) + ": " + triggerSummary + ")")
                 .build();
-        log.info("Creating controller trigger alert for transformer {} from controller {}", transformer.getId(), controller.getId());
-        var createdAlert = alertService.create(alert);
+        AlertRaiseResult result = alertService.raise(alert);
+        AlertResponse raised = result.getAlert();
+        if (result.isCreated()) {
+            log.info("Created controller trigger alert {} for transformer {} from controller {}",
+                    raised.getId(), transformer.getId(), controller.getId());
+        }
+        if (!result.isShouldNotify()) {
+            return;
+        }
+        int occurrences = raised.getOccurrenceCount() != null ? raised.getOccurrenceCount() : 1;
+        String subject = result.isCreated()
+                ? "Controller trigger detected"
+                : "Controller trigger repeated (" + occurrences + " events, case still open)";
         try {
             notificationClient.send(SendNotificationRequest.builder()
                     .notificationType(NotificationType.CONTROLLER_TRIGGER)
                     .supplierCode(alert.getSupplierCode())
                     .depotId(alert.getDepotId())
                     .sourceSystem("transformer-service")
-                    .referenceId(createdAlert.getId() != null ? String.valueOf(createdAlert.getId()) : null)
-                    .subject("Controller trigger detected")
+                    .referenceId(raised.getId() != null ? String.valueOf(raised.getId()) : null)
+                    .subject(subject)
                     .message(alert.getMessage())
                     .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(transformer, triggerSummary, reading.getCreatedAt()))
                     .build());

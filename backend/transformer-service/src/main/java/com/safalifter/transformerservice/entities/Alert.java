@@ -71,6 +71,23 @@ public class Alert {
     @Column(name = "image_url")
     private String imageUrl;
 
+    /**
+     * Number of trigger events folded into this alert. Repeated triggers on the same
+     * transformer/device while the case is still open increment this counter instead of
+     * inserting a new row (see AlertServiceImpl#raise).
+     */
+    @Builder.Default
+    @Column(name = "occurrence_count", nullable = false)
+    private Integer occurrenceCount = 1;
+
+    /** Timestamp of the most recent trigger folded into this alert. */
+    @Column(name = "last_seen_at")
+    private LocalDateTime lastSeenAt;
+
+    /** Timestamp of the last outbound notification (email/WhatsApp) for this alert. */
+    @Column(name = "last_notified_at")
+    private LocalDateTime lastNotifiedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
