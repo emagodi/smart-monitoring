@@ -17,4 +17,6 @@ public class UserAccessResponse {
     private String supplierCode;
     private String supplierName;
     private Long depotId;
+    /** Active permission names from all of the user's active roles, e.g. "response.dispatch". */
+    private java.util.Set<String> permissions;
 }

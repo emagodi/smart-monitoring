@@ -25,4 +25,6 @@ public class ChatCommandUserProfile {
     private String supplierName;
     private List<String> roles;
     private boolean allowedToControl;
+    /** Tick-box permissions (null on older auth-service builds). */
+    private List<String> permissions;
 }

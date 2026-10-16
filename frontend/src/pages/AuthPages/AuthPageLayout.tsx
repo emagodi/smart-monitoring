@@ -34,11 +34,28 @@ export default function AuthLayout({
             </div>
 
             <div className="relative">
-              <img
-                src="/images/powertel.png"
-                alt="Powertel"
-                className="mx-auto h-12 w-auto object-contain"
-              />
+              <div className="flex items-center gap-4">
+                <div className="group relative">
+                  {/* soft brand glow behind the card */}
+                  <div className="pointer-events-none absolute -inset-3 rounded-[26px] bg-[radial-gradient(circle,rgba(56,189,248,0.45),rgba(37,99,235,0.15)_55%,transparent_75%)] blur-xl transition-opacity duration-500 group-hover:opacity-90" />
+                  <div className="relative rounded-[20px] bg-gradient-to-br from-white/70 via-white/20 to-sky-300/40 p-[1.5px] shadow-[0_18px_40px_-12px_rgba(2,6,23,0.65)]">
+                    <div className="rounded-[18.5px] bg-white px-4 py-2.5 ring-1 ring-inset ring-slate-900/5">
+                      <img
+                        src="/images/powertel.png"
+                        alt="Powertel Communications"
+                        className="h-11 w-auto select-none object-contain"
+                        draggable={false}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="h-11 w-px bg-gradient-to-b from-transparent via-white/40 to-transparent" />
+                <div className="leading-tight">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-200/80">A subsidiary of</p>
+                  <p className="mt-1 text-sm font-semibold text-white">ZESA Private Limited</p>
+                  <p className="text-[11px] text-blue-100/70">ICT &amp; Smart Grid Solutions</p>
+                </div>
+              </div>
 
               <h1 className="mt-10 max-w-md text-[30px] font-semibold tracking-tight text-white">
                 Transformer Monitoring
@@ -92,13 +109,13 @@ export default function AuthLayout({
             <div className="relative rounded-[22px] border border-white/10 bg-white/10 p-5 backdrop-blur-md">
               <div className="grid grid-cols-4 gap-3">
                 {[
-                  { value: "1,248", label: "Transformers", sublabel: "Monitored" },
-                  { value: "24/7", label: "System", sublabel: "Uptime" },
-                  { value: "125", label: "Active Alerts", sublabel: "Tracked" },
-                  { value: "3", label: "Regions", sublabel: "Online" },
+                  { value: "24/7", label: "Contact Centre", sublabel: "Alert response" },
+                  { value: "GMT·PMT", label: "Assets", sublabel: "Ground & pole" },
+                  { value: "Multi", label: "Partners", sublabel: "One platform" },
+                  { value: "Live", label: "Dispatch", sublabel: "Alert to closure" },
                 ].map((item) => (
                   <div key={item.label}>
-                    <p className="text-[24px] font-semibold tracking-tight text-white">{item.value}</p>
+                    <p className="whitespace-nowrap text-[22px] font-semibold tracking-tight text-white">{item.value}</p>
                     <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-100/70">
                       {item.label}
                     </p>

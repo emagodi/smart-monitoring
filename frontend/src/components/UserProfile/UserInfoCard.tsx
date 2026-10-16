@@ -144,8 +144,8 @@ export default function UserInfoCard() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       await axios.post(
-        `${API_BASE_URL}/api/v1/auth/change-password/${user?.email}/${encodeURIComponent(currentPassword)}/${encodeURIComponent(newPassword)}`, 
-        null, 
+        `${API_BASE_URL}/api/v1/auth/change-password`,
+        { currentPassword, newPassword },
         { headers }
       );
       

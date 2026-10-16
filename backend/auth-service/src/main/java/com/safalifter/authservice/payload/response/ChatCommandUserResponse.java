@@ -25,4 +25,5 @@ public class ChatCommandUserResponse {
     private String supplierName;
     private List<String> roles;
     private boolean allowedToControl;
+    private java.util.List<String> permissions;
 }

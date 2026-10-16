@@ -36,7 +36,8 @@ import java.util.Optional;
 public class AlertQueryRepository {
 
     public static final List<String> OPEN_STATUSES = List.of(
-            AlertCaseStatus.NEW.name(), AlertCaseStatus.ACKNOWLEDGED.name(), AlertCaseStatus.DISPATCHED.name());
+            AlertCaseStatus.NEW.name(), AlertCaseStatus.ACKNOWLEDGED.name(), AlertCaseStatus.DISPATCHED.name(),
+            AlertCaseStatus.EN_ROUTE.name(), AlertCaseStatus.ON_SCENE.name());
 
     /** Effective case status: alerts without a case row fall back like the UI did. */
     private static final String EFFECTIVE_STATUS = "COALESCE(c.status, CASE WHEN a.is_alert = 1 THEN 'NEW' ELSE 'RESOLVED' END)";
@@ -49,7 +50,8 @@ public class AlertQueryRepository {
                    a.created_at, a.updated_at, a.occurrence_count, a.last_seen_at, a.last_notified_at,
                    c.id AS case_id, c.status AS case_status, c.assigned_to_email, c.assigned_to_name,
                    c.assigned_at, c.acknowledged_at, c.dispatched_at, c.resolved_at, c.false_alarm_at,
-                   c.last_action_at, c.last_action_by_email, c.last_action_by_name, c.last_action_note
+                   c.last_action_at, c.last_action_by_email, c.last_action_by_name, c.last_action_note,
+                   c.en_route_at, c.on_scene_at, c.closed_at, c.outcome, c.outcome_note, c.closed_by_name
               FROM alerts a
               LEFT JOIN alert_cases c ON c.alert_id = a.id
             """;
@@ -137,6 +139,8 @@ public class AlertQueryRepository {
                 case "NEW" -> out.newCount(n);
                 case "ACKNOWLEDGED" -> out.acknowledged(n);
                 case "DISPATCHED" -> out.dispatched(n);
+                case "EN_ROUTE" -> out.enRoute(n);
+                case "ON_SCENE" -> out.onScene(n);
                 case "RESOLVED" -> out.resolved(n);
                 case "FALSE_ALARM" -> out.falseAlarm(n);
                 default -> { }
@@ -165,6 +169,27 @@ public class AlertQueryRepository {
                     .events(toLong(row.get("events")))
                     .build());
         }
+
+        // Outcomes and response times over the last 30 days (closed cases only)
+        params.addValue("since30", Timestamp.valueOf(LocalDateTime.now().minusDays(30)));
+        String slaSql = "SELECT"
+                + " SUM(CASE WHEN c.outcome = 'REAL_THREAT' THEN 1 ELSE 0 END) AS real_threats,"
+                + " SUM(CASE WHEN c.outcome = 'FALSE_ALARM' OR c.status = 'FALSE_ALARM' THEN 1 ELSE 0 END) AS false_alarms,"
+                + " SUM(CASE WHEN c.outcome = 'TECHNICAL_FAULT' THEN 1 ELSE 0 END) AS technical_faults,"
+                + " AVG(CASE WHEN c.acknowledged_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, a.created_at, c.acknowledged_at) END) AS ack_s,"
+                + " AVG(CASE WHEN c.dispatched_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, a.created_at, c.dispatched_at) END) AS dispatch_s,"
+                + " AVG(CASE WHEN c.on_scene_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, a.created_at, c.on_scene_at) END) AS arrive_s,"
+                + " AVG(CASE WHEN c.closed_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, a.created_at, c.closed_at) END) AS close_s"
+                + " FROM alerts a JOIN alert_cases c ON c.alert_id = a.id"
+                + scope + (scope.isEmpty() ? " WHERE" : " AND") + " a.created_at >= :since30";
+        Map<String, Object> sla = jdbc.queryForMap(slaSql, params);
+        out.realThreats30d(toLong(sla.get("real_threats")))
+                .falseAlarms30d(toLong(sla.get("false_alarms")))
+                .technicalFaults30d(toLong(sla.get("technical_faults")))
+                .avgAcknowledgeMinutes(toMinutes(sla.get("ack_s")))
+                .avgDispatchMinutes(toMinutes(sla.get("dispatch_s")))
+                .avgArrivalMinutes(toMinutes(sla.get("arrive_s")))
+                .avgCloseMinutes(toMinutes(sla.get("close_s")));
 
         return out.total(total)
                 .open(open)
@@ -201,7 +226,12 @@ public class AlertQueryRepository {
                 clauses.add("c.assigned_to_email IS NULL AND c.assigned_to_name IS NULL");
                 params.addValue("openStatuses", OPEN_STATUSES);
             }
-            case "NEW", "ACKNOWLEDGED", "DISPATCHED", "RESOLVED", "FALSE_ALARM" -> {
+            case "CLOSED_RECENT" -> {
+                clauses.add(EFFECTIVE_STATUS + " IN ('RESOLVED', 'FALSE_ALARM')");
+                clauses.add("c.closed_at >= :closedSince");
+                params.addValue("closedSince", Timestamp.valueOf(LocalDateTime.now().minusHours(24)));
+            }
+            case "NEW", "ACKNOWLEDGED", "DISPATCHED", "EN_ROUTE", "ON_SCENE", "RESOLVED", "FALSE_ALARM" -> {
                 clauses.add(EFFECTIVE_STATUS + " = :status");
                 params.addValue("status", status);
             }
@@ -213,6 +243,13 @@ public class AlertQueryRepository {
             params.addValue("q", "%" + filter.search().trim() + "%");
         }
         return clauses.isEmpty() ? "" : " WHERE " + String.join(" AND ", clauses);
+    }
+
+    private static Double toMinutes(Object seconds) {
+        if (!(seconds instanceof Number n)) {
+            return null;
+        }
+        return Math.round(n.doubleValue() / 6.0) / 10.0;
     }
 
     private static long toLong(Object value) {
@@ -284,5 +321,11 @@ public class AlertQueryRepository {
             .lastActionByEmail(rs.getString("last_action_by_email"))
             .lastActionByName(rs.getString("last_action_by_name"))
             .lastActionNote(rs.getString("last_action_note"))
+            .enRouteAt(ts(rs, "en_route_at"))
+            .onSceneAt(ts(rs, "on_scene_at"))
+            .closedAt(ts(rs, "closed_at"))
+            .outcome(rs.getString("outcome"))
+            .outcomeNote(rs.getString("outcome_note"))
+            .closedByName(rs.getString("closed_by_name"))
             .build();
 }

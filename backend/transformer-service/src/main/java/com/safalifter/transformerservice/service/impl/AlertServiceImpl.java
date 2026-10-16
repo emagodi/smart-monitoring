@@ -414,19 +414,39 @@ public class AlertServiceImpl implements AlertService {
     }
 
     private void applyStatusTimestamp(AlertCase alertCase, AlertCaseStatus status, LocalDateTime timestamp) {
+        // Earlier stages are back-filled so response-time metrics stay meaningful
+        // even when an operator jumps straight to a later stage.
         switch (status) {
             case ACKNOWLEDGED -> alertCase.setAcknowledgedAt(timestamp);
             case DISPATCHED -> {
-                alertCase.setAcknowledgedAt(alertCase.getAcknowledgedAt() != null ? alertCase.getAcknowledgedAt() : timestamp);
+                fillAcknowledged(alertCase, timestamp);
                 alertCase.setDispatchedAt(timestamp);
             }
-            case RESOLVED -> {
-                alertCase.setAcknowledgedAt(alertCase.getAcknowledgedAt() != null ? alertCase.getAcknowledgedAt() : timestamp);
-                alertCase.setResolvedAt(timestamp);
+            case EN_ROUTE -> {
+                fillAcknowledged(alertCase, timestamp);
+                alertCase.setEnRouteAt(timestamp);
             }
-            case FALSE_ALARM -> alertCase.setFalseAlarmAt(timestamp);
+            case ON_SCENE -> {
+                fillAcknowledged(alertCase, timestamp);
+                alertCase.setOnSceneAt(timestamp);
+            }
+            case RESOLVED -> {
+                fillAcknowledged(alertCase, timestamp);
+                alertCase.setResolvedAt(timestamp);
+                alertCase.setClosedAt(timestamp);
+            }
+            case FALSE_ALARM -> {
+                alertCase.setFalseAlarmAt(timestamp);
+                alertCase.setClosedAt(timestamp);
+            }
             case NEW -> {
             }
+        }
+    }
+
+    private void fillAcknowledged(AlertCase alertCase, LocalDateTime timestamp) {
+        if (alertCase.getAcknowledgedAt() == null) {
+            alertCase.setAcknowledgedAt(timestamp);
         }
     }
 
@@ -501,6 +521,12 @@ public class AlertServiceImpl implements AlertService {
                 .occurrenceCount(alert.getOccurrenceCount())
                 .lastSeenAt(alert.getLastSeenAt())
                 .lastNotifiedAt(alert.getLastNotifiedAt())
+                .enRouteAt(alertCase != null ? alertCase.getEnRouteAt() : null)
+                .onSceneAt(alertCase != null ? alertCase.getOnSceneAt() : null)
+                .closedAt(alertCase != null ? alertCase.getClosedAt() : null)
+                .outcome(alertCase != null && alertCase.getOutcome() != null ? alertCase.getOutcome().name() : null)
+                .outcomeNote(alertCase != null ? alertCase.getOutcomeNote() : null)
+                .closedByName(alertCase != null ? alertCase.getClosedByName() : null)
                 .build();
     }
 

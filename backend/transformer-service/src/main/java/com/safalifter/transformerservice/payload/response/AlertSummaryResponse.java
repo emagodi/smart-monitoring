@@ -17,6 +17,8 @@ public class AlertSummaryResponse {
     private long newCount;
     private long acknowledged;
     private long dispatched;
+    private long enRoute;
+    private long onScene;
     private long resolved;
     private long falseAlarm;
     private long unassigned;
@@ -25,6 +27,14 @@ public class AlertSummaryResponse {
     private long totalEvents;
     private long transformersWithOpenAlerts;
     private List<MonthlyCount> monthly;
+    private long realThreats30d;
+    private long falseAlarms30d;
+    private long technicalFaults30d;
+    /** Average minutes from alert to acknowledgement / dispatch / arrival / closure (last 30 days). */
+    private Double avgAcknowledgeMinutes;
+    private Double avgDispatchMinutes;
+    private Double avgArrivalMinutes;
+    private Double avgCloseMinutes;
 
     @Data
     @Builder

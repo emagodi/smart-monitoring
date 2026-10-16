@@ -1,6 +1,7 @@
 package com.safalifter.transformerservice.entities;
 
 import com.safalifter.transformerservice.enums.AlertCaseStatus;
+import com.safalifter.transformerservice.enums.IncidentOutcome;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -61,6 +62,28 @@ public class AlertCase {
 
     @Column(name = "last_action_note", length = 2000)
     private String lastActionNote;
+
+    /** Crew accepted the dispatch and is travelling. */
+    @Column(name = "en_route_at")
+    private LocalDateTime enRouteAt;
+
+    /** Crew arrived at the transformer. */
+    @Column(name = "on_scene_at")
+    private LocalDateTime onSceneAt;
+
+    /** Case closed (RESOLVED or FALSE_ALARM) with an outcome. */
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "outcome", length = 32)
+    private IncidentOutcome outcome;
+
+    @Column(name = "outcome_note", length = 2000)
+    private String outcomeNote;
+
+    @Column(name = "closed_by_name")
+    private String closedByName;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

@@ -42,6 +42,32 @@ public class AccessScopeService {
         return principal != null ? principal.getDepotId() : null;
     }
 
+    /**
+     * Fine-grained permission check (tick-box permissions from Roles admin, e.g. "response.dispatch").
+     * Administrators always pass. If the auth-service did not send a permission list (older
+     * auth-service build), internal users fall back to allowed so nothing locks up mid-deploy.
+     */
+    public boolean hasPermission(String permission) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return false;
+        }
+        boolean permissionsKnown = false;
+        for (var authority : authentication.getAuthorities()) {
+            String name = authority.getAuthority();
+            if ("ROLE_ADMIN".equals(name) || name.equals(permission)) {
+                return true;
+            }
+            if (PERMISSIONS_LOADED.equals(name)) {
+                permissionsKnown = true;
+            }
+        }
+        return !permissionsKnown && !isSupplierScoped();
+    }
+
+    /** Marker authority added when the access profile carried an explicit permission list. */
+    public static final String PERMISSIONS_LOADED = "PERMISSIONS_LOADED";
+
     public boolean isDepotScoped() {
         return getCurrentDepotId() != null;
     }

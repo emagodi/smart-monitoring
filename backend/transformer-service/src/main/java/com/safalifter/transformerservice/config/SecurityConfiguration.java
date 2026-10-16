@@ -35,7 +35,11 @@ public class SecurityConfiguration {
                                 "/webjars/**", "/swagger-ui.html", "/error",
                                 "/api/v1/chat-commands/**",
                                 "/api/v1/integrations/digital/**",
-                                "/internal/integrations/loriot/**").permitAll()
+                                "/internal/integrations/loriot/**",
+                                // crew response links: guarded by a 192-bit random token per dispatch
+                                "/api/v1/public/response/**",
+                                // partner HTTP push: guarded by the per-integration secret
+                                "/api/v1/public/ingest/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(STATELESS))

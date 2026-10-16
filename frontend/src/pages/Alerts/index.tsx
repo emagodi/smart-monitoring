@@ -25,7 +25,7 @@ import { useAuth } from "../../context/AuthContext";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 
-type AlertCaseStatus = "NEW" | "ACKNOWLEDGED" | "DISPATCHED" | "RESOLVED" | "FALSE_ALARM";
+type AlertCaseStatus = "NEW" | "ACKNOWLEDGED" | "DISPATCHED" | "EN_ROUTE" | "ON_SCENE" | "RESOLVED" | "FALSE_ALARM";
 
 type AlertItem = {
   id: number;
@@ -179,6 +179,10 @@ const statusTone = (status: AlertCaseStatus) => {
       return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300";
     case "DISPATCHED":
       return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300";
+    case "EN_ROUTE":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300";
+    case "ON_SCENE":
+      return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300";
     case "RESOLVED":
       return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300";
     case "FALSE_ALARM":
@@ -531,7 +535,7 @@ export default function AlertsIndex() {
                     >
                       <Td>
                         <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${statusTone(status)}`}>
-                          {status.replace("_", " ")}
+                          {status.replace(/_/g, " ")}
                         </span>
                       </Td>
                       <Td>
@@ -637,7 +641,7 @@ export default function AlertsIndex() {
                   </p>
                 </div>
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(getCaseStatus(selectedAlert))}`}>
-                  {getCaseStatus(selectedAlert).replace("_", " ")}
+                  {getCaseStatus(selectedAlert).replace(/_/g, " ")}
                 </span>
               </div>
 
@@ -671,7 +675,7 @@ export default function AlertsIndex() {
                 <SummaryTile label="Supplier" value={selectedAlert.supplierName || selectedAlert.supplierCode || "ZESA"} />
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
+              <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
                 <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                     <ShieldAlert className="h-4 w-4 text-blue-500" />
@@ -711,7 +715,7 @@ export default function AlertsIndex() {
                     />
                   </div>
 
-                  <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr,0.75fr]">
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
                     <textarea
                       value={note}
                       onChange={(event) => setNote(event.target.value)}

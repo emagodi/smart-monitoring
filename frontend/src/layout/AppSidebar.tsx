@@ -26,7 +26,11 @@ import {
   Cpu,
   KeySquare,
   Router,
-  CardSim
+  CardSim,
+  Siren,
+  Truck,
+  BarChart3,
+  Plug
 } from 'lucide-react';
 
 interface NavItem {
@@ -52,6 +56,12 @@ const navGroups: NavGroup[] = [
         icon: <Grid className="w-5 h-5" />,
         name: "Dashboard",
         path: "/dashboard",
+        permission: "dashboard.read",
+      },
+      {
+        icon: <BarChart3 className="w-5 h-5" />,
+        name: "Insights",
+        path: "/insights",
         permission: "dashboard.read",
       },
     ],
@@ -125,6 +135,19 @@ const navGroups: NavGroup[] = [
     name: "Operations",
     items: [
       {
+        icon: <Siren className="w-5 h-5" />,
+        name: "Response Desk",
+        path: "/response",
+        permission: "response.read",
+      },
+      {
+        icon: <Truck className="w-5 h-5" />,
+        name: "Fleet",
+        path: "/fleet",
+        permission: "fleet.read",
+        hideForSupplier: true,
+      },
+      {
         icon: <AlertTriangle className="w-5 h-5" />,
         name: "Alerts",
         path: "/alerts",
@@ -160,6 +183,13 @@ const navGroups: NavGroup[] = [
         name: "Roles",
         path: "/roles",
         permission: "roles.read",
+        hideForSupplier: true,
+      },
+      {
+        icon: <Plug className="w-5 h-5" />,
+        name: "Integrations",
+        path: "/integrations",
+        permission: "integrations.read",
         hideForSupplier: true,
       },
       {
@@ -239,14 +269,14 @@ const AppSidebar: React.FC = () => {
           className={`flex items-center ${isExpanded || isMobileOpen ? "w-full justify-center" : "justify-center"}`}
         >
           <div
-            className={`flex items-center justify-center rounded-lg border border-blue-100 bg-white ${
-              isExpanded || isMobileOpen ? "min-h-[42px] w-[108px] px-2 py-1" : "h-10 w-10 p-1"
+            className={`flex items-center justify-center overflow-hidden bg-white shadow-[0_8px_24px_-8px_rgba(56,189,248,0.55)] ring-1 ring-white/60 transition-all duration-300 ${
+              isExpanded || isMobileOpen ? "min-h-[44px] w-[132px] rounded-2xl px-3 py-1.5" : "h-11 w-11 rounded-xl p-1"
             }`}
           >
             <img
-              src="/images/powertel.png"
+              src={isExpanded || isMobileOpen ? "/images/powertel.png" : "/images/powertel-mark.png"}
               alt="Powertel"
-              className={`${isExpanded || isMobileOpen ? "h-8 w-auto object-contain" : "h-7 w-7 object-contain"}`}
+              className={`${isExpanded || isMobileOpen ? "h-8 w-auto object-contain" : "h-8 w-8 object-contain"}`}
             />
           </div>
         </Link>

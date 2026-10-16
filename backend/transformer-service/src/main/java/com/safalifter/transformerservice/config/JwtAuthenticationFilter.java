@@ -24,6 +24,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final RemoteUserService remoteUserService;
 
+    /** Access profiles cached briefly: previously every API request made a Feign call to auth-service. */
+    private static final long PROFILE_TTL_MS = 60_000;
+    private final java.util.concurrent.ConcurrentHashMap<String, CachedProfile> profileCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private record CachedProfile(UserAccessProfile profile, long expiresAt) {
+    }
+
+    private UserAccessProfile loadProfile(String email) {
+        long now = System.currentTimeMillis();
+        CachedProfile cached = profileCache.get(email);
+        if (cached != null && cached.expiresAt() > now) {
+            return cached.profile();
+        }
+        UserAccessProfile fresh = remoteUserService.getAccessByEmail(email);
+        if (fresh != null) {
+            profileCache.put(email, new CachedProfile(fresh, now + PROFILE_TTL_MS));
+            if (profileCache.size() > 5_000) {
+                profileCache.entrySet().removeIf(e -> e.getValue().expiresAt() <= now);
+            }
+        }
+        return fresh;
+    }
+
     private boolean shouldSkip(HttpServletRequest request) {
         String uri = request.getRequestURI();
         return uri.startsWith("/v2/api-docs") ||
@@ -78,12 +101,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (!StringUtils.isEmpty(userEmail) && org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() == null) {
             UserAccessProfile accessProfile;
             try {
-                accessProfile = remoteUserService.getAccessByEmail(userEmail);
+                accessProfile = loadProfile(userEmail);
             } catch (Exception ex) {
                 accessProfile = UserAccessProfile.builder().role(Role.USER).build();
             }
             Role role = accessProfile != null && accessProfile.getRole() != null ? accessProfile.getRole() : Role.USER;
-            List<SimpleGrantedAuthority> authorities = role != null ? role.getAuthorities() : List.of(new SimpleGrantedAuthority("ROLE_USER"));
+            List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>(
+                    role != null ? role.getAuthorities() : List.of(new SimpleGrantedAuthority("ROLE_USER")));
+            if (accessProfile != null && accessProfile.getPermissions() != null) {
+                // Tick-box permissions from the Roles admin become Spring authorities ("response.dispatch", ...)
+                authorities.add(new SimpleGrantedAuthority(AccessScopeService.PERMISSIONS_LOADED));
+                accessProfile.getPermissions().forEach(p -> authorities.add(new SimpleGrantedAuthority(p)));
+            }
             AuthenticatedUserPrincipal principal = new AuthenticatedUserPrincipal(
                     userEmail,
                     accessProfile != null ? accessProfile.getUserType() : null,

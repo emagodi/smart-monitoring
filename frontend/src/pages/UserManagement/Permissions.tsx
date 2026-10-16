@@ -41,6 +41,8 @@ export default function PermissionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
   const [notice, setNotice] = useState<{ variant: "success" | "error" | "info" | "warning"; title: string; message: string } | null>(null);
   const [activePermission, setActivePermission] = useState<PermissionItem | null>(null);
   const [form, setForm] = useState<PermissionForm>(defaultForm);
@@ -61,6 +63,11 @@ export default function PermissionsPage() {
       );
     });
   }, [permissions, search]);
+
+  useEffect(() => setPage(0), [search, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(filteredPermissions.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pagedPermissions = filteredPermissions.slice(safePage * pageSize, safePage * pageSize + pageSize);
 
   const pushNotice = (variant: "success" | "error" | "info" | "warning", title: string, message: string) => {
     setNotice({ variant, title, message });
@@ -397,7 +404,7 @@ export default function PermissionsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPermissions.map((permission) => {
+                  {pagedPermissions.map((permission) => {
                     const status = permission.status || "ACTIVE";
 
                     return (
@@ -460,6 +467,59 @@ export default function PermissionsPage() {
                   })}
                 </tbody>
               </table>
+              <div className="flex flex-col gap-3 border-t border-slate-200/80 px-4 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:text-gray-400">
+                <div className="flex items-center gap-2">
+                  <span>
+                    Showing {filteredPermissions.length === 0 ? 0 : safePage * pageSize + 1}–
+                    {Math.min(filteredPermissions.length, safePage * pageSize + pageSize)} of {filteredPermissions.length}
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(event) => setPageSize(Number(event.target.value))}
+                    className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                  >
+                    {[10, 15, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n} per page
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={safePage === 0}
+                    onClick={() => setPage(safePage - 1)}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 font-medium text-slate-700 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200"
+                  >
+                    Previous
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i)
+                    .filter((i) => i === 0 || i === totalPages - 1 || Math.abs(i - safePage) <= 1)
+                    .map((i, idx, arr) => (
+                      <span key={i} className="flex items-center">
+                        {idx > 0 && i - arr[idx - 1] > 1 ? <span className="px-1">…</span> : null}
+                        <button
+                          type="button"
+                          onClick={() => setPage(i)}
+                          className={`h-8 min-w-8 rounded-full px-2 font-semibold ${
+                            i === safePage ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      </span>
+                    ))}
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages - 1}
+                    onClick={() => setPage(safePage + 1)}
+                    className="rounded-full bg-blue-600 px-3 py-1.5 font-semibold text-white disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </div>
           )}
       </section>

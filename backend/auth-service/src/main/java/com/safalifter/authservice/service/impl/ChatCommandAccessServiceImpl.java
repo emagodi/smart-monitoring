@@ -64,6 +64,7 @@ public class ChatCommandAccessServiceImpl implements ChatCommandAccessService {
                 .supplierName(user.getSupplier() != null ? user.getSupplier().getName() : null)
                 .roles(resolveRoles(user))
                 .allowedToControl(isAllowedToControl(user))
+                .permissions(resolvePermissions(user))
                 .build();
     }
 
@@ -83,18 +84,34 @@ public class ChatCommandAccessServiceImpl implements ChatCommandAccessService {
                 || normalizedContact.equals(normalizeContact(user.getPhone()));
     }
 
+    /**
+     * WhatsApp / chat control uses the same rule as the web console: the user needs the
+     * control.arm or control.disarm permission (ticked on one of their roles), or is an Administrator.
+     * The exact action is checked again per command by transformer-service.
+     */
     private boolean isAllowedToControl(User user) {
         if (!user.isEnabled()) {
             return false;
         }
-        if (user.getUserType() != null && user.getUserType().getName() != null
-                && "supplier".equalsIgnoreCase(user.getUserType().getName())) {
+        if (user.getRole() == Role.ADMIN || resolveRoles(user).stream().map(this::normalizeRoleName).anyMatch("ADMINISTRATOR"::equals)) {
             return true;
         }
-        if (user.getRole() == Role.ADMIN || user.getRole() == Role.USER) {
-            return true;
+        List<String> permissions = resolvePermissions(user);
+        return permissions.contains("control.arm") || permissions.contains("control.disarm");
+    }
+
+    private List<String> resolvePermissions(User user) {
+        if (user.getRoles() == null) {
+            return List.of();
         }
-        return resolveRoles(user).stream().map(this::normalizeRoleName).anyMatch(TEMP_ALLOWED_ROLES::contains);
+        return user.getRoles().stream()
+                .filter(r -> r.getStatus() == null || "ACTIVE".equalsIgnoreCase(r.getStatus()))
+                .flatMap(r -> r.getPermissions().stream())
+                .filter(p -> p.getStatus() == null || "ACTIVE".equalsIgnoreCase(p.getStatus()))
+                .map(com.safalifter.authservice.entities.PermissionEntity::getName)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     private List<String> resolveRoles(User user) {

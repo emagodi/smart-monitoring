@@ -51,4 +51,10 @@ public class AlertResponse {
     private Integer occurrenceCount;
     private LocalDateTime lastSeenAt;
     private LocalDateTime lastNotifiedAt;
+    private LocalDateTime enRouteAt;
+    private LocalDateTime onSceneAt;
+    private LocalDateTime closedAt;
+    private String outcome;
+    private String outcomeNote;
+    private String closedByName;
 }

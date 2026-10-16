@@ -1075,7 +1075,7 @@ export default function DashboardHome() {
           Number.isFinite(item.lat) &&
           Number.isFinite(item.lng)
       )
-      .slice(0, 60);
+      .slice(0, 5000);
   }, [transformerOperations]);
 
   const getTransformerMarkerColors = useCallback(
@@ -1085,9 +1085,11 @@ export default function DashboardHome() {
       const hasAlert = Boolean(point?.latestAlertLabel && point.latestAlertLabel !== "—" && !/no alerts?|none/i.test(String(point.latestAlertLabel)));
       let fill = "#64748b";
       let stroke = "#475569";
+      // Online = green, offline = red (alert history is shown in the pin tooltip, not the colour).
+      void hasAlert;
       if (online === "online") {
-        fill = hasAlert ? "#f59e0b" : "#22c55e";
-        stroke = hasAlert ? "#b45309" : "#15803d";
+        fill = "#22c55e";
+        stroke = "#15803d";
       } else if (online === "offline") {
         fill = "#ef4444";
         stroke = "#b91c1c";

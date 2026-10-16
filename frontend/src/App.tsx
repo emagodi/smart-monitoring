@@ -31,6 +31,12 @@ import NotificationCenter from "./pages/NotificationCenter";
 import GatewaysIndex from "./pages/Gateways";
 import GatewaysMapIndex from "./pages/Gateways/Map";
 import SimsIndex from "./pages/Sims";
+import ResponseDesk from "./pages/Response";
+import FleetPage from "./pages/Response/Fleet";
+import CrewRespond from "./pages/Response/CrewRespond";
+import TransformerRegistry from "./pages/Registry";
+import InsightsPage from "./pages/Insights";
+import IntegrationsPage from "./pages/Integrations";
 
 const AppRoutes = () => {
   const { isAuthenticated, user } = useAuth();
@@ -91,6 +97,14 @@ const AppRoutes = () => {
         />
         <Route
           path="transformers"
+          element={
+            <ProtectedRoute permission="transformers.read">
+              <TransformerRegistry />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="transformers/classic"
           element={
             <ProtectedRoute permission="transformers.read">
               <TransformersIndex />
@@ -162,6 +176,38 @@ const AppRoutes = () => {
           }
         />
         <Route
+          path="insights"
+          element={
+            <ProtectedRoute permission="dashboard.read">
+              <InsightsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="integrations"
+          element={
+            <ProtectedRoute permission="integrations.read">
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <IntegrationsPage />}
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="response"
+          element={
+            <ProtectedRoute permission="response.read">
+              <ResponseDesk />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="fleet"
+          element={
+            <ProtectedRoute permission="fleet.read">
+              {isSupplierUser ? <Navigate to="/dashboard" replace /> : <FleetPage />}
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="alerts"
           element={
             <ProtectedRoute permission="alerts.read">
@@ -227,9 +273,13 @@ const AppRoutes = () => {
           }
         />
       </Route>
+      {/* Crew response link (also works when someone is logged in on the same phone) */}
+      <Route path="/respond/:token" element={<CrewRespond />} />
     </Routes>
   ) : (
     <Routes>
+      {/* Crew response link: public, the token in the URL is the credential */}
+      <Route path="/respond/:token" element={<CrewRespond />} />
       <Route path="/signin" element={<SignIn />} />
       <Route path="/signup" element={<SignUp />} />
       <Route path="*" element={<Navigate to="/signin" />} />

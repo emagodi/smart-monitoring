@@ -64,6 +64,23 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
 
+                .route("transformer-response", r -> r.path("/api/v1/response/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                // Crew response links: no JWT (crews are not system users); each URL carries
+                // a random per-dispatch token that transformer-service validates.
+                .route("transformer-public-response", r -> r.path("/api/v1/public/response/**")
+                        .uri("lb://transformer-service"))
+
+                .route("transformer-supplier-integrations", r -> r.path("/api/v1/supplier-integrations/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                // Partner HTTP push: no JWT; each integration has its own secret key.
+                .route("transformer-public-ingest", r -> r.path("/api/v1/public/ingest/**")
+                        .uri("lb://transformer-service"))
+
                 .route("transformer-gateways", r -> r.path("/api/v1/gateways/**")
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
