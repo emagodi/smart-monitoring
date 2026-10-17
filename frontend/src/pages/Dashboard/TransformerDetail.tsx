@@ -172,7 +172,7 @@ export default function TransformerDetail() {
               <ArrowLeft className="h-4 w-4" /> Back
             </button>
             {d?.lat != null && d?.lng != null ? (
-              <Link to={`/dashboard?t=${d.id}`} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/20">
+              <Link to={`/sites?t=${d.id}`} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/20">
                 <MapPinned className="h-4 w-4" /> Show on map
               </Link>
             ) : null}
