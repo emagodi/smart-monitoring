@@ -15,8 +15,7 @@ import java.math.BigDecimal;
 public class TransformerRequest {
     @NotBlank(message = "name is required")
     private String name;
-    @NotNull(message = "capacity is required")
-    private Integer capacity;
+    private String transformerNumber;
     @NotNull(message = "isActive is required")
     private Boolean isActive;
     private Long depotId;

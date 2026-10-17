@@ -19,4 +19,6 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     Page<Alert> findAllBySupplierCodeAndDepotIdOrderByCreatedAtDesc(String supplierCode, Long depotId, Pageable pageable);
     java.util.Optional<Alert> findByIdAndSupplierCode(Long id, String supplierCode);
     List<Alert> findBySensorIdAndSupplierCode(Long sensorId, String supplierCode);
+    List<Alert> findBySensorIdOrderByIdDesc(Long sensorId, Pageable pageable);
+    List<Alert> findBySensorIdAndSupplierCodeOrderByIdDesc(Long sensorId, String supplierCode, Pageable pageable);
 }

@@ -61,6 +61,12 @@ public class ChatCommandServiceImpl implements ChatCommandService {
         }
 
         String normalizedAction = request.getAction().trim().toUpperCase(Locale.ROOT);
+        // Same rule as the web console: ARM needs control.arm, DISARM needs control.disarm.
+        if (!operatorHas(operator, "ARM".equals(normalizedAction) ? "control.arm" : "control.disarm")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You are not allowed to " + normalizedAction.toLowerCase(Locale.ROOT) + " transformers. Ask an administrator for the "
+                            + ("ARM".equals(normalizedAction) ? "control.arm" : "control.disarm") + " permission.");
+        }
         try {
             OculusControlActionResponse response = switch (normalizedAction) {
                 case "ARM" -> oculusControlService.armTransformer(transformer.getId());
@@ -90,6 +96,17 @@ public class ChatCommandServiceImpl implements ChatCommandService {
             sendCommandNotification(transformer, normalizedAction, false, operator, ex.getMessage());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
         }
+    }
+
+    private boolean operatorHas(ChatCommandUserProfile operator, String permission) {
+        if (operator.getRoles() != null && operator.getRoles().stream()
+                .anyMatch(r -> r != null && (r.equalsIgnoreCase("Administrator") || r.equalsIgnoreCase("ADMIN")))) {
+            return true;
+        }
+        if (operator.getPermissions() == null) {
+            return operator.isAllowedToControl(); // older auth-service: keep previous behaviour
+        }
+        return operator.getPermissions().stream().anyMatch(p -> permission.equalsIgnoreCase(p));
     }
 
     @Override

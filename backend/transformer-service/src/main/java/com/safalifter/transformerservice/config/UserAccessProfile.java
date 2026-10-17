@@ -17,4 +17,6 @@ public class UserAccessProfile {
     private String supplierCode;
     private String supplierName;
     private Long depotId;
+    /** Tick-box permission names from the user's roles (e.g. "response.dispatch"); null on older auth-service builds. */
+    private java.util.Set<String> permissions;
 }

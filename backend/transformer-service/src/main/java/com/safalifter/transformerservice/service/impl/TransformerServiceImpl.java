@@ -13,12 +13,10 @@ import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.payload.request.TransformerRequest;
-import com.safalifter.transformerservice.payload.response.SensorResponse;
 import com.safalifter.transformerservice.payload.response.ControllerResponse;
 import com.safalifter.transformerservice.payload.response.ExternalTransformerLookupResponse;
 import com.safalifter.transformerservice.payload.response.TransformerResponse;
 import com.safalifter.transformerservice.config.AccessScopeService;
-import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.TransformerService;
@@ -40,7 +38,6 @@ import java.util.stream.Collectors;
 public class TransformerServiceImpl implements TransformerService {
 
     private final TransformerRepository transformerRepository;
-    private final SensorRepository sensorRepository;
     private final ControllerRepository controllerRepository;
     private final AccessScopeService accessScopeService;
     private final RestTemplate restTemplate;
@@ -64,7 +61,7 @@ public class TransformerServiceImpl implements TransformerService {
         }
         Transformer transformer = Transformer.builder()
                 .name(request.getName())
-                .capacity(request.getCapacity())
+                .transformerNumber(request.getTransformerNumber())
                 .isActive(request.getIsActive())
                 .depotId(request.getDepotId())
                 .supplierCode(supplierCode)
@@ -107,6 +104,9 @@ public class TransformerServiceImpl implements TransformerService {
             return ExternalTransformerLookupResponse.builder()
                     .eui(normalizedEui)
                     .transformerName(trimToNull(transformerNode.path("transformerName").asText(null)))
+                    .transformerNumber(firstNonBlank(
+                            trimToNull(transformerNode.path("transformerNumber").asText(null)),
+                            trailingNumber(transformerNode.path("transformerName").asText(null))))
                     .rawTransformerType(trimToNull(transformerNode.path("transformerType").asText(null)))
                     .transformerType(mapRemoteTransformerType(transformerNode.path("transformerType").asText(null)))
                     .lat(readDecimal(locationNode, "latitude"))
@@ -127,7 +127,9 @@ public class TransformerServiceImpl implements TransformerService {
 
     @Override
     public List<TransformerResponse> getAssignmentOptions() {
-        return transformerRepository.findAll().stream().map(this::toResponse).toList();
+        Long depotId = accessScopeService.getCurrentDepotId();
+        List<Transformer> all = depotId != null ? transformerRepository.findByDepotId(depotId) : transformerRepository.findAll();
+        return all.stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -161,7 +163,7 @@ public class TransformerServiceImpl implements TransformerService {
             });
         }
         transformer.setName(request.getName());
-        transformer.setCapacity(request.getCapacity());
+        transformer.setTransformerNumber(request.getTransformerNumber());
         transformer.setActive(request.getIsActive());
         transformer.setDepotId(request.getDepotId());
         if (supplierCode != null) {
@@ -184,8 +186,9 @@ public class TransformerServiceImpl implements TransformerService {
 
     private List<Transformer> listScopedTransformers() {
         String supplierCode = accessScopeService.getCurrentSupplierCode();
+        Long depotId = accessScopeService.getCurrentDepotId();
         if (supplierCode == null) {
-            return transformerRepository.findAll();
+            return depotId != null ? transformerRepository.findByDepotId(depotId) : transformerRepository.findAll();
         }
 
         LinkedHashMap<Long, Transformer> visible = new LinkedHashMap<>();
@@ -196,10 +199,6 @@ public class TransformerServiceImpl implements TransformerService {
                 .map(c -> c.getTransformerId())
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        linkedTransformerIds.addAll(sensorRepository.findAllBySupplierCode(supplierCode).stream()
-                .map(s -> s.getTransformerId())
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet()));
 
         transformerRepository.findAllById(linkedTransformerIds)
                 .forEach(transformer -> visible.put(transformer.getId(), transformer));
@@ -212,6 +211,7 @@ public class TransformerServiceImpl implements TransformerService {
         return (supplierCode != null
                 ? transformerRepository.findById(id).filter(transformer -> isVisibleToSupplier(transformer, supplierCode))
                 : transformerRepository.findById(id))
+                .filter(t -> accessScopeService.getCurrentDepotId() == null || accessScopeService.getCurrentDepotId().equals(t.getDepotId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + id + " not found"));
     }
 
@@ -223,7 +223,7 @@ public class TransformerServiceImpl implements TransformerService {
             return true;
         }
         return controllerRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode).stream().findAny().isPresent()
-                || sensorRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode).stream().findAny().isPresent();
+;
     }
 
     private void forbidSupplierCrud() {
@@ -344,22 +344,6 @@ public class TransformerServiceImpl implements TransformerService {
 
     private TransformerResponse toResponse(Transformer transformer) {
         String supplierCode = accessScopeService.getCurrentSupplierCode();
-        List<SensorResponse> sensors = (supplierCode != null
-                ? sensorRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode)
-                : sensorRepository.findByTransformerId(transformer.getId())).stream()
-                .map(s -> SensorResponse.builder()
-                        .id(s.getId())
-                        .deviceId(s.getDeviceId())
-                        .devEui(s.getDevEui())
-                        .name(s.getName())
-                        .type(s.getType())
-                        .supplierCode(s.getSupplierCode())
-                        .supplierName(s.getSupplierName())
-                        .transformerId(transformer.getId())
-                        .createdAt(s.getCreatedAt())
-                        .updatedAt(s.getUpdatedAt())
-                        .build())
-                .toList();
         List<ControllerResponse> controllers = (supplierCode != null
                 ? controllerRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode)
                 : controllerRepository.findByTransformerId(transformer.getId())).stream()
@@ -379,7 +363,7 @@ public class TransformerServiceImpl implements TransformerService {
         return TransformerResponse.builder()
                 .id(transformer.getId())
                 .name(transformer.getName())
-                .capacity(transformer.getCapacity())
+                .transformerNumber(transformer.getTransformerNumber())
                 .isActive(transformer.isActive())
                 .depotId(transformer.getDepotId())
                 .supplierCode(transformer.getSupplierCode())
@@ -388,8 +372,18 @@ public class TransformerServiceImpl implements TransformerService {
                 .locationLabel(transformer.getLat() != null && transformer.getLng() != null ? transformer.getLat() + ", " + transformer.getLng() : null)
                 .lat(transformer.getLat())
                 .lng(transformer.getLng())
-                .sensors(sensors)
                 .controllers(controllers)
                 .build();
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
+    /** "Warren Park 1 55 crescent - 2476" -> "2476" (partner names end with the transformer number). */
+    static String trailingNumber(String name) {
+        if (name == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[-\u2013]\\s*([A-Za-z]{0,3}\\d[\\w/]*)\\s*$").matcher(name.trim());
+        return m.find() ? m.group(1) : null;
     }
 }

@@ -11,7 +11,6 @@ import com.safalifter.transformerservice.entities.Transformer;
 import com.safalifter.transformerservice.payload.request.ControllerRequest;
 import com.safalifter.transformerservice.payload.response.ControllerResponse;
 import com.safalifter.transformerservice.repository.ControllerRepository;
-import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
 import com.safalifter.transformerservice.service.ControllerService;
 
@@ -23,7 +22,6 @@ import java.util.List;
 public class ControllerServiceImpl implements ControllerService {
 
     private final ControllerRepository controllerRepository;
-    private final SensorRepository sensorRepository;
     private final TransformerRepository transformerRepository;
     private final AccessScopeService accessScopeService;
 
@@ -125,7 +123,7 @@ public class ControllerServiceImpl implements ControllerService {
             return true;
         }
         return controllerRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode).stream().findAny().isPresent()
-                || sensorRepository.findByTransformerIdAndSupplierCode(transformer.getId(), supplierCode).stream().findAny().isPresent();
+;
     }
 
     private Transformer findAssignmentTransformerOrThrow(Long transformerId) {

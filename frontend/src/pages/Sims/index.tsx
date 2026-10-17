@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import {
   Eye,
   EyeOff,
@@ -9,12 +10,10 @@ import {
   Loader2,
   Pencil,
   Plus,
-  RefreshCcw,
   Router,
   Search,
   Shield,
   ShieldAlert,
-  ShieldCheck,
   CardSim,
   Smartphone,
   Trash2,
@@ -160,59 +159,6 @@ const STATUS_FILTERS: Array<{ value: SimStatus | "ALL"; label: string }> = [
   { value: "SUSPENDED", label: "Suspended" },
 ];
 
-const StatCard = ({
-  title,
-  value,
-  subtitle,
-  icon,
-  highlight,
-}: {
-  title: string;
-  value: number | string;
-  subtitle: string;
-  icon: ReactNode;
-  highlight?: "blue" | "red" | "emerald" | "amber" | "neutral" | "slate";
-}) => {
-  const hl = highlight || "neutral";
-  const valueTone =
-    hl === "blue"
-      ? "text-blue-700 dark:text-blue-300"
-      : hl === "red"
-        ? "text-red-600 dark:text-red-300"
-        : hl === "emerald"
-          ? "text-emerald-600 dark:text-emerald-300"
-          : hl === "amber"
-            ? "text-amber-600 dark:text-amber-300"
-            : hl === "slate"
-              ? "text-slate-600 dark:text-slate-300"
-              : "text-slate-950 dark:text-slate-50";
-  const iconTone =
-    hl === "red"
-      ? "border border-red-100 bg-red-50/90 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300"
-      : hl === "emerald"
-        ? "border border-emerald-100 bg-emerald-50/80 text-emerald-600 dark:border-emerald-500/10 dark:bg-emerald-500/10 dark:text-emerald-300"
-        : hl === "amber"
-          ? "border border-amber-100 bg-amber-50/80 text-amber-600 dark:border-amber-500/10 dark:bg-amber-500/10 dark:text-amber-300"
-          : hl === "slate"
-            ? "border border-slate-200 bg-slate-100/80 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-            : "border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300";
-  return (
-    <div className="enterprise-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-            {title}
-          </p>
-          <p className={`mt-2 text-[28px] font-semibold tracking-tight ${valueTone}`}>
-            {typeof value === "number" ? value.toLocaleString() : value}
-          </p>
-          <p className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
-        </div>
-        <div className={`shrink-0 rounded-xl p-2.5 ${iconTone}`}>{icon}</div>
-      </div>
-    </div>
-  );
-};
 
 function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -602,102 +548,33 @@ export default function SimsIndex() {
 
   return (
     <div className="space-y-4">
-      <section className="enterprise-card p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-              SIM Inventory
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-              Subscriber identity module cards
-            </h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              PIN/PUK/ICCID masked by default. Click the per-field eye icon to reveal.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="enterprise-chip inline-flex items-center gap-2 px-3 py-2 text-[11px] text-slate-600 dark:text-slate-300">
-              {canViewSensitive ? (
-                <>
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  Sensitive reveal enabled
-                </>
-              ) : (
-                <>
-                  <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
-                  Sensitive reveal disabled
-                </>
-              )}
-            </div>
+      <PageHero
+        eyebrow="Assets · SIM cards"
+        title="SIM cards"
+        subtitle={`Gateway SIM inventory. PIN, PUK and ICCID are masked; ${canViewSensitive ? "use the eye icon on a field to reveal it." : "your role cannot reveal them."}`}
+        actions={
+          <>
+            <HeroButton onClick={() => void fetchSims()}>Refresh</HeroButton>
             {canCreateSim ? (
-              <button
-                type="button"
-                onClick={openCreateSimModal}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-              >
-                <Plus className="h-3.5 w-3.5" />
+              <HeroButton icon={<Plus className="h-4 w-4" />} onClick={openCreateSimModal}>
                 New SIM
-              </button>
+              </HeroButton>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void fetchSims()}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-            >
-              <RefreshCcw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+      >
+        <HeroStats cols={6}>
+          <HeroStat icon={<CardSim className="h-3.5 w-3.5" />} label="SIM cards" value={totals.total.toLocaleString()} sub="in inventory" />
+          <HeroStat icon={<Link2 className="h-3.5 w-3.5 text-emerald-300" />} label="Assigned" value={items.filter((i) => i.assignedGatewayId).length.toLocaleString()} sub="in a gateway" tone="good" />
+          <HeroStat icon={<Link2Off className="h-3.5 w-3.5" />} label="Unassigned" value={items.filter((i) => !i.assignedGatewayId).length.toLocaleString()} sub="available" />
+          <HeroStat icon={<Shield className="h-3.5 w-3.5 text-emerald-300" />} label="Active" value={items.filter((i) => i.status === "ACTIVE" || i.status === "ASSIGNED").length.toLocaleString()} sub="operator active" />
+          <HeroStat icon={<ShieldAlert className="h-3.5 w-3.5 text-amber-300" />} label="Suspended" value={items.filter((i) => i.status === "SUSPENDED").length.toLocaleString()} sub="by operator or policy" tone={items.some((i) => i.status === "SUSPENDED") ? "warn" : undefined} />
+          <HeroStat icon={<Smartphone className="h-3.5 w-3.5" />} label="Inactive" value={items.filter((i) => i.status === "INACTIVE" || i.status === "UNASSIGNED").length.toLocaleString()} sub="pending or deactivated" />
+        </HeroStats>
+      </PageHero>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard
-          title="Total SIMs"
-          value={totals.total}
-          subtitle="Cards registered in SIM inventory."
-          icon={<CardSim className="h-5 w-5" />}
-          highlight="blue"
-        />
-        <StatCard
-          title="Assigned"
-          value={items.filter((i) => i.assignedGatewayId).length}
-          subtitle="Currently assigned to a gateway slot."
-          icon={<Link2 className="h-5 w-5" />}
-          highlight="emerald"
-        />
-        <StatCard
-          title="Unassigned"
-          value={items.filter((i) => !i.assignedGatewayId).length}
-          subtitle="Available for assignment to gateways."
-          icon={<Link2Off className="h-5 w-5" />}
-          highlight="slate"
-        />
-        <StatCard
-          title="Active"
-          value={items.filter((i) => i.status === "ACTIVE" || i.status === "ASSIGNED").length}
-          subtitle="Operator state reported as active."
-          icon={<Shield className="h-5 w-5" />}
-          highlight="emerald"
-        />
-        <StatCard
-          title="Suspended"
-          value={items.filter((i) => i.status === "SUSPENDED").length}
-          subtitle="Cards suspended by operator or policy."
-          icon={<ShieldAlert className="h-5 w-5" />}
-          highlight="amber"
-        />
-        <StatCard
-          title="Inactive"
-          value={items.filter((i) => i.status === "INACTIVE" || i.status === "UNASSIGNED").length}
-          subtitle="Cards pending activation or deactivated."
-          icon={<Smartphone className="h-5 w-5" />}
-          highlight="red"
-        />
-      </section>
-
-      <section className="enterprise-card overflow-hidden">
-        <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 p-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
+      <section className="ui-panel overflow-hidden">
+        <div className="border-b border-slate-200/80 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div className="space-y-3">
               <div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import axios from "axios";
+import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import {
   Activity,
   Eye,
@@ -8,7 +9,6 @@ import {
   Lock,
   MapPinned,
   Radio,
-  RefreshCw,
   Search,
   Shield,
   ShieldAlert,
@@ -520,97 +520,30 @@ export default function OculusControlIndex() {
     selectedEffectiveState === "DISARMED";
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Oqulus Control</p>
-            <h1 className="mt-1 text-xl font-semibold text-slate-950 md:text-2xl">Enterprise arming control workspace</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Review Oqulus-monitored transformers, compare operator state with confirmed telemetry, and send Loriot arm or disarm commands without losing command context.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Monitored</span>
-              <span className="mt-1 block font-semibold text-slate-900">{filteredRows.length.toLocaleString()}</span>
-            </div>
-            <Button onClick={() => void fetchControlRows()} icon={<RefreshCw className="h-4 w-4" />}>
-              Refresh Control List
-            </Button>
-          </div>
-        </div>
-      </section>
+    <div className="space-y-4">
+      <PageHero
+        eyebrow="Operations · Oqulus control"
+        title="Arm and disarm sites"
+        subtitle="Oqulus-monitored transformers: the state we asked for, the state the device confirmed, and arm / disarm commands sent through LORIOT."
+        actions={<HeroButton onClick={() => void fetchControlRows()}>Refresh</HeroButton>}
+      >
+        <HeroStats cols={6}>
+          <HeroStat icon={<Shield className="h-3.5 w-3.5" />} label="Monitored" value={stats.total.toLocaleString()} sub={`${filteredRows.length.toLocaleString()} in this view`} />
+          <HeroStat icon={<ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />} label="Armed" value={stats.armed.toLocaleString()} sub="sites protected" tone="good" />
+          <HeroStat icon={<Shield className="h-3.5 w-3.5 text-amber-300" />} label="Disarmed" value={stats.disarmed.toLocaleString()} sub="not protected" tone={stats.disarmed ? "warn" : undefined} />
+          <HeroStat icon={<Radio className="h-3.5 w-3.5" />} label="Awaiting confirmation" value={stats.pending.toLocaleString()} sub={`${stats.overdue} keepalive overdue`} />
+          <HeroStat icon={<Activity className="h-3.5 w-3.5 text-emerald-300" />} label="Controllers online" value={stats.online.toLocaleString()} sub="can take commands" tone="good" />
+          <HeroStat icon={<Activity className="h-3.5 w-3.5 text-red-300" />} label="Unavailable" value={stats.unavailable.toLocaleString()} sub="cannot be controlled now" tone={stats.unavailable ? "bad" : undefined} />
+        </HeroStats>
+      </PageHero>
 
       {error ? <Alert variant="error" title="Oqulus Control" message={error} /> : null}
       {success ? <Alert variant="success" title="Oqulus Control" message={success} /> : null}
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Monitored" value={stats.total} helper="Oqulus transformers in scope" tone="slate" icon={<Shield className="h-5 w-5" />} />
-        <StatCard title="Armed now" value={stats.armed} helper={`${stats.disarmed} disarmed posture`} tone="emerald" icon={<ShieldCheck className="h-5 w-5" />} />
-        <StatCard
-          title="Pending confirmation"
-          value={stats.pending}
-          helper={`${stats.overdue} keepalive overdue`}
-          tone="blue"
-          icon={<Radio className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Controllers online"
-          value={stats.online}
-          helper={`${stats.unavailable} unavailable for control`}
-          tone="amber"
-          icon={<Activity className="h-5 w-5" />}
-        />
-      </section>
 
       <section className="flex flex-col gap-4">
         {/* Top Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Summary Rail */}
-          <div className="enterprise-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Summary Rail
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Control posture snapshot
-                </h3>
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                <Shield className="h-4 w-4" />
-              </div>
-            </div>
-            
-            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Armed posture</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{stats.armed}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Disarmed posture</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{stats.disarmed}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Unknown posture</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{stats.unknown}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Pending confirmation</p>
-                <p className="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">{stats.pending}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Unavailable controls</p>
-                <p className="mt-1 text-lg font-semibold text-red-600 dark:text-red-400">{stats.unavailable}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Online controllers</p>
-                <p className="mt-1 text-lg font-semibold text-emerald-600 dark:text-emerald-400">{stats.online}</p>
-              </div>
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 gap-4">
           {/* Selected Asset */}
           <div className="enterprise-card p-5">
             <div className="flex items-start justify-between">
@@ -704,7 +637,7 @@ export default function OculusControlIndex() {
         </div>
 
         {/* Main Table Card */}
-        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden rounded-[30px] border border-slate-200/80 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.10)] ring-1 ring-blue-100/40">
+        <div className="ui-panel flex min-h-[600px] flex-col overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400" />
           <div className="flex flex-col gap-4 border-b border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.08),_transparent_42%),linear-gradient(180deg,rgba(248,250,252,0.98),rgba(255,255,255,0.94))] px-5 py-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">

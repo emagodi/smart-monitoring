@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import PageBreadcrumb from "../../components/common/PageBreadCrumb";
+import { HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 
 interface StatsCardProps {
   label: string;
@@ -7,12 +7,6 @@ interface StatsCardProps {
   tone?: "blue" | "green" | "purple" | "amber";
 }
 
-const toneClasses: Record<NonNullable<StatsCardProps["tone"]>, string> = {
-  blue: "from-blue-500/10 to-blue-50 text-blue-700",
-  green: "from-emerald-500/10 to-emerald-50 text-emerald-700",
-  purple: "from-violet-500/10 to-violet-50 text-violet-700",
-  amber: "from-amber-500/10 to-amber-50 text-amber-700",
-};
 
 export const AdminShell = ({
   title,
@@ -28,41 +22,16 @@ export const AdminShell = ({
   children: ReactNode;
 }) => {
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-5">
-      <PageBreadcrumb pageTitle={title} />
-
-      <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 lg:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
-            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600 dark:bg-white/5 dark:text-gray-400">
-              Enterprise Workspace
-            </span>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white lg:text-[28px]">
-                {title}
-              </h1>
-              <p className="max-w-3xl text-sm leading-6 text-gray-500 dark:text-gray-400">{description}</p>
-            </div>
-          </div>
-          {actions ? <div className="flex flex-wrap gap-2.5 lg:justify-end">{actions}</div> : null}
-        </div>
-
+    <div className="space-y-4">
+      <PageHero eyebrow={`Administration · ${title}`} title={title} subtitle={description} actions={actions}>
         {stats && stats.length > 0 ? (
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <HeroStats cols={stats.length >= 6 ? 6 : stats.length <= 3 ? 3 : (stats.length as 4 | 5)}>
             {stats.map((stat) => (
-              <div
-                key={stat.label}
-                className={`rounded-2xl border border-slate-200/80 bg-gradient-to-br px-4 py-4 shadow-sm dark:border-gray-800 ${toneClasses[stat.tone ?? "blue"]}`}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
-                  {stat.label}
-                </p>
-                <p className="mt-2.5 text-2xl font-semibold tracking-tight">{stat.value}</p>
-              </div>
+              <HeroStat key={stat.label} label={stat.label} value={typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value} tone={stat.tone === "green" ? "good" : stat.tone === "amber" ? "warn" : undefined} />
             ))}
-          </div>
+          </HeroStats>
         ) : null}
-      </div>
+      </PageHero>
 
       {children}
     </div>

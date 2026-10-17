@@ -41,6 +41,8 @@ export default function PermissionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
   const [notice, setNotice] = useState<{ variant: "success" | "error" | "info" | "warning"; title: string; message: string } | null>(null);
   const [activePermission, setActivePermission] = useState<PermissionItem | null>(null);
   const [form, setForm] = useState<PermissionForm>(defaultForm);
@@ -62,6 +64,11 @@ export default function PermissionsPage() {
     });
   }, [permissions, search]);
 
+  useEffect(() => setPage(0), [search, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(filteredPermissions.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pagedPermissions = filteredPermissions.slice(safePage * pageSize, safePage * pageSize + pageSize);
+
   const pushNotice = (variant: "success" | "error" | "info" | "warning", title: string, message: string) => {
     setNotice({ variant, title, message });
     window.setTimeout(() => setNotice(null), 4500);
@@ -69,34 +76,6 @@ export default function PermissionsPage() {
 
   const activePermissionsCount = useMemo(
     () => permissions.filter((permission) => (permission.status || "ACTIVE") === "ACTIVE").length,
-    [permissions]
-  );
-
-  const topModules = useMemo(
-    () =>
-      Array.from(
-        permissions.reduce((accumulator, permission) => {
-          const key = permission.module || "general";
-          accumulator.set(key, (accumulator.get(key) || 0) + 1);
-          return accumulator;
-        }, new Map<string, number>())
-      )
-        .sort(([, left], [, right]) => right - left)
-        .slice(0, 4),
-    [permissions]
-  );
-
-  const actionMix = useMemo(
-    () =>
-      Array.from(
-        permissions.reduce((accumulator, permission) => {
-          const key = permission.action || "unknown";
-          accumulator.set(key, (accumulator.get(key) || 0) + 1);
-          return accumulator;
-        }, new Map<string, number>())
-      )
-        .sort(([, left], [, right]) => right - left)
-        .slice(0, 4),
     [permissions]
   );
 
@@ -203,117 +182,7 @@ export default function PermissionsPage() {
     >
       {notice ? <Alert variant={notice.variant} title={notice.title} message={notice.message} /> : null}
 
-      <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        <div className="enterprise-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Summary
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Catalog health
-              </h3>
-            </div>
-            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-              <KeySquare className="h-5 w-5" />
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2.5">
-            {[
-              ["Active permissions", activePermissionsCount],
-              ["Inactive permissions", permissions.length - activePermissionsCount],
-              ["Modules", new Set(permissions.map((permission) => permission.module)).size],
-              ["Distinct actions", new Set(permissions.map((permission) => permission.action)).size],
-            ].map(([label, value]) => (
-              <div
-                key={String(label)}
-                className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5"
-              >
-                <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="enterprise-card p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              Module Concentration
-            </p>
-            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-              Highest-volume modules
-            </h3>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {topModules.length === 0 ? (
-              <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                No modules are available yet.
-              </div>
-            ) : (
-              topModules.slice(0, 3).map(([module, count]) => (
-                <div
-                  key={module}
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">{module}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Permissions mapped in this module</p>
-                  </div>
-                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                    {count}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="enterprise-card p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              Action Mix
-            </p>
-            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-              Common capability verbs
-            </h3>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {actionMix.length === 0 ? (
-              <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                Common actions will appear here once the catalog loads.
-              </div>
-            ) : (
-              actionMix.slice(0, 3).map(([action, count]) => (
-                <div key={action}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{action}</span>
-                    <span className="text-slate-500 dark:text-slate-400">{count} permissions</span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                      style={{
-                        width: `${Math.max(
-                          permissions.length ? (count / permissions.length) * 100 : 0,
-                          count > 0 ? 8 : 0
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="enterprise-card overflow-hidden">
+      <section className="ui-panel overflow-hidden">
         <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
@@ -397,7 +266,7 @@ export default function PermissionsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPermissions.map((permission) => {
+                  {pagedPermissions.map((permission) => {
                     const status = permission.status || "ACTIVE";
 
                     return (
@@ -460,6 +329,59 @@ export default function PermissionsPage() {
                   })}
                 </tbody>
               </table>
+              <div className="flex flex-col gap-3 border-t border-slate-200/80 px-4 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:text-gray-400">
+                <div className="flex items-center gap-2">
+                  <span>
+                    Showing {filteredPermissions.length === 0 ? 0 : safePage * pageSize + 1}–
+                    {Math.min(filteredPermissions.length, safePage * pageSize + pageSize)} of {filteredPermissions.length}
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(event) => setPageSize(Number(event.target.value))}
+                    className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                  >
+                    {[10, 15, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n} per page
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={safePage === 0}
+                    onClick={() => setPage(safePage - 1)}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 font-medium text-slate-700 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200"
+                  >
+                    Previous
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i)
+                    .filter((i) => i === 0 || i === totalPages - 1 || Math.abs(i - safePage) <= 1)
+                    .map((i, idx, arr) => (
+                      <span key={i} className="flex items-center">
+                        {idx > 0 && i - arr[idx - 1] > 1 ? <span className="px-1">…</span> : null}
+                        <button
+                          type="button"
+                          onClick={() => setPage(i)}
+                          className={`h-8 min-w-8 rounded-full px-2 font-semibold ${
+                            i === safePage ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      </span>
+                    ))}
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages - 1}
+                    onClick={() => setPage(safePage + 1)}
+                    className="rounded-full bg-blue-600 px-3 py-1.5 font-semibold text-white disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </div>
           )}
       </section>

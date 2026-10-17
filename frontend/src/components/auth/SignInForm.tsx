@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, LockKeyhole, Mail, Moon, ShieldCheck, Sun } from "lucide-react";
+import { ArrowRight, FlaskConical, LockKeyhole, Mail, Moon, ShieldCheck, Sun } from "lucide-react";
 import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
@@ -8,6 +8,28 @@ import Checkbox from "../form/input/Checkbox";
 import Button from "../ui/button/Button";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
+
+/**
+ * Test personas seeded by auth-service (DataLoader.seedTestUsers), all with password Password@123.
+ * The picker shows on localhost, or anywhere when VITE_SHOW_TEST_ACCOUNTS=true at build time.
+ * Build production with VITE_SHOW_TEST_ACCOUNTS=false and set app.seed.test-users=false.
+ */
+const TEST_PASSWORD = "Password@123";
+const TEST_ACCOUNTS = [
+  { email: "emagodi1@powertel.co.zw", name: "Edwin Magodi", role: "Super administrator: everything" },
+  { email: "agent@powertel.co.zw", name: "Tariro Agent", role: "Contact centre agent" },
+  { email: "dispatcher@powertel.co.zw", name: "Tendai Dispatcher", role: "Dispatcher" },
+  { email: "supervisor@powertel.co.zw", name: "Rudo Supervisor", role: "Loss control supervisor" },
+  { email: "depot.user@powertel.co.zw", name: "Farai Depot User", role: "Depot-scoped dispatcher" },
+  { email: "magodi@oculus.co.zw", name: "Oqulus partner", role: "Supplier / partner portal" },
+];
+const showTestAccounts = (() => {
+  const flag = import.meta.env.VITE_SHOW_TEST_ACCOUNTS;
+  if (flag === "false") return false;
+  if (flag === "true") return true;
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  return host === "localhost" || host.startsWith("127.") || host === "0.0.0.0";
+})();
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -85,6 +107,36 @@ export default function SignInForm() {
         {error ? (
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
             {error}
+          </div>
+        ) : null}
+
+        {showTestAccounts ? (
+          <div className="mt-4 rounded-2xl border border-dashed border-violet-200 bg-violet-50/60 px-3.5 py-3 dark:border-violet-500/30 dark:bg-violet-500/10">
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
+              <FlaskConical className="h-3.5 w-3.5" /> Test account
+            </label>
+            <select
+              defaultValue=""
+              onChange={(event) => {
+                const account = TEST_ACCOUNTS.find((a) => a.email === event.target.value);
+                if (account) {
+                  setUsername(account.email);
+                  setPassword(TEST_PASSWORD);
+                  setError("");
+                }
+              }}
+              className="mt-1.5 w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-violet-400 dark:border-violet-500/30 dark:bg-slate-900 dark:text-slate-100"
+            >
+              <option value="" disabled>
+                Pick a user to sign in as…
+              </option>
+              {TEST_ACCOUNTS.map((a) => (
+                <option key={a.email} value={a.email}>
+                  {a.name}: {a.role}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px] text-violet-700/80 dark:text-violet-300/80">All test accounts use {TEST_PASSWORD}. Shown only on test environments.</p>
           </div>
         ) : null}
 

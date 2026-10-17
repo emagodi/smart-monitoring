@@ -14,6 +14,8 @@ import com.safalifter.transformerservice.payload.request.AlertCaseUpdateRequest;
 import com.safalifter.transformerservice.payload.request.AlertRequest;
 import com.safalifter.transformerservice.payload.response.AlertCaseActivityResponse;
 import com.safalifter.transformerservice.payload.response.AlertResponse;
+import com.safalifter.transformerservice.payload.response.AlertSummaryResponse;
+import com.safalifter.transformerservice.payload.response.TransformerAlertStateResponse;
 import com.safalifter.transformerservice.service.AlertService;
 
 import java.util.List;
@@ -47,16 +49,43 @@ public class AlertController {
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
     public ResponseEntity<Page<AlertResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long transformerId,
+            @RequestParam(required = false, name = "q") String query
     ) {
-        return ResponseEntity.ok(alertService.getAll(page, size));
+        // status: all | open | unassigned | NEW | ACKNOWLEDGED | DISPATCHED | RESOLVED | FALSE_ALARM
+        return ResponseEntity.ok(alertService.search(page, size, status, transformerId, query));
     }
 
-    @GetMapping("/sensor/{sensorId}")
-    @Operation(summary = "List alerts by sensor")
+    @GetMapping("/summary")
+    @Operation(summary = "Alert counts by case status, last 24h and monthly trend (scoped to the caller)")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
-    public ResponseEntity<List<AlertResponse>> listBySensor(@PathVariable Long sensorId) {
-        return ResponseEntity.ok(alertService.listBySensorId(sensorId));
+    public ResponseEntity<AlertSummaryResponse> summary() {
+        return ResponseEntity.ok(alertService.summary());
+    }
+
+    @GetMapping("/transformers")
+    @Operation(summary = "Per-transformer alert snapshot: open count, totals and the 3 latest alerts")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<List<TransformerAlertStateResponse>> transformerStates(
+            @RequestParam(defaultValue = "false") boolean openOnly
+    ) {
+        return ResponseEntity.ok(alertService.transformerStates(openOnly));
+    }
+
+    @GetMapping("/transformer/{transformerId}/recent")
+    @Operation(summary = "Alert snapshot (3 latest alerts) for one transformer")
+    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
+    public ResponseEntity<TransformerAlertStateResponse> transformerState(@PathVariable Long transformerId) {
+        return ResponseEntity.ok(alertService.transformerState(transformerId));
+    }
+
+    @PostMapping("/transformers/rebuild")
+    @Operation(summary = "Recompute every transformer alert snapshot (admin maintenance)")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<java.util.Map<String, Integer>> rebuildStates() {
+        return ResponseEntity.ok(java.util.Map.of("transformersRefreshed", alertService.rebuildTransformerStates()));
     }
 
     @GetMapping("/{id}/timeline")

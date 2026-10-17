@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
 public class OculusControlServiceImpl implements OculusControlService {
 
     private static final String OCULUS_SUPPLIER_CODE = "oculus";
-    private static final String OCULUS_SUPPLIER_NAME = "Oculus";
+    private static final String OCULUS_SUPPLIER_NAME = "Oqulus";
     private static final String LORIOT_PROVIDER = "LORIOT";
     private static final String ARM_HEX = "030100";
     private static final String DISARM_HEX = "030000";
@@ -155,6 +155,12 @@ public class OculusControlServiceImpl implements OculusControlService {
         for (Controller unassigned : unassignedControllers) {
             OculusTransformerControlResponse built = buildUnassignedControllerResponse(unassigned);
             if (built != null) result.add(built);
+        }
+
+        // Depot users only see (and may only control) transformers in their own depot; unassigned devices are a registry job.
+        Long scopeDepot = accessScopeService.getCurrentDepotId();
+        if (scopeDepot != null) {
+            result.removeIf(r -> r.getDepotId() == null || !scopeDepot.equals(r.getDepotId()));
         }
 
         result.sort(Comparator.comparing(
@@ -387,6 +393,10 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         Transformer transformer = transformerRepository.findById(transformerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found"));
+        Long scopeDepot = accessScopeService.getCurrentDepotId();
+        if (scopeDepot != null && !scopeDepot.equals(transformer.getDepotId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found");
+        }
 
         List<Controller> controllers = controllerRepository.findByTransformerIdAndSupplierCode(transformerId, OCULUS_SUPPLIER_CODE);
         Controller controller = resolvePrimaryController(controllers);

@@ -21,7 +21,7 @@ public class AlertResponse {
     private String message;
     private Long transformerId;
     private String transformerName;
-    private Integer transformerCapacity;
+    private String transformerNumber;
     private Long depotId;
     private String depotName;
     private BigDecimal lat;
@@ -48,4 +48,13 @@ public class AlertResponse {
     private String lastActionByEmail;
     private String lastActionByName;
     private String lastActionNote;
+    private Integer occurrenceCount;
+    private LocalDateTime lastSeenAt;
+    private LocalDateTime lastNotifiedAt;
+    private LocalDateTime enRouteAt;
+    private LocalDateTime onSceneAt;
+    private LocalDateTime closedAt;
+    private String outcome;
+    private String outcomeNote;
+    private String closedByName;
 }

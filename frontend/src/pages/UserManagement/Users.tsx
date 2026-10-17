@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import PageBreadcrumb from "../../components/common/PageBreadCrumb";
+import { HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 import { ActionMenu } from "../../components/ui/dropdown/ActionMenu";
@@ -561,11 +561,6 @@ export default function Users() {
     }
   };
 
-  const selectedUsers = useMemo(
-    () => users.filter((user) => selectedIds.includes(user.id)),
-    [selectedIds, users]
-  );
-  const focusUser = activeUser ?? selectedUsers[0] ?? filteredUsers[0] ?? users[0] ?? null;
   const canCreate = hasPermission("users.create");
   const canUpdate = hasPermission("users.update");
   const canDelete = hasPermission("users.delete");
@@ -576,107 +571,23 @@ export default function Users() {
 
   return (
     <div className="space-y-4">
-      <PageBreadcrumb pageTitle="Users" />
+      <PageHero
+        eyebrow="Administration · Users"
+        title="Users"
+        subtitle="Everyone who can sign in: their role, user type, scope and whether the account is active."
+      >
+        <HeroStats cols={6}>
+          <HeroStat icon={<Users2 className="h-3.5 w-3.5" />} label="Users" value={users.length.toLocaleString()} sub={`${filteredUsers.length.toLocaleString()} in this view`} />
+          <HeroStat icon={<ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />} label="Active" value={activeCount.toLocaleString()} sub="can sign in" tone="good" />
+          <HeroStat icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Inactive" value={inactiveCount.toLocaleString()} sub="blocked from signing in" tone={inactiveCount ? "warn" : undefined} />
+          <HeroStat icon={<UserCog className="h-3.5 w-3.5" />} label="Administrators" value={adminCount.toLocaleString()} sub="full access" />
+          <HeroStat icon={<Building2 className="h-3.5 w-3.5" />} label="Partner users" value={supplierUsersCount.toLocaleString()} sub="supplier portals" />
+          <HeroStat icon={<Users2 className="h-3.5 w-3.5" />} label="User types" value={userTypes.length.toLocaleString()} sub={selectedIds.length ? `${selectedIds.length} selected` : "configured"} />
+        </HeroStats>
+      </PageHero>
       {notice ? <Alert variant={notice.variant} title={notice.title} message={notice.message} /> : null}
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: "Total Users",
-            value: users.length,
-            subtitle: "Accounts in the administration workspace",
-            tone: "bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300",
-            icon: <Users2 className="h-6 w-6" />,
-          },
-          {
-            label: "Active Users",
-            value: activeCount,
-            subtitle: `${inactiveCount} inactive account${inactiveCount === 1 ? "" : "s"}`,
-            tone: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300",
-            icon: <ShieldCheck className="h-6 w-6" />,
-          },
-          {
-            label: "Administrators",
-            value: adminCount,
-            subtitle: "Users with elevated administration access",
-            tone: "bg-violet-50 text-violet-600 dark:bg-violet-500/14 dark:text-violet-300",
-            icon: <UserCog className="h-6 w-6" />,
-          },
-          {
-            label: "Supplier Users",
-            value: supplierUsersCount,
-            subtitle: `${userTypes.length} configured user type${userTypes.length === 1 ? "" : "s"}`,
-            tone: "bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300",
-            icon: <Building2 className="h-6 w-6" />,
-          },
-        ].map((card) => (
-          <div key={card.label} className="enterprise-card p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{card.label}</p>
-                <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-                  {card.value.toLocaleString()}
-                </p>
-                <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{card.subtitle}</p>
-              </div>
-              <div className={`rounded-xl p-2.5 ${card.tone}`}>{card.icon}</div>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section>
-        <div className="enterprise-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Workspace Summary
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Account posture overview
-              </h3>
-            </div>
-            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 xl:grid-cols-[repeat(5,minmax(0,0.7fr))_minmax(0,1.5fr)]">
-            <SummaryTile label="Visible users" value={filteredUsers.length} />
-            <SummaryTile label="Selected users" value={selectedIds.length} />
-            <SummaryTile label="Active accounts" value={activeCount} />
-            <SummaryTile label="Inactive accounts" value={inactiveCount} />
-            <SummaryTile label="User types" value={userTypes.length} />
-
-            {focusUser ? (
-              <div className="enterprise-subtle-card px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">In Focus</p>
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-semibold text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                    {`${focusUser.firstname?.[0] || ""}${focusUser.lastname?.[0] || ""}`.toUpperCase() || "U"}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      {focusUser.firstname} {focusUser.lastname}
-                    </p>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{focusUser.email}</p>
-                  </div>
-                  <div className="ml-auto shrink-0">
-                    <StatusPill status={(focusUser.status || "ACTIVE") as "ACTIVE" | "INACTIVE"} />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="enterprise-subtle-card px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">In Focus</p>
-                <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No user selected</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="enterprise-card flex max-h-[70vh] min-h-0 flex-col overflow-hidden">
+      <section className="ui-panel flex max-h-[75vh] min-h-0 flex-col overflow-hidden">
         <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
@@ -1524,14 +1435,6 @@ export default function Users() {
   );
 }
 
-function SummaryTile({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="enterprise-subtle-card px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{value}</p>
-    </div>
-  );
-}
 
 function SoftChip({
   children,

@@ -6,13 +6,11 @@ import {
   BellRing,
   CheckCircle2,
   Eye,
-  FileWarning,
   History,
   Loader2,
   Mail,
   MapPinned,
   MessageSquareText,
-  RefreshCcw,
   Search,
   Send,
   ShieldAlert,
@@ -22,10 +20,14 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useGeography } from "../Registry/geo";
+import { cachedGet } from "../../lib/cache";
+import { displayName } from "../../lib/brand";
+import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 
-type AlertCaseStatus = "NEW" | "ACKNOWLEDGED" | "DISPATCHED" | "RESOLVED" | "FALSE_ALARM";
+type AlertCaseStatus = "NEW" | "ACKNOWLEDGED" | "DISPATCHED" | "EN_ROUTE" | "ON_SCENE" | "RESOLVED" | "FALSE_ALARM";
 
 type AlertItem = {
   id: number;
@@ -52,6 +54,48 @@ type AlertItem = {
   falseAlarmAt?: string | null;
   lastActionAt?: string | null;
   lastActionNote?: string | null;
+  occurrenceCount?: number | null;
+  lastSeenAt?: string | null;
+};
+
+type AlertSummary = {
+  total: number;
+  open: number;
+  newCount: number;
+  acknowledged: number;
+  dispatched: number;
+  resolved: number;
+  falseAlarm: number;
+  unassigned: number;
+  last24h: number;
+  totalEvents: number;
+  transformersWithOpenAlerts: number;
+};
+
+const EMPTY_SUMMARY: AlertSummary = {
+  total: 0,
+  open: 0,
+  newCount: 0,
+  acknowledged: 0,
+  dispatched: 0,
+  resolved: 0,
+  falseAlarm: 0,
+  unassigned: 0,
+  last24h: 0,
+  totalEvents: 0,
+  transformersWithOpenAlerts: 0,
+};
+
+// Filter chips map 1:1 to the backend `status` query param, so filtering happens in SQL
+// across all alerts instead of only on the rows of the current page.
+const FILTER_TO_STATUS: Record<string, string | undefined> = {
+  all: undefined,
+  new: "NEW",
+  acknowledged: "ACKNOWLEDGED",
+  dispatched: "DISPATCHED",
+  resolved: "RESOLVED",
+  falseAlarm: "FALSE_ALARM",
+  unassigned: "unassigned",
 };
 
 type TimelineItem = {
@@ -137,6 +181,10 @@ const statusTone = (status: AlertCaseStatus) => {
       return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300";
     case "DISPATCHED":
       return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300";
+    case "EN_ROUTE":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300";
+    case "ON_SCENE":
+      return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300";
     case "RESOLVED":
       return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300";
     case "FALSE_ALARM":
@@ -176,6 +224,9 @@ const CASE_ACTIONS: Array<{ label: string; value: AlertCaseStatus; icon: ReactNo
 
 export default function AlertsIndex() {
   const { token, user } = useAuth();
+  const geo = useGeography(token);
+  const depotLabel = (a: { depotId?: number | null; depotName?: string | null }) =>
+    (a.depotId != null ? geo.depotById.get(a.depotId)?.name : undefined) || a.depotName || "Unscoped";
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
   const [items, setItems] = useState<AlertItem[]>([]);
@@ -186,7 +237,9 @@ export default function AlertsIndex() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("q") || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => (new URLSearchParams(window.location.search).get("q") || "").trim());
+  const [summary, setSummary] = useState<AlertSummary>(EMPTY_SUMMARY);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -203,13 +256,42 @@ export default function AlertsIndex() {
     [token]
   );
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => window.clearTimeout(handle);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filterMode, debouncedSearch]);
+
+  const [summaryLoaded, setSummaryLoaded] = useState(false);
+  const fetchSummary = useCallback(
+    async (force = false) => {
+      try {
+        // Cached briefly and loaded separately from the queue, so the list never waits for the counts.
+        const data = await cachedGet<Partial<AlertSummary>>(`${API_BASE_URL}/api/v1/alerts/summary`, token, 15_000, force);
+        setSummary({ ...EMPTY_SUMMARY, ...data });
+        setSummaryLoaded(true);
+      } catch (summaryError) {
+        console.error(summaryError);
+      }
+    },
+    [API_BASE_URL, token]
+  );
+
   const fetchAlerts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await axios.get(`${API_BASE_URL}/api/v1/alerts`, {
         headers,
-        params: { page, size: pageSize },
+        params: {
+          page,
+          size: pageSize,
+          status: FILTER_TO_STATUS[filterMode],
+          q: debouncedSearch || undefined,
+        },
       });
       const normalized = normalizePage<AlertItem>(response.data);
       setItems(normalized.items);
@@ -221,7 +303,7 @@ export default function AlertsIndex() {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers, page, pageSize]);
+  }, [API_BASE_URL, debouncedSearch, filterMode, headers, page, pageSize]);
 
   const fetchDetails = useCallback(
     async (alertId: number) => {
@@ -253,65 +335,19 @@ export default function AlertsIndex() {
     }
   }, [fetchAlerts, token]);
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return items.filter((item) => {
-      const status = getCaseStatus(item);
-      const matchesFilter =
-        filterMode === "all"
-          ? true
-          : filterMode === "new"
-            ? status === "NEW"
-            : filterMode === "acknowledged"
-              ? status === "ACKNOWLEDGED"
-              : filterMode === "dispatched"
-                ? status === "DISPATCHED"
-                : filterMode === "resolved"
-                  ? status === "RESOLVED"
-                  : filterMode === "falseAlarm"
-                    ? status === "FALSE_ALARM"
-                    : !item.assignedToEmail && !item.assignedToName;
+  useEffect(() => {
+    if (token) {
+      void fetchSummary();
+    }
+  }, [fetchSummary, token]);
 
-      const matchesQuery =
-        !query ||
-        (item.message || "").toLowerCase().includes(query) ||
-        (item.transformerName || "").toLowerCase().includes(query) ||
-        (item.deviceName || "").toLowerCase().includes(query) ||
-        (item.deviceId || "").toLowerCase().includes(query) ||
-        (item.assignedToName || "").toLowerCase().includes(query) ||
-        (item.assignedToEmail || "").toLowerCase().includes(query) ||
-        (item.depotName || "").toLowerCase().includes(query) ||
-        (item.supplierName || "").toLowerCase().includes(query);
+  const refreshAll = () => {
+    void fetchAlerts();
+    void fetchSummary(true);
+  };
 
-      return matchesFilter && matchesQuery;
-    });
-  }, [filterMode, items, search]);
-
-  const stats = useMemo(() => {
-    const statusCounts = {
-      total: totalElements,
-      openCases: 0,
-      acknowledged: 0,
-      dispatched: 0,
-      resolved: 0,
-      falseAlarm: 0,
-      unassigned: 0,
-    };
-
-    items.forEach((item) => {
-      const status = getCaseStatus(item);
-      if (status === "NEW") statusCounts.openCases += 1;
-      if (status === "ACKNOWLEDGED") statusCounts.acknowledged += 1;
-      if (status === "DISPATCHED") statusCounts.dispatched += 1;
-      if (status === "RESOLVED") statusCounts.resolved += 1;
-      if (status === "FALSE_ALARM") statusCounts.falseAlarm += 1;
-      if (!item.assignedToEmail && !item.assignedToName && status !== "RESOLVED" && status !== "FALSE_ALARM") {
-        statusCounts.unassigned += 1;
-      }
-    });
-
-    return statusCounts;
-  }, [items, totalElements]);
+  // Status filter and search are applied by the backend; the page already holds the result.
+  const filtered = items;
 
   const deliverySummary = useMemo(() => {
     const delivered = notifications.filter((item) =>
@@ -362,6 +398,7 @@ export default function AlertsIndex() {
       setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setSelectedAlert(updated);
       setSelectedStatus(getCaseStatus(updated));
+      void fetchSummary(true);
       await fetchDetails(updated.id);
     } catch (saveError) {
       console.error(saveError);
@@ -378,56 +415,31 @@ export default function AlertsIndex() {
     <div className="space-y-4">
       {error ? <Alert variant="error" title="Alerts" message={error} /> : null}
 
-      <section className="enterprise-card p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-              Alert Operations Desk
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-              Compact response queue
-            </h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Scope: {summarizeScope(user?.supplierName, user?.depotId)}
-            </p>
-          </div>
+      <PageHero
+        eyebrow="Operations · Alerts"
+        title="Alert desk"
+        subtitle={`Every alert in your scope (${summarizeScope(displayName(user?.supplierName), user?.depotId)}). Repeat triggers on an open case are grouped into one row.`}
+        actions={<HeroButton onClick={refreshAll} busy={loading}>Refresh</HeroButton>}
+      >
+        <HeroStats cols={8}>
+          <HeroStat icon={<BellRing className="h-3.5 w-3.5 text-red-300" />} label="New" value={summary.newCount.toLocaleString()} sub="waiting for an agent" tone={summary.newCount ? "bad" : undefined} loading={!summaryLoaded} />
+          <HeroStat icon={<UserCheck className="h-3.5 w-3.5 text-amber-300" />} label="Acknowledged" value={summary.acknowledged.toLocaleString()} sub="being handled" loading={!summaryLoaded} />
+          <HeroStat icon={<Truck className="h-3.5 w-3.5" />} label="Dispatched" value={summary.dispatched.toLocaleString()} sub="crew on the way" loading={!summaryLoaded} />
+          <HeroStat icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />} label="Resolved" value={summary.resolved.toLocaleString()} sub="closed" tone="good" loading={!summaryLoaded} />
+          <HeroStat icon={<XCircle className="h-3.5 w-3.5" />} label="False alarm" value={summary.falseAlarm.toLocaleString()} sub="closed, no threat" loading={!summaryLoaded} />
+          <HeroStat icon={<AlertTriangle className="h-3.5 w-3.5 text-red-300" />} label="Transformers alerting" value={summary.transformersWithOpenAlerts.toLocaleString()} sub="with an open alert" loading={!summaryLoaded} />
+          <HeroStat icon={<ShieldAlert className="h-3.5 w-3.5" />} label="Last 24 hours" value={summary.last24h.toLocaleString()} sub={`${summary.totalEvents.toLocaleString()} trigger events in total`} loading={!summaryLoaded} />
+          <HeroStat icon={<History className="h-3.5 w-3.5 text-amber-300" />} label="Unassigned" value={summary.unassigned.toLocaleString()} sub={`of ${summary.total.toLocaleString()} alerts`} tone={summary.unassigned ? "warn" : undefined} loading={!summaryLoaded} />
+        </HeroStats>
+      </PageHero>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <InfoPill label="National total" value={stats.total.toLocaleString()} icon={<BellRing className="h-3.5 w-3.5" />} />
-            <InfoPill label="On page" value={filtered.length.toLocaleString()} icon={<ShieldAlert className="h-3.5 w-3.5" />} />
-            <InfoPill label="Unassigned" value={stats.unassigned.toLocaleString()} icon={<AlertTriangle className="h-3.5 w-3.5" />} />
-            <button
-              type="button"
-              onClick={() => void fetchAlerts()}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-            >
-              <RefreshCcw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-6">
-        <MetricTile label="Open" value={stats.openCases} tone="red" />
-        <MetricTile label="Acknowledged" value={stats.acknowledged} tone="amber" />
-        <MetricTile label="Dispatched" value={stats.dispatched} tone="blue" />
-        <MetricTile label="Resolved" value={stats.resolved} tone="emerald" />
-        <MetricTile label="False Alarm" value={stats.falseAlarm} tone="slate" />
-        <MetricTile label="Visible Range" value={pageEnd === 0 ? "0" : `${pageStart}-${pageEnd}`} tone="blue" />
-      </section>
-
-      <section className="enterprise-card overflow-hidden">
-        <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 p-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
+      <section className="ui-panel overflow-hidden">
+        <div className="border-b border-slate-200/80 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div className="space-y-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Active Queue
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
-                  Click any alert row to open actions and detail in a modal
-                </h3>
+                <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-50">Alert queue</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Click an alert to acknowledge, dispatch or close it.</p>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -453,7 +465,7 @@ export default function AlertsIndex() {
               </div>
 
               <div className="flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-                <span>Rows are paged from the backend. Detail, timeline, and recipient audit load only when opened.</span>
+                <span>Filters and search run on the server. Repeat triggers on an open case are grouped into one row.</span>
                 <label className="inline-flex items-center gap-2">
                   <span>Rows</span>
                   <select
@@ -486,7 +498,7 @@ export default function AlertsIndex() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[980px] w-full">
-              <thead className="bg-gradient-to-r from-blue-50/80 via-white to-red-50/70 dark:from-blue-500/10 dark:via-slate-900 dark:to-red-500/10">
+              <thead className="bg-slate-50/80 dark:bg-slate-900/60">
                 <tr className="text-left">
                   <Th>Status</Th>
                   <Th>Transformer</Th>
@@ -508,23 +520,38 @@ export default function AlertsIndex() {
                     >
                       <Td>
                         <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${statusTone(status)}`}>
-                          {status.replace("_", " ")}
+                          {status.replace(/_/g, " ")}
                         </span>
                       </Td>
                       <Td>
                         <div className="max-w-[340px]">
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">{item.transformerName || "Unassigned transformer"}</p>
+                          <p className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                            <span>{item.transformerName || "Unassigned transformer"}</span>
+                            {(item.occurrenceCount ?? 1) > 1 ? (
+                              <span
+                                title={`${item.occurrenceCount} trigger events grouped into this case`}
+                                className="inline-flex rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                              >
+                                ×{(item.occurrenceCount ?? 1).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </p>
                           <p className="mt-1 line-clamp-2 text-slate-500 dark:text-slate-400">{item.message || item.value || "Operational event"}</p>
                         </div>
                       </Td>
                       <Td>
                         <div className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-300">
                           <MapPinned className="h-3.5 w-3.5 text-blue-500" />
-                          <span>{item.depotName || "Unscoped"}</span>
+                          <span>{depotLabel(item)}</span>
                         </div>
                       </Td>
                       <Td>{item.supplierName || item.supplierCode || "ZESA"}</Td>
-                      <Td>{formatDateTime(item.createdAt)}</Td>
+                      <Td>
+                        <div>{formatDateTime(item.createdAt)}</div>
+                        {item.lastSeenAt && (item.occurrenceCount ?? 1) > 1 ? (
+                          <div className="mt-0.5 text-[10px] text-slate-400">Last: {formatDateTime(item.lastSeenAt)}</div>
+                        ) : null}
+                      </Td>
                       <Td>{item.assignedToName || item.assignedToEmail || "Unassigned"}</Td>
                       <Td className="text-right">
                         <button
@@ -599,18 +626,18 @@ export default function AlertsIndex() {
                   </p>
                 </div>
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(getCaseStatus(selectedAlert))}`}>
-                  {getCaseStatus(selectedAlert).replace("_", " ")}
+                  {getCaseStatus(selectedAlert).replace(/_/g, " ")}
                 </span>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <InfoPill
                   label="Depot"
-                  value={selectedAlert.depotName || "Unscoped"}
+                  value={depotLabel(selectedAlert)}
                   icon={<MapPinned className="h-3.5 w-3.5" />}
                 />
                 <InfoPill
-                  label="Sensor"
+                  label="Source"
                   value={selectedAlert.sensorType || "Alert"}
                   icon={<ShieldAlert className="h-3.5 w-3.5" />}
                 />
@@ -625,12 +652,15 @@ export default function AlertsIndex() {
             <div className="space-y-4 overflow-y-auto px-5 py-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <SummaryTile label="Detected" value={formatDateTime(selectedAlert.createdAt)} />
+                <SummaryTile
+                  label="Trigger Events"
+                  value={`${(selectedAlert.occurrenceCount ?? 1).toLocaleString()} · last ${formatDateTime(selectedAlert.lastSeenAt || selectedAlert.createdAt)}`}
+                />
                 <SummaryTile label="Last Action" value={formatDateTime(selectedAlert.lastActionAt)} />
-                <SummaryTile label="Depot" value={selectedAlert.depotName || "Unscoped"} />
                 <SummaryTile label="Supplier" value={selectedAlert.supplierName || selectedAlert.supplierCode || "ZESA"} />
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
+              <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
                 <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                     <ShieldAlert className="h-4 w-4 text-blue-500" />
@@ -670,7 +700,7 @@ export default function AlertsIndex() {
                     />
                   </div>
 
-                  <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr,0.75fr]">
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
                     <textarea
                       value={note}
                       onChange={(event) => setNote(event.target.value)}
@@ -717,7 +747,7 @@ export default function AlertsIndex() {
                           <div key={entry.id} className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
                             <div className="flex items-center justify-between gap-3">
                               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200">
-                                {entry.activityType.replaceAll("_", " ")}
+                                {entry.activityType.replace(/_/g, " ")}
                               </p>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400">{formatDateTime(entry.createdAt)}</p>
                             </div>
@@ -815,33 +845,6 @@ function FilterButton({
     >
       {label}
     </button>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone: "red" | "amber" | "blue" | "emerald" | "slate";
-}) {
-  const toneClasses = {
-    red: "bg-red-50 text-red-600 dark:bg-red-500/14 dark:text-red-300",
-    amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300",
-    blue: "bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300",
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300",
-    slate: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-  }[tone];
-
-  return (
-    <div className="enterprise-card px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{label}</p>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">
-        <span className={`inline-flex rounded-xl px-2.5 py-1 ${toneClasses}`}>{value}</span>
-      </div>
-    </div>
   );
 }
 

@@ -3,10 +3,7 @@ package com.safalifter.transformerservice.ingest;
 import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.repository.ControllerReadingRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
-import com.safalifter.transformerservice.repository.SensorReadingRepository;
-import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.ControllerReadingService;
-import com.safalifter.transformerservice.service.SensorReadingService;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -21,9 +18,6 @@ class OculusWebSocketIngestorDuplicateReadingsTest {
 
     @Test
     void persistsOnlyGwMessageAfterFix() throws Exception {
-        SensorRepository sensorRepository = mock(SensorRepository.class);
-        SensorReadingRepository sensorReadingRepository = mock(SensorReadingRepository.class);
-        SensorReadingService sensorReadingService = mock(SensorReadingService.class);
         ControllerRepository controllerRepository = mock(ControllerRepository.class);
         ControllerReadingRepository controllerReadingRepository = mock(ControllerReadingRepository.class);
         ControllerReadingService controllerReadingService = mock(ControllerReadingService.class);
@@ -36,9 +30,6 @@ class OculusWebSocketIngestorDuplicateReadingsTest {
         });
 
         OculusWebSocketIngestor ingestor = new OculusWebSocketIngestor(
-                sensorRepository,
-                sensorReadingRepository,
-                sensorReadingService,
                 controllerRepository,
                 controllerReadingRepository,
                 controllerReadingService

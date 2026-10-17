@@ -41,6 +41,10 @@ type GoogleAssetMapProps<T extends GoogleAssetMapPoint> = {
   renderDetails?: (point: T) => ReactNode;
   userLocation?: { lat: number; lng: number; accuracy?: number } | null;
   userLocationLabel?: string;
+  /** false hides the built-in "selected asset" card (the page shows its own panel). */
+  showSelectedCard?: boolean;
+  /** Pan/zoom request; bump key to re-apply. */
+  focus?: { key: number; lat: number; lng: number; zoom?: number } | null;
 };
 
 const GOOGLE_MAP_SCRIPT_ID = "powertel-google-maps-script";
@@ -78,7 +82,7 @@ const DEFAULT_MAP_STYLES = [
   },
 ];
 
-const loadGoogleMaps = (apiKey: string) =>
+export const loadGoogleMaps = (apiKey: string) =>
   new Promise<void>((resolve, reject) => {
     if (window.google?.maps) {
       resolve();
@@ -138,6 +142,8 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
   renderDetails,
   userLocation,
   userLocationLabel = "Your current location",
+  showSelectedCard = true,
+  focus,
 }: GoogleAssetMapProps<T>) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -152,6 +158,13 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
   const pointMap = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
   const activeSelectedId = selectedPointId ?? internalSelectedId;
   const selectedPoint = activeSelectedId != null ? pointMap.get(activeSelectedId) ?? null : null;
+  // Callbacks and the selection live in refs so markers are not rebuilt (and the map re-fitted) on every render or click.
+  const selectedRef = useRef(activeSelectedId);
+  selectedRef.current = activeSelectedId;
+  const onSelectRef = useRef(onPointSelect);
+  onSelectRef.current = onPointSelect;
+  const colorsRef = useRef(getMarkerColors);
+  colorsRef.current = getMarkerColors;
 
   useEffect(() => {
     if (selectedPointId !== undefined) {
@@ -251,14 +264,14 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
           title: point.name,
           icon: buildMarkerIcon(
             googleMaps,
-            (getMarkerColors ?? defaultMarkerColors)(point, point.id === activeSelectedId),
-            point.id === activeSelectedId
+            (colorsRef.current ?? defaultMarkerColors)(point, point.id === selectedRef.current),
+            point.id === selectedRef.current
           ),
         });
 
         marker.addListener("click", () => {
           setInternalSelectedId(point.id);
-          onPointSelect?.(point);
+          onSelectRef.current?.(point);
         });
 
         markersRef.current.set(point.id, marker);
@@ -281,7 +294,15 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
         });
       }
     }
-  }, [activeSelectedId, defaultCenter, defaultZoom, getMarkerColors, loadState, onPointSelect, points, userLocation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCenter, defaultZoom, loadState, points, userLocation]);
+
+  useEffect(() => {
+    if (!focus || loadState !== "ready" || !mapRef.current) return;
+    mapRef.current.panTo({ lat: focus.lat, lng: focus.lng });
+    if (focus.zoom) mapRef.current.setZoom(focus.zoom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.key, loadState]);
 
   useEffect(() => {
     if (loadState !== "ready" || !mapRef.current || !window.google?.maps) return;
@@ -369,7 +390,7 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
       marker.setIcon(
         buildMarkerIcon(
           googleMaps,
-          (getMarkerColors ?? defaultMarkerColors)(point, pointId === activeSelectedId),
+          (colorsRef.current ?? defaultMarkerColors)(point, pointId === activeSelectedId),
           pointId === activeSelectedId
         )
       );
@@ -377,7 +398,8 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
 
     if (!selectedPoint) return;
     mapRef.current.panTo({ lat: selectedPoint.lat, lng: selectedPoint.lng });
-  }, [activeSelectedId, getMarkerColors, loadState, pointMap, selectedPoint]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSelectedId, loadState, pointMap]);
 
   if (loadState === "error") {
     return (
@@ -403,7 +425,7 @@ export default function GoogleAssetMap<T extends GoogleAssetMapPoint>({
         </div>
       ) : null}
 
-      {loadState === "ready" && selectedPoint ? (
+      {loadState === "ready" && selectedPoint && showSelectedCard ? (
         <div className="absolute bottom-4 left-4 right-4 max-w-md rounded-[24px] border border-white/80 bg-white/95 p-4 shadow-[0_18px_44px_-26px_rgba(15,23,42,0.42)] backdrop-blur-sm">
           <div className="flex items-start justify-between gap-3">
             <div>

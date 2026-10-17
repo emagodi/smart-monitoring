@@ -1,960 +1,522 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import Alert from '../../components/ui/alert/Alert';
+import { useMemo, useState } from "react";
+import axios from "axios";
+import { Check, Cpu, Hash, Link2, Pencil, Plus, Radio, Search, Signal, Wifi, WifiOff, Zap } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { invalidateCache, useCachedGet } from "../../lib/cache";
+import { displayPartner } from "../../lib/brand";
+import { useGeography } from "../Registry/geo";
+import AddFromEuiDrawer from "../Registry/AddFromEuiDrawer";
 import {
-  Search,
-  Loader2,
-  Cpu,
-  Settings,
-  Link2,
-  Save,
-  RefreshCcw,
-  Filter,
-  ShieldCheck,
-  X,
-} from 'lucide-react';
-import { Modal } from '../../components/ui/modal';
-import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
+  Button,
+  Chips,
+  Dialog,
+  EmptyRow,
+  HeroButton,
+  HeroStat,
+  HeroStats,
+  Notice,
+  PageHero,
+  Pager,
+  Panel,
+  SearchBox,
+  SelectBox,
+  SkeletonRows,
+  inputCls,
+  tableCls,
+  timeAgo,
+} from "../../components/ui/page";
 
-interface Controller {
+const API = import.meta.env.VITE_API_BASE_URL || "";
+
+/** Row of GET /api/v1/controllers/unmatched: devices that reported in but have no transformer. */
+type Unmatched = {
   id: number;
-  deviceId: string;
   devEui: string;
-  name: string;
-  type: string;
-  transformerId?: number;
-  transformer?: { id: number; name: string };
-  createdAt?: string;
-  updatedAt?: string;
-}
+  deviceId?: string | null;
+  name?: string | null;
+  type?: string | null;
+  supplierCode?: string | null;
+  supplierName?: string | null;
+  lastReadingAt?: string | null;
+  online: boolean;
+  battery?: number | null;
+  rssi?: number | null;
+  createdAt?: string | null;
+};
 
-interface TransformerOption {
+/** Row of GET /api/v1/transformers/registry (only the fields the picker needs). */
+type TransformerRow = {
   id: number;
   name: string;
-  description?: string;
-  searchText?: string;
-  badge?: string;
-}
+  transformerNumber?: string | null;
+  type?: string | null;
+  depotId?: number | null;
+  supplierCode?: string | null;
+  supplierName?: string | null;
+  controllerEuis: string[];
+};
 
+type Filter = "all" | "online" | "silent";
+
+const errText = (e: unknown, fallback: string) => {
+  const r = (e as { response?: { data?: { message?: string } | string; status?: number } })?.response;
+  if (r?.status === 403) return "Your role cannot link controllers.";
+  if (typeof r?.data === "string" && r.data) return r.data;
+  return (r?.data as { message?: string } | undefined)?.message || fallback;
+};
+
+const label = (c: Unmatched) => (c.name && !/^new controller/i.test(c.name) && !/^controller /i.test(c.name) ? c.name : `Controller ${c.devEui.slice(-8)}`);
+
+/**
+ * New controllers: devices our partner feeds heard that are not linked to a transformer yet.
+ * Link each one to its transformer (search by transformer name, number or depot).
+ */
 export default function NewControllersIndex() {
-  const { token, hasPermission, user } = useAuth();
-  const navigate = useNavigate();
-  const initialLoadTokenRef = useRef<string | null>(null);
-  const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
-  const [items, setItems] = useState<Controller[]>([]);
-  const [transformers, setTransformers] = useState<TransformerOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [active, setActive] = useState<Controller | null>(null);
-  const [showAssign, setShowAssign] = useState(false);
-  const [assigning, setAssigning] = useState(false);
-  const [assignError, setAssignError] = useState<string | null>(null);
-  const [transformerInput, setTransformerInput] = useState<number | ''>('');
+  const { token, hasPermission } = useAuth();
+  const geo = useGeography(token);
+  const list = useCachedGet<Unmatched[]>(token ? `${API}/api/v1/controllers/unmatched` : null, token, { maxAgeMs: 20_000, errorText: "Could not load new controllers." });
+  const reg = useCachedGet<TransformerRow[]>(token ? `${API}/api/v1/transformers/registry` : null, token, { maxAgeMs: 30_000 });
 
-  const [showEdit, setShowEdit] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', deviceId: '', devEui: '', type: '' });
-  
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
-  const canUpdate = hasPermission('controllers.update');
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [partner, setPartner] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+  const [assigning, setAssigning] = useState<Unmatched | null>(null);
+  const [renaming, setRenaming] = useState<{ c: Unmatched; name: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const canUpdate = hasPermission("controllers.update") || hasPermission("transformers.update");
+  const canCreate = hasPermission("transformers.create") || hasPermission("transformers.update");
+  // "New transformer from EUI": create the transformer straight from the device's EUI and link it in one go.
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
-  const normalizeList = (payload: unknown): Controller[] => {
-    if (Array.isArray(payload)) return payload as Controller[];
-    const obj = payload as Record<string, unknown>;
-    const candidates = ['data', 'content', 'items', 'records'];
-    for (const key of candidates) {
-      const v = obj?.[key] as unknown;
-      if (Array.isArray(v)) return v as Controller[];
-    }
-    return [];
-  };
-
-  const fetchControllers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await axios.get<any>(`${API_BASE_URL}/api/v1/controllers`, { headers });
-      const list = normalizeList(res.data);
-      // Filter for controllers without transformerId
-      const unassigned = list.filter(c => !c.transformerId);
-      setItems(unassigned);
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setError('Failed to fetch controllers. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [API_BASE_URL, headers]);
-
-  const fetchTransformers = useCallback(async () => {
-    try {
-      const res = await axios.get<any>(`${API_BASE_URL}/api/v1/transformers/assignment-options`, { headers });
-      const list = normalizeList(res.data);
-      setTransformers(
-        list
-          .map((item) => ({
-            id: item.id,
-            name: item.name,
-            description: buildTransformerDescription(item),
-            searchText: buildTransformerSearchText(item),
-            badge: item.supplierName || item.type || undefined,
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-      );
-    } catch (err) {
-      console.error('Transformer lookup error:', err);
-      setTransformers([]);
-    }
-  }, [API_BASE_URL, headers]);
-
-  useEffect(() => {
-    if (!token) {
-      initialLoadTokenRef.current = null;
-      return;
-    }
-
-    if (initialLoadTokenRef.current === token) return;
-
-    initialLoadTokenRef.current = token;
-    void fetchControllers();
-    void fetchTransformers();
-  }, [token, fetchControllers, fetchTransformers]);
-
-  const closeAssign = () => {
-    setShowAssign(false);
-    setActive(null);
-    setTransformerInput('');
-    setAssignError(null);
-  };
-
-  const openAssign = (controller: Controller) => {
-    setActive(controller);
-    setTransformerInput(controller.transformerId ?? '');
-    setAssignError(null);
-    setShowAssign(true);
-  };
-
-  const openEdit = (controller: Controller) => {
-    setActive(controller);
-    setEditForm({
-      name: controller.name || '',
-      deviceId: controller.deviceId || '',
-      devEui: controller.devEui || '',
-      type: controller.type || '',
-    });
-    setEditError(null);
-    setShowEdit(true);
-  };
-
-  const closeEdit = () => {
-    setShowEdit(false);
-    setActive(null);
-    setEditError(null);
-  };
-
-  const submitEdit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!active) return;
-    try {
-      setEditing(true);
-      setEditError(null);
-      await axios.put(
-        `${API_BASE_URL}/api/v1/controllers/${active.id}`,
-        {
-          ...editForm,
-          transformerId: active.transformerId,
-        },
-        { headers }
-      );
-      closeEdit();
-      await fetchControllers();
-    } catch (err: any) {
-      console.error(err);
-      setEditError(err.response?.data?.message || 'Failed to update controller.');
-    } finally {
-      setEditing(false);
-    }
-  };
-
-  const submitAssign = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!active) return;
-    if (!transformerInput || typeof transformerInput !== 'number') {
-      setAssignError('Select a transformer for this controller.');
-      return;
-    }
-    try {
-      setAssigning(true);
-      setAssignError(null);
-      await axios.put(
-        `${API_BASE_URL}/api/v1/controllers/${active.id}`,
-        {
-          deviceId: active.deviceId,
-          devEui: active.devEui,
-          type: active.type,
-          name: active.name,
-          transformerId: transformerInput,
-        },
-        { headers }
-      );
-      closeAssign();
-      await fetchControllers();
-      await fetchTransformers();
-    } catch (err: any) {
-      console.error(err);
-      setAssignError(err.response?.data?.message || 'Failed to assign controller.');
-    } finally {
-      setAssigning(false);
-    }
-  };
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-
-    return items.filter((controller) => {
-      return (
-        controller.name.toLowerCase().includes(q) ||
-        controller.deviceId.toLowerCase().includes(q) ||
-        controller.devEui.toLowerCase().includes(q)
-      );
-    });
-  }, [items, search]);
-
-  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const resultsFrom = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
-  const resultsTo = filtered.length === 0 ? 0 : Math.min(page * pageSize, filtered.length);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
-
-  const controllerTypes = useMemo(() => {
-    const breakdown = new Map<string, number>();
-    items.forEach((controller) => {
-      const key = controller.type || 'Unknown';
-      breakdown.set(key, (breakdown.get(key) || 0) + 1);
-    });
-
-    return Array.from(breakdown.entries())
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  const items = list.data ?? [];
+  const partners = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of items) if (c.supplierCode) m.set(c.supplierCode, displayPartner(c.supplierName, c.supplierCode));
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [items]);
 
-  const totals = useMemo(
-    () => ({
-      unassigned: items.length,
-      transformerOptions: transformers.length,
-      filtered: filtered.length,
-      visible: paginated.length,
-      types: controllerTypes.length,
-    }),
-    [controllerTypes.length, filtered.length, items.length, paginated.length, transformers.length]
-  );
+  const rows = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return items
+      .filter((c) => (filter === "online" ? c.online : filter === "silent" ? !c.online : true))
+      .filter((c) => !partner || c.supplierCode === partner)
+      .filter((c) => !term || [c.devEui, c.name, c.deviceId, c.supplierName].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)))
+      .sort((a, b) => Number(b.online) - Number(a.online) || String(b.lastReadingAt ?? "").localeCompare(String(a.lastReadingAt ?? "")));
+  }, [filter, items, partner, q]);
 
-  if (loading) {
-    return (
-      <div className="enterprise-card flex h-96 items-center justify-center gap-3 text-slate-500 dark:text-slate-300">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <span>Loading controllers...</span>
-      </div>
-    );
-  }
+  const online = items.filter((c) => c.online).length;
+  const shown = rows.slice(page * pageSize, page * pageSize + pageSize);
+  const loading = !list.data && !list.error;
 
-  if (error) {
-    return (
-      <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p>{error}</p>
-          <button
-            onClick={() => {
-              void fetchControllers();
-              void fetchTransformers();
-            }}
-            className="inline-flex w-fit items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
-          >
-            <RefreshCcw className="h-4 w-4" />
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const refresh = () => {
+    invalidateCache("/api/v1/controllers/unmatched");
+    invalidateCache("/api/v1/transformers/registry");
+    void list.reload();
+    void reg.reload();
+  };
+
+  const saveName = async () => {
+    if (!renaming) return;
+    const { c, name } = renaming;
+    try {
+      await axios.put(
+        `${API}/api/v1/controllers/${c.id}`,
+        { name: name.trim() || label(c), deviceId: c.deviceId || c.devEui, devEui: c.devEui, type: c.type },
+        { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+      );
+      setNotice({ tone: "success", text: `Renamed to ${name.trim()}.` });
+      setRenaming(null);
+      refresh();
+    } catch (e) {
+      setNotice({ tone: "error", text: errText(e, "Could not rename the controller.") });
+    }
+  };
 
   return (
     <div className="space-y-4">
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Unassigned Controllers"
-          value={totals.unassigned}
-          subtitle="Controllers waiting for transformer ownership"
-          icon={<Cpu className="h-6 w-6" />}
-          tone="bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300"
-        />
-        <MetricCard
-          label="Transformer Options"
-          value={totals.transformerOptions}
-          subtitle="Available assignment targets from the lookup service"
-          icon={<Link2 className="h-6 w-6" />}
-          tone="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/14 dark:text-indigo-300"
-        />
-        <MetricCard
-          label="Search Matches"
-          value={totals.filtered}
-          subtitle="Controllers in the active filter workspace"
-          icon={<Search className="h-6 w-6" />}
-          tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300"
-        />
-        <MetricCard
-          label="Controller Types"
-          value={totals.types}
-          subtitle="Distinct hardware types awaiting configuration"
-          icon={<ShieldCheck className="h-6 w-6" />}
-          tone="bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300"
-        />
-      </section>
+      <PageHero
+        eyebrow="Operations · New controllers"
+        title="New controllers"
+        subtitle="Devices our partner feeds have heard that are not linked to a transformer yet. Create a new transformer from the device EUI, or link it to one that exists, so its alerts reach the right depot."
+        actions={<HeroButton onClick={refresh} busy={list.refreshing || list.loading}>Refresh</HeroButton>}
+      >
+        <HeroStats cols={4}>
+          <HeroStat icon={<Cpu className="h-3.5 w-3.5 text-amber-300" />} label="Waiting" value={items.length.toLocaleString()} sub="not linked to a transformer" tone={items.length ? "warn" : "good"} loading={loading} />
+          <HeroStat icon={<Wifi className="h-3.5 w-3.5 text-emerald-300" />} label="Online" value={online.toLocaleString()} sub="heard in the last 15 min" tone="good" loading={loading} />
+          <HeroStat icon={<WifiOff className="h-3.5 w-3.5 text-red-300" />} label="Offline" value={(items.length - online).toLocaleString()} sub="not heard in 15 min" tone={items.length - online ? "bad" : undefined} loading={loading} />
+          <HeroStat icon={<Zap className="h-3.5 w-3.5" />} label="Transformers" value={(reg.data?.length ?? 0).toLocaleString()} sub="available to link to" loading={!reg.data} />
+        </HeroStats>
+      </PageHero>
 
-      <section className="flex flex-col gap-4">
-        {/* Top Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Assignment Summary */}
-          <div className="enterprise-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Assignment Summary
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Operator readiness
-                </h3>
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-            </div>
-            
-            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Pending</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.unassigned}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Visible matches</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.filtered}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Lookup targets</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.transformerOptions}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Access</p>
-                <p className={`mt-1 text-sm font-semibold ${canUpdate ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {canUpdate ? 'Enabled' : 'Restricted'}
-                </p>
-              </div>
-            </div>
+      {notice ? (
+        <Notice tone={notice.tone} onClose={() => setNotice(null)}>
+          {notice.text}
+        </Notice>
+      ) : null}
+      {list.error && !list.data ? <Notice>{list.error}</Notice> : null}
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800/50 dark:bg-slate-900/50">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Scope</p>
-              </div>
-              <p className="mt-1 text-sm font-medium text-slate-700 dark:text-slate-300">
-                {isSupplierUser ? 'Supplier-visible transformer catalogue' : 'Full transformer assignment catalogue'}
-              </p>
-            </div>
-          </div>
-
-          {/* Controller Mix */}
-          <div className="enterprise-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  Controller Mix
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Types awaiting assignment
-                </h3>
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-                <Cpu className="h-4 w-4" />
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              {controllerTypes.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No controller types available yet.
-                </div>
-              ) : (
-                controllerTypes.slice(0, 4).map((type) => {
-                  const width = totals.unassigned ? (type.count / totals.unassigned) * 100 : 0;
-
-                  return (
-                    <div key={type.label}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                          {formatTypeLabel(type.label)}
-                        </span>
-                        <span className="text-slate-500 dark:text-slate-400">
-                          {type.count}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-blue-500 dark:bg-blue-600"
-                          style={{ width: `${Math.max(width, 4)}%` }}
-                        />
+      <Panel
+        icon={<Cpu className="h-4 w-4" />}
+        title={`${rows.length.toLocaleString()} controller${rows.length === 1 ? "" : "s"} waiting`}
+        subtitle="Online devices are listed first."
+        toolbar={
+          <>
+            <SearchBox value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Find by EUI or name…" className="max-w-sm" />
+            <Chips<Filter>
+              value={filter}
+              onChange={(v) => {
+                setFilter(v);
+                setPage(0);
+              }}
+              options={[
+                { value: "all", label: "All", count: items.length },
+                { value: "online", label: "Online", dot: "bg-emerald-500", count: online },
+                { value: "silent", label: "Offline", dot: "bg-red-500", count: items.length - online },
+              ]}
+            />
+            {partners.length > 1 ? (
+              <SelectBox value={partner} onChange={(v) => { setPartner(v); setPage(0); }} label="Partner">
+                <option value="">All partners</option>
+                {partners.map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </SelectBox>
+            ) : null}
+          </>
+        }
+      >
+        <div className={tableCls.wrap}>
+          <table className={`${tableCls.table} min-w-[1120px]`}>
+            <thead className={tableCls.thead}>
+              <tr>
+                <th className={tableCls.th}>Controller</th>
+                <th className={tableCls.th}>Device EUI</th>
+                <th className={tableCls.th}>Partner</th>
+                <th className={tableCls.th}>Status</th>
+                <th className={tableCls.th}>Last heard</th>
+                <th className={`${tableCls.th} w-[420px] text-center`}>Actions</th>
+              </tr>
+            </thead>
+            <tbody className={tableCls.tbody}>
+              {loading ? <SkeletonRows rows={6} cols={6} /> : null}
+              {shown.map((c) => (
+                <tr key={c.id} className={tableCls.tr}>
+                  <td className={tableCls.td}>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/20">
+                        <Cpu className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-slate-900 dark:text-slate-100">{label(c)}</p>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Main Table Card */}
-        <div className="enterprise-card flex min-h-[600px] flex-col overflow-hidden">
-          <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Assignment Workspace
-                </p>
-                <h3 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 md:text-lg">
-                  New controller intake and transformer linking
-                </h3>
-                <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400 md:text-sm">
-                  {isSupplierUser
-                    ? 'Assign unlinked controllers to transformers visible to your organisation.'
-                    : 'Review unassigned controllers and connect them to the correct transformers.'}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => {
-                    setSearch('');
-                    setPage(1);
-                  }}
-                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-amber-600 dark:text-slate-200 dark:hover:text-amber-300"
-                >
-                  <Filter className="h-4 w-4" />
-                  Reset
-                </button>
-                <button
-                  onClick={() => {
-                    void fetchControllers();
-                    void fetchTransformers();
-                  }}
-                  className="enterprise-chip inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-300"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  Refresh
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
-              <div className="enterprise-chip inline-flex items-center gap-3 px-3 py-2.5 text-sm text-slate-600 dark:text-slate-300">
-                <span className="font-semibold text-slate-900 dark:text-slate-100">Show</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  className="bg-transparent text-sm outline-none"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
-              <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2.5">
-                <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search controllers, device IDs, or DevEUI..."
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto p-4 pt-0">
-            <table className="min-w-full border-separate border-spacing-y-2.5">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                  <th className="px-3 py-2.5">Controller</th>
-                  <th className="px-3 py-2.5">Device ID</th>
-                  <th className="px-3 py-2.5">DevEUI</th>
-                  <th className="px-3 py-2.5">Type</th>
-                  <th className="px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginated.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-12">
-                      <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                        {search.trim()
-                          ? 'No unassigned controllers match the current search.'
-                          : 'No unassigned controllers are waiting for assignment.'}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginated.map((controller) => (
-                    <tr key={controller.id} className="enterprise-subtle-card">
-                      <td className="rounded-l-[22px] px-3 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                            <Cpu className="h-4.5 w-4.5" />
-                          </div>
-                          <div>
-                            <p className="text-[15px] font-medium text-slate-900 dark:text-slate-100">
-                              {controller.name}
-                            </p>
-                            <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
-                              Ready for transformer assignment
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                          {controller.deviceId}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="font-mono text-sm text-slate-500 dark:text-slate-400">
-                          {controller.devEui}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                          {formatTypeLabel(controller.type)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-col gap-1.5">
-                          <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                            <span className="h-2 w-2 rounded-full bg-amber-500" />
-                            Unassigned
-                          </span>
-                          <span className="text-[12px] text-slate-400 dark:text-slate-500">
-                            Awaiting transformer link
-                          </span>
-                        </div>
-                      </td>
-                      <td className="rounded-r-[22px] px-3 py-3">
+                  </td>
+                  <td className={`${tableCls.td} font-mono text-[12px] tracking-wide`}>{c.devEui}</td>
+                  <td className={tableCls.td}>{c.supplierCode ? displayPartner(c.supplierName, c.supplierCode) : <span className="text-slate-400">Unknown</span>}</td>
+                  <td className={tableCls.td}>
+                    <DeviceStatus c={c} />
+                  </td>
+                  <td className={tableCls.td}>
+                    <span className="text-[13px] text-slate-700 dark:text-slate-200">{c.lastReadingAt ? timeAgo(c.lastReadingAt) : "Never"}</span>
+                    {c.rssi != null ? (
+                      <span className="ml-2 inline-flex items-center gap-0.5 text-[11px] text-slate-400" title="Signal strength (RSSI)">
+                        <Signal className="h-3 w-3" /> {c.rssi} dBm
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className={`${tableCls.td} text-center`}>
+                    {canUpdate || canCreate ? (
+                      <div className="flex items-center justify-center gap-2">
                         {canUpdate ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openAssign(controller)}
-                              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-                            >
-                              <Link2 className="h-4 w-4" />
-                              Assign
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openEdit(controller)}
-                              className="enterprise-chip inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200"
-                            >
-                              <Settings className="h-4 w-4" />
-                              Edit
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-right text-xs text-slate-400 dark:text-slate-500">No access</div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Showing {resultsFrom} to {resultsTo} of {filtered.length} controllers
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page === 1}
-                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
-                >
-                  Previous
-                </button>
-                <div className="rounded-full bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">
-                  {page}
-                </div>
-                <button
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  disabled={page === totalPages}
-                  className="enterprise-chip rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-50 dark:text-slate-200"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
+                          <button
+                            type="button"
+                            onClick={() => setRenaming({ c, name: label(c) })}
+                            title="Rename this controller"
+                            aria-label="Rename"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-300 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {canCreate ? (
+                          <button
+                            type="button"
+                            onClick={() => setCreatingFor(c.devEui)}
+                            title="Create a new transformer from this device's EUI and link it"
+                            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#0a2a6b] to-[#0b4fc4] px-3.5 text-xs font-semibold text-white shadow-sm shadow-blue-700/25 transition hover:brightness-110"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> New transformer
+                          </button>
+                        ) : null}
+                        {canUpdate ? (
+                          <button
+                            type="button"
+                            onClick={() => setAssigning(c)}
+                            title="Link to a transformer that already exists"
+                            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
+                          >
+                            <Link2 className="h-3.5 w-3.5" /> Link to existing
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">View only</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!loading && rows.length === 0 ? (
+                <EmptyRow cols={6}>{items.length ? "Nothing matches these filters." : "Every controller is linked to a transformer."}</EmptyRow>
+              ) : null}
+            </tbody>
+          </table>
         </div>
-      </section>
+        <Pager
+          page={page}
+          pageSize={pageSize}
+          total={rows.length}
+          onPage={setPage}
+          onPageSize={(n) => {
+            setPageSize(n);
+            setPage(0);
+          }}
+        />
+      </Panel>
 
-      <Modal
-        isOpen={showAssign}
-        onClose={closeAssign}
-        variant="center"
-        showCloseButton={false}
-        className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
-        backdropBlur={true}
+      {assigning ? (
+        <AssignDialog
+          controller={assigning}
+          transformers={reg.data ?? []}
+          loadingTransformers={!reg.data}
+          geo={geo}
+          token={token}
+          onClose={() => setAssigning(null)}
+          onDone={(t) => {
+            setNotice({ tone: "success", text: `${label(assigning)} is now linked to ${t.name}. Its alerts go to ${geo.pathOf(t.depotId).depotName}.` });
+            setAssigning(null);
+            refresh();
+          }}
+        />
+      ) : null}
+
+      <AddFromEuiDrawer
+        open={Boolean(creatingFor)}
+        initialEui={creatingFor ?? undefined}
+        geo={geo}
+        onClose={() => setCreatingFor(null)}
+        onCreated={() => {
+          setNotice({ tone: "success", text: `Transformer created and controller ${creatingFor} linked.` });
+          setCreatingFor(null);
+          refresh();
+        }}
+      />
+
+      <Dialog
+        open={Boolean(renaming)}
+        onClose={() => setRenaming(null)}
+        icon={<Pencil className="h-4 w-4" />}
+        title="Rename controller"
+        subtitle={renaming ? `Device ${renaming.c.devEui}` : undefined}
+        width="max-w-lg"
+        footer={
+          <>
+            <Button size="lg" onClick={() => setRenaming(null)}>
+              Cancel
+            </Button>
+            <Button size="lg" variant="primary" icon={<Check className="h-4 w-4" />} onClick={() => void saveName()}>
+              Save name
+            </Button>
+          </>
+        }
       >
-        <div className="flex max-h-[90vh] min-h-0 flex-col bg-white dark:bg-slate-950">
-          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
-                  <Link2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                    Assign Controller
-                  </p>
-                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-                    Link controller to transformer
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeAssign}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <form onSubmit={submitAssign} className="flex min-h-0 flex-1 flex-col">
-            <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
-              {assignError ? <Alert variant="error" title="Assignment" message={assignError} /> : null}
-
-
-
-              <div className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-                    Controller Snapshot
-                  </p>
-                  <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
-                    Assignment details
-                  </h4>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <InfoCard label="Controller" value={active?.name || '—'} />
-                  <InfoCard label="Device ID" value={active?.deviceId || '—'} />
-                  <InfoCard label="Current assignment" value={active?.transformer?.name || 'Unassigned'} />
-                  <InfoCard
-                    label="Last updated"
-                    value={active?.updatedAt ? new Date(active.updatedAt).toLocaleString() : 'Not yet updated'}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-                    Transformer Selection
-                  </p>
-                  <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
-                    Choose assignment target
-                  </h4>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">
-                    Transformer *
-                  </label>
-                  <SearchableSelect
-                    options={transformers}
-                    value={transformerInput}
-                    onChange={(value) => setTransformerInput(value)}
-                    placeholder={isSupplierUser ? 'Select organisation transformer...' : 'Select transformer...'}
-                  />
-                  <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                    {isSupplierUser
-                      ? 'Only transformers visible to your organisation are available in this selector.'
-                      : 'Select the transformer that should own this controller after assignment.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeAssign}
-                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={assigning}
-                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {assigning ? 'Saving...' : 'Save Assignment'}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={showEdit}
-        onClose={closeEdit}
-        variant="center"
-        showCloseButton={false}
-        className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
-        backdropBlur={true}
-      >
-        <div className="flex max-h-[90vh] min-h-0 flex-col bg-white dark:bg-slate-950">
-          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
-                  <Settings className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                    Edit Controller
-                  </p>
-                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-                    Update controller properties
-                  </h3>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeEdit}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <form onSubmit={submitEdit} className="flex min-h-0 flex-1 flex-col">
-            <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
-              {editError ? <Alert variant="error" title="Update failed" message={editError} /> : null}
-
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Controller Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Device ID *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.deviceId}
-                    onChange={(e) => setEditForm({ ...editForm, deviceId: e.target.value })}
-                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    DevEUI *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.devEui}
-                    onChange={(e) => setEditForm({ ...editForm, devEui: e.target.value })}
-                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-mono text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Type
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.type}
-                    onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
-                    placeholder="e.g. IO_CONTROLLER, DRAGINO_LT22222"
-                    className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={editing}
-                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {editing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {editing ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </Modal>
+        {renaming ? (
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Name</span>
+            <input
+              autoFocus
+              value={renaming.name}
+              onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && void saveName()}
+              className={`${inputCls} h-12 text-[15px]`}
+            />
+          </label>
+        ) : null}
+      </Dialog>
     </div>
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  subtitle,
-  icon,
-  tone,
+function AssignDialog({
+  controller,
+  transformers,
+  loadingTransformers,
+  geo,
+  token,
+  onClose,
+  onDone,
 }: {
-  label: string;
-  value: number;
-  subtitle: string;
-  icon: React.ReactNode;
-  tone: string;
+  controller: Unmatched;
+  transformers: TransformerRow[];
+  loadingTransformers: boolean;
+  geo: ReturnType<typeof useGeography>;
+  token: string | null;
+  onClose: () => void;
+  onDone: (t: TransformerRow) => void;
 }) {
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState<TransformerRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Same partner first, then the rest; search across name, number, depot, district and region.
+  const matches = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const scored = transformers
+      .map((t) => {
+        const path = geo.pathOf(t.depotId);
+        const hay = [t.name, t.transformerNumber, path.depotName, path.districtName, path.regionName].filter(Boolean).join(" ").toLowerCase();
+        return { t, path, ok: !term || hay.includes(term), same: Boolean(controller.supplierCode) && t.supplierCode === controller.supplierCode };
+      })
+      .filter((x) => x.ok)
+      .sort((a, b) => Number(b.same) - Number(a.same) || a.t.name.localeCompare(b.t.name));
+    return scored.slice(0, 60);
+  }, [controller.supplierCode, geo, q, transformers]);
+
+  const save = async () => {
+    if (!picked) return setError("Choose the transformer this controller is fitted to.");
+    try {
+      setBusy(true);
+      setError(null);
+      await axios.put(
+        `${API}/api/v1/controllers/${controller.id}`,
+        { name: controller.name || label(controller), deviceId: controller.deviceId || controller.devEui, devEui: controller.devEui, type: controller.type, transformerId: picked.id },
+        { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+      );
+      onDone(picked);
+    } catch (e) {
+      setError(errText(e, "Could not link the controller."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="enterprise-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
-          <p
-            className={`mt-2 text-3xl font-semibold tracking-tight ${
-              value > 0 ? 'text-slate-950 dark:text-slate-50' : 'text-slate-400 dark:text-slate-500'
-            }`}
-          >
-            {value.toLocaleString()}
+    <Dialog
+      open
+      onClose={onClose}
+      icon={<Link2 className="h-4 w-4" />}
+      title="Link controller to a transformer"
+      subtitle={`${label(controller)} · ${controller.devEui}`}
+      width="max-w-2xl"
+      footer={
+        <>
+          <Button size="lg" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="lg" variant="primary" busy={busy} disabled={!picked} icon={<Link2 className="h-4 w-4" />} onClick={() => void save()}>
+            {picked ? `Link to ${picked.name}` : "Choose a transformer"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-2">
+          <Fact icon={<Radio className="h-3.5 w-3.5" />} label="Partner" value={controller.supplierCode ? displayPartner(controller.supplierName, controller.supplierCode) : "Unknown"} />
+          <Fact icon={controller.online ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5" />} label="Last heard" value={controller.lastReadingAt ? timeAgo(controller.lastReadingAt) : "never"} />
+          <Fact icon={<Cpu className="h-3.5 w-3.5" />} label="Status" value={controller.online ? "Online" : controller.lastReadingAt ? "Offline" : "Never heard"} />
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            Transformer <span className="text-red-500">*</span>
           </p>
-          <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{subtitle}</p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by transformer name, number or depot…"
+              className={`${inputCls} h-12 pl-10 text-[15px]`}
+            />
+          </div>
+          <ul className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700">
+            {loadingTransformers ? <li className="px-4 py-3 text-sm text-slate-500">Loading transformers…</li> : null}
+            {matches.map(({ t, path, same }) => {
+              const on = picked?.id === t.id;
+              return (
+                <li key={t.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setPicked(t)}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${on ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-900"}`}
+                  >
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${on ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 dark:border-slate-600"}`}
+                    >
+                      {on ? <Check className="h-3 w-3" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{t.name}</span>
+                        {t.transformerNumber ? (
+                          <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            <Hash className="h-2.5 w-2.5" />
+                            {t.transformerNumber}
+                          </span>
+                        ) : null}
+                        {same ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Same partner</span> : null}
+                      </span>
+                      <span className="block truncate text-[11px] text-slate-500">
+                        {path.depotName} · {path.districtName} · {path.regionName}
+                        {t.controllerEuis?.length ? ` · ${t.controllerEuis.length} device${t.controllerEuis.length === 1 ? "" : "s"} already` : " · no device yet"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            {!loadingTransformers && matches.length === 0 ? <li className="px-4 py-3 text-sm text-slate-500">No transformer matches “{q}”.</li> : null}
+          </ul>
+          <p className="text-xs text-slate-500">
+            Not in the list? Add it on the Transformers page with “Add from device EUI”, which creates the transformer and links this device in one step.
+          </p>
         </div>
-        <div className={`rounded-xl p-2.5 ${tone}`}>{icon}</div>
+
+        {error ? <Notice>{error}</Notice> : null}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
-function SummaryStat({
-  label,
-  value,
-  accent = 'default',
-  mutedZero = false,
-}: {
-  label: string;
-  value: string | number;
-  accent?: 'default' | 'success' | 'muted';
-  mutedZero?: boolean;
-}) {
-  const isZero = typeof value === 'number' && value === 0;
-  const valueTone =
-    accent === 'success'
-      ? 'text-emerald-600 dark:text-emerald-300'
-      : accent === 'muted' || (mutedZero && isZero)
-        ? 'text-slate-400 dark:text-slate-500'
-        : 'text-slate-900 dark:text-slate-100';
-
+function DeviceStatus({ c }: { c: Unmatched }) {
+  const state = c.online ? "online" : c.lastReadingAt ? "offline" : "never";
+  const cls = {
+    online: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30",
+    offline: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30",
+    never: "bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700",
+  }[state];
+  const dot = { online: "bg-emerald-500", offline: "bg-red-500", never: "bg-slate-400" }[state];
   return (
-    <div className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-      <span className={`text-sm font-semibold ${valueTone}`}>{value}</span>
-    </div>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${cls}`}>
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      {state === "online" ? "Online" : state === "offline" ? "Offline" : "Never heard"}
+    </span>
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
+function Fact({ icon, label: l, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 text-xs font-medium text-slate-900 break-words dark:text-slate-100">{value}</p>
+    <div className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-900">
+      <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+        {icon}
+        {l}
+      </p>
+      <p className="mt-0.5 truncate text-[13px] font-semibold text-slate-800 dark:text-slate-100">{value}</p>
     </div>
   );
-}
-
-function formatTypeLabel(value: string) {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function buildTransformerDescription(item: any) {
-  const parts = [
-    item.type ? item.type.replaceAll('_', ' ') : null,
-    item.capacity ? `${item.capacity} kVA` : null,
-    item.supplierName || null,
-    item.locationLabel || (item.lat != null && item.lng != null ? `${item.lat}, ${item.lng}` : null),
-  ].filter(Boolean);
-  return parts.join(' | ');
-}
-
-function buildTransformerSearchText(item: any) {
-  return [
-    item.name,
-    item.type,
-    item.capacity,
-    item.supplierName,
-    item.supplierCode,
-    item.depotId,
-    item.lat,
-    item.lng,
-  ]
-    .filter((value) => value !== null && value !== undefined && value !== '')
-    .join(' ');
 }

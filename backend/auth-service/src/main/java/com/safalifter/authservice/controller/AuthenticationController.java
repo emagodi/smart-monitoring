@@ -208,6 +208,12 @@ public class AuthenticationController {
                         .supplierCode(user.getSupplier() != null ? user.getSupplier().getCode() : null)
                         .supplierName(user.getSupplier() != null ? user.getSupplier().getName() : null)
                         .depotId(user.getDepotId())
+                        .permissions(user.getRoles() == null ? java.util.Set.of() : user.getRoles().stream()
+                                .filter(r -> r.getStatus() == null || "ACTIVE".equalsIgnoreCase(r.getStatus()))
+                                .flatMap(r -> r.getPermissions().stream())
+                                .filter(p -> p.getStatus() == null || "ACTIVE".equalsIgnoreCase(p.getStatus()))
+                                .map(com.safalifter.authservice.entities.PermissionEntity::getName)
+                                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new)))
                         .build())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.ok(UserAccessResponse.builder()
@@ -332,22 +338,26 @@ public class AuthenticationController {
         return null; // Return null if no match is found
     }
 
-    @PostMapping("/change-password/{email}/{currentPassword}/{newPassword}")
-    @Operation(summary = "Endpoint to change password",
-            description = "This endpoint will allow you to change password by entering old password and new password. If the two are different, error is displayed")
-    public ResponseEntity<String> changePassword(
-            @PathVariable String email,
-            @PathVariable String currentPassword,
-            @PathVariable String newPassword) {
+    @PostMapping("/change-password")
+    @Operation(summary = "Change the signed-in user's password",
+            description = "Send {\"currentPassword\", \"newPassword\"} in the JSON body. The account is taken from the access token, so a user can only change their own password.")
+    public ResponseEntity<String> changePassword(@RequestBody PasswordChangeRequest request,
+                                                 Authentication authentication) {
+        String email = authentication != null ? authentication.getName() : null;
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Not signed in.");
+        }
+        if (request == null || request.currentPassword() == null || request.currentPassword().isBlank()
+                || request.newPassword() == null || request.newPassword().isBlank()) {
+            return ResponseEntity.badRequest().body("Current and new password are required.");
+        }
         try {
-            authenticationService.changePassword(email, currentPassword, newPassword);
+            authenticationService.changePassword(email, request.currentPassword(), request.newPassword());
             return ResponseEntity.ok("Password changed successfully");
         } catch (IllegalArgumentException e) {
-            // Return the message for invalid old password
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            // Handle the specific case for invalid old password
-            return ResponseEntity.badRequest().body("Invalid old password.");
+            return ResponseEntity.badRequest().body("Invalid current password.");
         }
     }
 
