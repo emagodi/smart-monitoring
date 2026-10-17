@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
+import { displayName } from "../lib/brand";
 import { ChevronRight, Menu, Search } from "lucide-react";
 import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
 import NotificationDropdown from "../components/header/NotificationDropdown";
@@ -77,10 +78,12 @@ const AppHeader: React.FC = () => {
   const breadcrumbs = [
     { label: "Home", to: "/dashboard" },
     ...pathSegments.map((segment, index) => ({
-      label: segment
-        .split("-")
-        .map((value) => value.charAt(0).toUpperCase() + value.slice(1))
-        .join(" "),
+      label: displayName(
+        segment
+          .split("-")
+          .map((value) => value.charAt(0).toUpperCase() + value.slice(1))
+          .join(" ")
+      ),
       to: `/${pathSegments.slice(0, index + 1).join("/")}`,
     })),
   ];

@@ -38,8 +38,8 @@ public class Alert {
     @Column(name = "transformer_name")
     private String transformerName;
 
-    @Column(name = "transformer_capacity")
-    private Integer transformerCapacity;
+    @Column(name = "transformer_number", length = 64)
+    private String transformerNumber;
 
     @Column(name = "depot_id")
     private Long depotId;

@@ -64,7 +64,7 @@ public class TransformerServiceImpl implements TransformerService {
         }
         Transformer transformer = Transformer.builder()
                 .name(request.getName())
-                .capacity(request.getCapacity())
+                .transformerNumber(request.getTransformerNumber())
                 .isActive(request.getIsActive())
                 .depotId(request.getDepotId())
                 .supplierCode(supplierCode)
@@ -107,6 +107,9 @@ public class TransformerServiceImpl implements TransformerService {
             return ExternalTransformerLookupResponse.builder()
                     .eui(normalizedEui)
                     .transformerName(trimToNull(transformerNode.path("transformerName").asText(null)))
+                    .transformerNumber(firstNonBlank(
+                            trimToNull(transformerNode.path("transformerNumber").asText(null)),
+                            trailingNumber(transformerNode.path("transformerName").asText(null))))
                     .rawTransformerType(trimToNull(transformerNode.path("transformerType").asText(null)))
                     .transformerType(mapRemoteTransformerType(transformerNode.path("transformerType").asText(null)))
                     .lat(readDecimal(locationNode, "latitude"))
@@ -161,7 +164,7 @@ public class TransformerServiceImpl implements TransformerService {
             });
         }
         transformer.setName(request.getName());
-        transformer.setCapacity(request.getCapacity());
+        transformer.setTransformerNumber(request.getTransformerNumber());
         transformer.setActive(request.getIsActive());
         transformer.setDepotId(request.getDepotId());
         if (supplierCode != null) {
@@ -379,7 +382,7 @@ public class TransformerServiceImpl implements TransformerService {
         return TransformerResponse.builder()
                 .id(transformer.getId())
                 .name(transformer.getName())
-                .capacity(transformer.getCapacity())
+                .transformerNumber(transformer.getTransformerNumber())
                 .isActive(transformer.isActive())
                 .depotId(transformer.getDepotId())
                 .supplierCode(transformer.getSupplierCode())
@@ -391,5 +394,16 @@ public class TransformerServiceImpl implements TransformerService {
                 .sensors(sensors)
                 .controllers(controllers)
                 .build();
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
+    /** "Warren Park 1 55 crescent - 2476" -> "2476" (partner names end with the transformer number). */
+    static String trailingNumber(String name) {
+        if (name == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[-\u2013]\\s*([A-Za-z]{0,3}\\d[\\w/]*)\\s*$").matcher(name.trim());
+        return m.find() ? m.group(1) : null;
     }
 }

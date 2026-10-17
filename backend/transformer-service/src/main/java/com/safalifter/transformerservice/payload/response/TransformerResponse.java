@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 public class TransformerResponse {
     private Long id;
     private String name;
-    private Integer capacity;
+    private String transformerNumber;
     private Boolean isActive;
     private Long depotId;
     private String supplierCode;

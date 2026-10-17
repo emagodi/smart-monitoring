@@ -28,7 +28,7 @@ import AddFromEuiDrawer from "./AddFromEuiDrawer";
 export type RegistryRow = {
   id: number;
   name: string;
-  capacity?: number | null;
+  transformerNumber?: string | null;
   type?: "GROUND_MOUNTED" | "POLE_MOUNTED" | null;
   active: boolean;
   depotId?: number | null;
@@ -461,7 +461,7 @@ export default function TransformerRegistry() {
                               <p className="truncate font-semibold text-slate-900 dark:text-slate-100">{row.name}</p>
                               <p className="text-[11px] text-slate-500">
                                 #{row.id}
-                                {row.capacity ? ` · ${row.capacity} kVA` : ""}
+                                {row.transformerNumber ? ` · No. ${row.transformerNumber}` : ""}
                                 {row.lat != null && row.lng != null ? (
                                   <span className="ml-1 inline-flex items-center gap-0.5 text-emerald-600">
                                     <MapPin className="h-3 w-3" /> mapped

@@ -41,7 +41,7 @@ const TransformerCrudScreen = () => {
     const transformerFields = [
         { name: 'name', label: 'Transformer Name', placeholder: 'Enter transformer name', required: true },
         // Depot is pre-selected
-        { name: 'capacity', label: 'Capacity (KVA)', placeholder: 'Enter capacity', keyboardType: 'numeric' },
+        { name: 'transformerNumber', label: 'Transformer number', placeholder: 'e.g. 2476' },
         { 
             name: 'location', 
             label: 'Location', 
@@ -92,7 +92,7 @@ const TransformerCrudScreen = () => {
             name: data.name,
             depotId: selectedDepot.id, // Use selected depot ID
             depotName: selectedDepot.name, // Use selected depot name
-            capacity: parseInt(data.capacity, 10) || 0,
+            transformerNumber: (data.transformerNumber || '').trim() || undefined,
             isActive: data.status === 'active',
             lat: parseFloat(data.lat) || 0.0,
             lng: parseFloat(data.lng) || 0.0
@@ -280,7 +280,7 @@ const TransformerCrudScreen = () => {
                     </LinearGradient>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.cardSubtitle}>
-                            {item.capacity} KVA • {item.depotName}
+                            {item.transformerNumber ? `No. ${item.transformerNumber}` : 'No number'} • {item.depotName}
                             {item.type ? ` • ${item.type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}` : ''}
                         </Text>
                         <View style={styles.statusBadge}>

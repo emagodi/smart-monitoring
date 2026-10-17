@@ -44,7 +44,7 @@ const TransformerFormScreen = ({ route, navigation }) => {
     
     const [formData, setFormData] = useState({
         name: '',
-        capacity: '',
+        transformerNumber: '',
         lat: '',
         lng: '',
         isActive: true,
@@ -60,7 +60,7 @@ const TransformerFormScreen = ({ route, navigation }) => {
         if (isEditing && transformer) {
             setFormData({
                 name: transformer.name || '',
-                capacity: String(transformer.capacity || ''),
+                transformerNumber: String(transformer.transformerNumber || ''),
                 lat: String(transformer.lat || ''),
                 lng: String(transformer.lng || ''),
                 isActive: transformer.isActive ?? true,
@@ -88,7 +88,7 @@ const TransformerFormScreen = ({ route, navigation }) => {
         try {
             const payload = {
                 ...formData,
-                capacity: parseInt(formData.capacity, 10) || 0,
+                transformerNumber: (formData.transformerNumber || '').trim() || undefined,
                 lat: parseFloat(formData.lat) || 0.0,
                 lng: parseFloat(formData.lng) || 0.0
             };
@@ -142,14 +142,14 @@ const TransformerFormScreen = ({ route, navigation }) => {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Capacity (KVA)</Text>
+                        <Text style={styles.label}>Transformer number</Text>
                         <TextInput
                             style={styles.input}
-                            value={formData.capacity}
-                            onChangeText={(text) => setFormData({...formData, capacity: text})}
-                            placeholder="e.g. 100"
+                            value={formData.transformerNumber}
+                            onChangeText={(text) => setFormData({...formData, transformerNumber: text})}
+                            placeholder="e.g. 2476"
                             placeholderTextColor="#999"
-                            keyboardType="numeric"
+                            autoCapitalize="characters"
                         />
                     </View>
 

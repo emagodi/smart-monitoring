@@ -21,7 +21,7 @@ const TEST_ACCOUNTS = [
   { email: "dispatcher@powertel.co.zw", name: "Tendai Dispatcher", role: "Dispatcher" },
   { email: "supervisor@powertel.co.zw", name: "Rudo Supervisor", role: "Loss control supervisor" },
   { email: "depot.user@powertel.co.zw", name: "Farai Depot User", role: "Depot-scoped dispatcher" },
-  { email: "magodi@oculus.co.zw", name: "Oculus partner", role: "Supplier / partner portal" },
+  { email: "magodi@oculus.co.zw", name: "Oqulus partner", role: "Supplier / partner portal" },
 ];
 const showTestAccounts = (() => {
   const flag = import.meta.env.VITE_SHOW_TEST_ACCOUNTS;

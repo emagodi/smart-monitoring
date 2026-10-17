@@ -44,6 +44,15 @@ public class SchemaUpgrader implements ApplicationRunner {
         }
         int changes = 0;
         try {
+            changes += step("capacity renamed to transformer number", () -> {
+                int c = 0;
+                c += renameColumn("transformers", "capacity", "transformer_number", "VARCHAR(64) NULL");
+                c += renameColumn("alerts", "transformer_capacity", "transformer_number", "VARCHAR(64) NULL");
+                c += addColumn("transformers", "transformer_number", "VARCHAR(64) NULL");
+                c += addColumn("alerts", "transformer_number", "VARCHAR(64) NULL");
+                c += addIndex("transformers", "idx_transformers_number", "transformer_number");
+                return c;
+            });
             changes += step("transformers telemetry columns", () -> {
                 int c = 0;
                 c += addColumn("transformers", "last_telemetry_at", "DATETIME(3) NULL");
@@ -250,6 +259,13 @@ public class SchemaUpgrader implements ApplicationRunner {
     private int addColumn(String table, String column, String ddl) {
         if (!tableExists(table) || columnType(table, column) != null) return 0;
         jdbc.execute("ALTER TABLE `" + table + "` ADD COLUMN `" + column + "` " + ddl);
+        return 1;
+    }
+
+    /** Rename a column (keeping its values) when the old one exists and the new one does not. */
+    private int renameColumn(String table, String from, String to, String ddl) {
+        if (!tableExists(table) || columnType(table, from) == null || columnType(table, to) != null) return 0;
+        jdbc.execute("ALTER TABLE `" + table + "` CHANGE COLUMN `" + from + "` `" + to + "` " + ddl);
         return 1;
     }
 

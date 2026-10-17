@@ -14,6 +14,8 @@ import java.math.BigDecimal;
 public class ExternalTransformerLookupResponse {
     private String eui;
     private String transformerName;
+    /** Utility transformer number from the partner, or the trailing number of the name ("Warren Park - 2476"). */
+    private String transformerNumber;
     private String rawTransformerType;
     private String transformerType;
     private BigDecimal lat;

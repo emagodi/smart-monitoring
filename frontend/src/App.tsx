@@ -26,7 +26,8 @@ import CreateTransformer from "./pages/Transformers/CreateTransformer";
 import EditTransformer from "./pages/Transformers/EditTransformer";
 import AlertsIndex from "./pages/Alerts";
 import SiteIndex from "./pages/Site";
-import OculusControlIndex from "./pages/OculusControl";
+import PartnersPage from "./pages/Partners";
+import PartnerDetail from "./pages/Partners/PartnerDetail";
 import NotificationCenter from "./pages/NotificationCenter";
 import GatewaysIndex from "./pages/Gateways";
 import GatewaysMapIndex from "./pages/Gateways/Map";
@@ -231,11 +232,20 @@ const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        <Route path="oculus-control" element={<Navigate to="/partners/oculus" replace />} />
         <Route
-          path="oculus-control"
+          path="partners"
           element={
-            <ProtectedRoute permission="controllers.update" allowedSupplierCodes={["oculus"]}>
-              <OculusControlIndex />
+            <ProtectedRoute permission="controllers.read">
+              <PartnersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="partners/:code"
+          element={
+            <ProtectedRoute permission="controllers.read">
+              <PartnerDetail />
             </ProtectedRoute>
           }
         />

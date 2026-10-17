@@ -59,7 +59,7 @@ public class RegistryService {
     public static class RegistryRow {
         private Long id;
         private String name;
-        private Integer capacity;
+        private String transformerNumber;
         private String type;
         private boolean active;
         private Long depotId;
@@ -90,7 +90,7 @@ public class RegistryService {
         /** Optional overrides; the partner lookup fills anything left blank. */
         private String name;
         private String type;
-        private Integer capacity;
+        private String transformerNumber;
         private BigDecimal lat;
         private BigDecimal lng;
         private String supplierCode;
@@ -129,7 +129,7 @@ public class RegistryService {
             p.addValue("tid", onlyTransformerId);
         }
         String sql = """
-                SELECT t.id, t.name, t.capacity, t.type, t.is_active, t.depot_id, t.supplier_code, t.supplier_name,
+                SELECT t.id, t.name, t.transformer_number, t.type, t.is_active, t.depot_id, t.supplier_code, t.supplier_name,
                        t.lat, t.lng, t.last_telemetry_at, t.created_at,
                        COUNT(c.id) AS controller_count,
                        GROUP_CONCAT(c.dev_eui ORDER BY c.id SEPARATOR ',') AS euis,
@@ -156,8 +156,7 @@ public class RegistryService {
         RegistryRow r = new RegistryRow();
         r.setId(rs.getLong("id"));
         r.setName(rs.getString("name"));
-        int cap = rs.getInt("capacity");
-        r.setCapacity(rs.wasNull() ? null : cap);
+        r.setTransformerNumber(rs.getString("transformer_number"));
         r.setType(rs.getString("type"));
         r.setActive(rs.getBoolean("is_active"));
         long depot = rs.getLong("depot_id");
@@ -270,6 +269,7 @@ public class RegistryService {
             ExternalTransformerLookupResponse remote = transformerService.lookupRemoteByEui(eui);
             out.put("remoteFound", true);
             out.put("name", remote.getTransformerName());
+            out.put("transformerNumber", remote.getTransformerNumber());
             out.put("type", remote.getTransformerType());
             out.put("rawType", remote.getRawTransformerType());
             out.put("lat", remote.getLat());
@@ -315,7 +315,7 @@ public class RegistryService {
         TransformerType type = parseType(!blank(r.getType()) ? r.getType() : remote != null ? remote.getTransformerType() : null);
         Transformer transformer = transformerRepository.save(Transformer.builder()
                 .name(name)
-                .capacity(r.getCapacity())
+                .transformerNumber(!blank(r.getTransformerNumber()) ? r.getTransformerNumber().trim() : remote != null ? remote.getTransformerNumber() : null)
                 .isActive(true)
                 .depotId(r.getDepotId())
                 .supplierCode(supplierCode)

@@ -138,7 +138,7 @@ public class AlertServiceImpl implements AlertService {
                 .message(request.getMessage())
                 .transformerId(request.getTransformerId())
                 .transformerName(request.getTransformerName())
-                .transformerCapacity(request.getTransformerCapacity())
+                .transformerNumber(request.getTransformerNumber())
                 .depotId(request.getDepotId())
                 .depotName(request.getDepotName())
                 .lat(request.getLat())
@@ -327,7 +327,7 @@ public class AlertServiceImpl implements AlertService {
         alert.setMessage(request.getMessage());
         alert.setTransformerId(request.getTransformerId());
         alert.setTransformerName(request.getTransformerName());
-        alert.setTransformerCapacity(request.getTransformerCapacity());
+        alert.setTransformerNumber(request.getTransformerNumber());
         alert.setDepotId(request.getDepotId());
         alert.setDepotName(request.getDepotName());
         alert.setLat(request.getLat());
@@ -500,7 +500,7 @@ public class AlertServiceImpl implements AlertService {
                 .message(alert.getMessage())
                 .transformerId(alert.getTransformerId())
                 .transformerName(alert.getTransformerName())
-                .transformerCapacity(alert.getTransformerCapacity())
+                .transformerNumber(alert.getTransformerNumber())
                 .depotId(alert.getDepotId())
                 .depotName(alert.getDepotName())
                 .lat(alert.getLat())

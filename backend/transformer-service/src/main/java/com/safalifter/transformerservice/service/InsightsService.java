@@ -101,7 +101,7 @@ public class InsightsService {
         Map<String, Object> b = new HashMap<>();
         for (String k : List.of("transformers", "online", "delayed", "offline", "neverSeen", "noDevice", "controllers",
                 "openAlerts", "alerts30d", "realThreats30d", "falseAlarms30d", "technicalFaults30d", "arrivalSecSum", "arrivalCount",
-                "unmatchedControllers", "groundMounted", "poleMounted", "mapped")) {
+                "unmatchedControllers", "groundMounted", "poleMounted", "mapped", "armed", "disarmed")) {
             b.put(k, 0L);
         }
         return b;
@@ -119,6 +119,9 @@ public class InsightsService {
         if ("GROUND_MOUNTED".equals(r.getType())) inc(b, "groundMounted", 1);
         if ("POLE_MOUNTED".equals(r.getType())) inc(b, "poleMounted", 1);
         if (r.getLat() != null && r.getLng() != null) inc(b, "mapped", 1);
+        String arm = MapService.armState(r);
+        if ("ARMED".equals(arm)) inc(b, "armed", 1);
+        if ("DISARMED".equals(arm)) inc(b, "disarmed", 1);
         inc(b, "controllers", r.getControllerCount());
         inc(b, "openAlerts", r.getOpenAlerts());
         inc(b, "alerts30d", inc[0]);

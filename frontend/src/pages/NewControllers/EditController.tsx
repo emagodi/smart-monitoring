@@ -227,7 +227,7 @@ export default function EditController() {
 function buildTransformerDescription(item: any) {
   const parts = [
     item.type ? item.type.replaceAll('_', ' ') : null,
-    item.capacity ? `${item.capacity} kVA` : null,
+    item.transformerNumber ? `No. ${item.transformerNumber}` : null,
     item.supplierName || null,
     item.locationLabel || (item.lat != null && item.lng != null ? `${item.lat}, ${item.lng}` : null),
   ].filter(Boolean);
@@ -238,7 +238,7 @@ function buildTransformerSearchText(item: any) {
   return [
     item.name,
     item.type,
-    item.capacity,
+    item.transformerNumber,
     item.supplierName,
     item.supplierCode,
     item.depotId,

@@ -56,7 +56,7 @@ interface Transformer {
   id: number;
   name: string;
   type?: string;
-  capacity?: number;
+  transformerNumber?: string | null;
   isActive?: boolean;
   depotId?: number;
   depot?: { id: number; name: string };
@@ -183,7 +183,7 @@ export default function TransformersIndex() {
   const [savingCreate, setSavingCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createNameInput, setCreateNameInput] = useState('');
-  const [createCapacityInput, setCreateCapacityInput] = useState<number | ''>('');
+  const [createNumberInput, setCreateNumberInput] = useState('');
   const [createTypeInput, setCreateTypeInput] = useState<TransformerTypeOption | ''>('');
   const [createIsActiveInput, setCreateIsActiveInput] = useState(true);
   const [createDepotInput, setCreateDepotInput] = useState<number | ''>('');
@@ -199,7 +199,7 @@ export default function TransformersIndex() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editNameInput, setEditNameInput] = useState('');
-  const [editCapacityInput, setEditCapacityInput] = useState<number | ''>('');
+  const [editNumberInput, setEditNumberInput] = useState('');
   const [editTypeInput, setEditTypeInput] = useState<TransformerTypeOption | ''>('');
   const [editIsActiveInput, setEditIsActiveInput] = useState(true);
   const [editDepotInput, setEditDepotInput] = useState<number | ''>('');
@@ -645,7 +645,7 @@ export default function TransformersIndex() {
 
   const handleAddTransformer = () => {
       setCreateNameInput('');
-      setCreateCapacityInput('');
+      setCreateNumberInput('');
       setCreateTypeInput('');
       setCreateIsActiveInput(true);
       setCreateDepotInput(selectedDepot?.id ?? '');
@@ -708,7 +708,7 @@ export default function TransformersIndex() {
   const openEditModal = (t: Transformer) => {
       setActiveTransformer(t);
       setEditNameInput(t.name || '');
-      setEditCapacityInput(t.capacity ?? '');
+      setEditNumberInput(t.transformerNumber ?? '');
       setEditTypeInput((t.type as TransformerTypeOption | undefined) ?? '');
       setEditIsActiveInput(t.isActive ?? true);
       setEditDepotInput(t.depotId ?? t.depot?.id ?? selectedDepot?.id ?? '');
@@ -747,7 +747,7 @@ export default function TransformersIndex() {
         `${API_BASE_URL}/api/v1/transformers/create`,
         {
           name: createNameInput.trim(),
-          capacity: createCapacityInput === '' ? 0 : Number(createCapacityInput),
+          transformerNumber: createNumberInput.trim() || undefined,
           type: createTypeInput || null,
           isActive: createIsActiveInput,
           depotId: isSupplierUser ? null : Number(createDepotInput),
@@ -797,7 +797,7 @@ export default function TransformersIndex() {
       const matchedDepot = createDepotOptions.find((depot) => depot.id === Number(editDepotInput));
       const payload = {
         name: editNameInput.trim(),
-        capacity: editCapacityInput === '' ? undefined : Number(editCapacityInput),
+        transformerNumber: editNumberInput.trim() || undefined,
         type: editTypeInput || null,
         isActive: editIsActiveInput,
         depotId: isSupplierUser ? null : Number(editDepotInput),
@@ -1103,7 +1103,7 @@ export default function TransformersIndex() {
       return 'Step through the same hierarchy used in Regions,  table styling and contextual actions.';
     }
     if (viewMode === 'TRANSFORMERS') {
-      return 'Review status, capacity, and downstream device access without leaving the current hierarchy context.';
+      return 'Review status, transformer number, and downstream device access without leaving the current hierarchy context.';
     }
     if (viewMode === 'CONTROLLER_READINGS') {
       return 'Apply a time window and inspect decoded controller payloads in the same workspace.';
@@ -1947,7 +1947,7 @@ export default function TransformersIndex() {
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
                     <th className="px-3 py-2.5">Transformer</th>
-                    <th className="px-3 py-2.5">Capacity</th>
+                    <th className="px-3 py-2.5">Transformer no.</th>
                     <th className="px-3 py-2.5">Type</th>
                     <th className="px-3 py-2.5">Status</th>
                     <th className="px-3 py-2.5">Devices</th>
@@ -1981,10 +1981,10 @@ export default function TransformersIndex() {
                         <td className="px-3 py-3">
                           <span
                             className={`text-sm font-semibold ${
-                              transformer.capacity ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'
+                              transformer.transformerNumber ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'
                             }`}
                           >
-                            {transformer.capacity ? `${transformer.capacity} kVA` : '—'}
+                            {transformer.transformerNumber || '—'}
                           </span>
                         </td>
                         <td className="px-3 py-3">
@@ -2396,13 +2396,13 @@ export default function TransformersIndex() {
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Capacity (kVA)
+                  Transformer number
                 </label>
                 <input
-                  type="number"
-                  value={createCapacityInput}
-                  onChange={(e) => setCreateCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="e.g. 500"
+                  type="text"
+                  value={createNumberInput}
+                  onChange={(e) => setCreateNumberInput(e.target.value)}
+                  placeholder="e.g. 2476"
                   className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
               </div>
@@ -2566,13 +2566,13 @@ export default function TransformersIndex() {
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Capacity (kVA)
+                  Transformer number
                 </label>
                 <input
-                  type="number"
-                  value={editCapacityInput}
-                  onChange={(e) => setEditCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="e.g. 500"
+                  type="text"
+                  value={editNumberInput}
+                  onChange={(e) => setEditNumberInput(e.target.value)}
+                  placeholder="e.g. 2476"
                   className="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
               </div>
@@ -2777,8 +2777,8 @@ export default function TransformersIndex() {
                     tone: activeTransformer.isActive ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300',
                   },
                   {
-                    label: 'Capacity',
-                    value: activeTransformer.capacity ? `${activeTransformer.capacity} kVA` : '—',
+                    label: 'Transformer number',
+                    value: activeTransformer.transformerNumber || '—',
                     tone: 'text-slate-900 dark:text-slate-100',
                   },
                   {

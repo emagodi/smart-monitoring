@@ -22,10 +22,10 @@ export default function CreateTransformer() {
 
   // Form State
   const [nameInput, setNameInput] = useState('');
-  const [capacityInput, setCapacityInput] = useState<number | ''>('');
+  const [numberInput, setNumberInput] = useState('');
   const [typeInput, setTypeInput] = useState<TransformerTypeOption | ''>('');
   const [isActiveInput, setIsActiveInput] = useState<boolean>(true);
-  const [depotInput, setDepotInput] = useState<number | ''>('');
+  const [depotInput, setDepotInput] = useState('');
   const [latInput, setLatInput] = useState<number | ''>('');
   const [lngInput, setLngInput] = useState<number | ''>('');
 
@@ -73,7 +73,7 @@ export default function CreateTransformer() {
       
       const payload = {
         name: nameInput,
-        capacity: capacityInput ? Number(capacityInput) : 0,
+        transformerNumber: numberInput.trim() || undefined,
         type: typeInput || null,
         isActive: isActiveInput, // Reverted to isActive to match backend DTO
         depotId: isSupplierUser ? null : Number(depotInput),
@@ -148,17 +148,17 @@ export default function CreateTransformer() {
               </div>
               )}
 
-              {/* Capacity */}
+              {/* Transformer number */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-                  Capacity (kVA)
+                  Transformer number
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   className="block w-full rounded-lg border-gray-300 bg-white focus:bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm py-2.5 transition-all"
-                  value={capacityInput}
-                  onChange={(e) => setCapacityInput(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="e.g. 500"
+                  value={numberInput}
+                  onChange={(e) => setNumberInput(e.target.value)}
+                  placeholder="e.g. 2476"
                 />
               </div>
 

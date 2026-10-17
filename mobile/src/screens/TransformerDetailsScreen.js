@@ -73,7 +73,7 @@ const TransformerDetailsScreen = ({ route, navigation }) => {
       <View style={styles.card}>
         <Text style={styles.title}>{transformer.name}</Text>
         <Text style={styles.detailText}>Depot: {transformer.depotName || transformer.depotId}</Text>
-        <Text style={styles.detailText}>Capacity: {transformer.capacity} KVA</Text>
+        <Text style={styles.detailText}>Transformer number: {transformer.transformerNumber || '—'}</Text>
         
         <View style={styles.row}>
             <Text style={styles.label}>Status: {transformer.isActive ? 'Active' : 'Maintenance'}</Text>

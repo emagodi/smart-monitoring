@@ -21,7 +21,9 @@ public class Transformer {
 
     private String name;
 
-    private Integer capacity;
+    /** Utility transformer number (was "capacity"; column renamed by SchemaUpgrader). */
+    @Column(name = "transformer_number", length = 64)
+    private String transformerNumber;
 
     @Column(name = "is_active")
     private boolean isActive;
@@ -62,8 +64,8 @@ public class Transformer {
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-    public Integer getCapacity() { return capacity; }
-    public void setCapacity(Integer capacity) { this.capacity = capacity; }
+    public String getTransformerNumber() { return transformerNumber; }
+    public void setTransformerNumber(String transformerNumber) { this.transformerNumber = transformerNumber; }
     public boolean isActive() { return isActive; }
     public void setActive(boolean isActive) { this.isActive = isActive; }
     public Long getDepotId() { return depotId; }

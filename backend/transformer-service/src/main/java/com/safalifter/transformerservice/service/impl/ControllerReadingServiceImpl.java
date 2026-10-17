@@ -115,7 +115,7 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
         AlertRequest alert = AlertRequest.builder()
                 .transformerId(transformer.getId())
                 .transformerName(transformer.getName())
-                .transformerCapacity(transformer.getCapacity())
+                .transformerNumber(transformer.getTransformerNumber())
                 .depotId(transformer.getDepotId())
                 .depotName(resolveAlertLocation(transformer))
                 .lat(transformer.getLat())

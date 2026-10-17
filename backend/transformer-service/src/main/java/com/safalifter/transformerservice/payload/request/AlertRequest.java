@@ -18,7 +18,7 @@ public class AlertRequest {
     private String message;
     private Long transformerId;
     private String transformerName;
-    private Integer transformerCapacity;
+    private String transformerNumber;
     private Long depotId;
     private String depotName;
     private BigDecimal lat;

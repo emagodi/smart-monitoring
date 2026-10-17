@@ -27,7 +27,7 @@ interface TransformerDetail {
   transformer_id: string;
   depot_name: string;
   region_name: string;
-  capacity: number;
+  transformerNumber?: string | null;
   installation_date: string;
   description: string;
   is_active: boolean;
@@ -191,8 +191,8 @@ const TransformerDetail: React.FC = () => {
               <p className="font-medium">{transformer.depot_name}, {transformer.region_name}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Capacity</p>
-              <p className="font-medium">{transformer.capacity} MVA</p>
+              <p className="text-sm text-gray-600">Transformer number</p>
+              <p className="font-medium">{transformer.transformerNumber || "—"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Installation Date</p>

@@ -44,7 +44,7 @@ public class AlertQueryRepository {
 
     private static final String SELECT_COLUMNS = """
             SELECT a.id, a.sensor_id, a.camera_id, a.value, a.is_alert, a.message,
-                   a.transformer_id, a.transformer_name, a.transformer_capacity,
+                   a.transformer_id, a.transformer_name, a.transformer_number,
                    a.depot_id, a.depot_name, a.lat, a.lng, a.dev_eui, a.device_id, a.device_name,
                    a.sensor_type, a.supplier_code, a.supplier_name, a.image_url,
                    a.created_at, a.updated_at, a.occurrence_count, a.last_seen_at, a.last_notified_at,
@@ -292,7 +292,7 @@ public class AlertQueryRepository {
             .message(rs.getString("message"))
             .transformerId(nullableLong(rs, "transformer_id"))
             .transformerName(rs.getString("transformer_name"))
-            .transformerCapacity(nullableInt(rs, "transformer_capacity"))
+            .transformerNumber(rs.getString("transformer_number"))
             .depotId(nullableLong(rs, "depot_id"))
             .depotName(rs.getString("depot_name"))
             .lat(rs.getBigDecimal("lat"))

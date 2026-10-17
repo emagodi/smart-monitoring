@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
 public class OculusControlServiceImpl implements OculusControlService {
 
     private static final String OCULUS_SUPPLIER_CODE = "oculus";
-    private static final String OCULUS_SUPPLIER_NAME = "Oculus";
+    private static final String OCULUS_SUPPLIER_NAME = "Oqulus";
     private static final String LORIOT_PROVIDER = "LORIOT";
     private static final String ARM_HEX = "030100";
     private static final String DISARM_HEX = "030000";

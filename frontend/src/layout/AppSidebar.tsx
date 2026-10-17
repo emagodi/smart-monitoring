@@ -30,7 +30,8 @@ import {
   Siren,
   Truck,
   BarChart3,
-  Plug
+  Plug,
+  Handshake
 } from 'lucide-react';
 
 interface NavItem {
@@ -160,11 +161,10 @@ const navGroups: NavGroup[] = [
         permission: "controllers.read",
       },
       {
-        icon: <Shield className="w-5 h-5" />,
-        name: "Oqulus Control",
-        path: "/oculus-control",
-        permission: "controllers.update",
-        supplierCodes: ["oculus"],
+        icon: <Handshake className="w-5 h-5" />,
+        name: "Partners",
+        path: "/partners",
+        permission: "controllers.read",
       },
     ],
   },

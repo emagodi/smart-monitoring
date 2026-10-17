@@ -304,7 +304,7 @@ public class SensorReadingServiceImpl implements SensorReadingService {
                     .message(message)
                     .transformerId(sensor.getTransformerId())
                     .transformerName(tf != null ? tf.getName() : null)
-                    .transformerCapacity(tf != null ? tf.getCapacity() : null)
+                    .transformerNumber(tf != null ? tf.getTransformerNumber() : null)
                     .depotId(tf != null ? tf.getDepotId() : null)
                     .depotName(resolveAlertLocation(tf))
                     .lat(tf != null ? tf.getLat() : null)

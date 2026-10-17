@@ -33,7 +33,7 @@ type MapResponse = {
 type Detail = {
   id: number;
   name: string;
-  capacity?: number | null;
+  transformerNumber?: string | null;
   type?: string | null;
   depotId?: number | null;
   supplierCode?: string | null;
@@ -410,7 +410,7 @@ function DetailPanel({
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Fact icon={<Zap className="h-3.5 w-3.5" />} label="Type" value={`${d.type === "GROUND_MOUNTED" ? "Ground (GMT)" : d.type === "POLE_MOUNTED" ? "Pole (PMT)" : d.type || "—"}${d.capacity ? ` · ${d.capacity} kVA` : ""}`} />
+              <Fact icon={<Zap className="h-3.5 w-3.5" />} label="Type" value={`${d.type === "GROUND_MOUNTED" ? "Ground (GMT)" : d.type === "POLE_MOUNTED" ? "Pole (PMT)" : d.type || "—"}${d.transformerNumber ? ` · No. ${d.transformerNumber}` : ""}`} />
               <Fact icon={<Radio className="h-3.5 w-3.5" />} label="Partner" value={displayPartner(d.supplierName, d.supplierCode)} />
               <Fact icon={<Cpu className="h-3.5 w-3.5" />} label="Last signal" value={timeAgo(d.lastSignalAt)} />
               <Fact
