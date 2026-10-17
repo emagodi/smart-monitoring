@@ -1,13 +1,8 @@
 package com.safalifter.transformerservice.ingest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.safalifter.transformerservice.entities.Sensor;
-import com.safalifter.transformerservice.entities.SensorReading;
 import com.safalifter.transformerservice.integration.loriot.LoriotProperties;
-import com.safalifter.transformerservice.repository.SensorReadingRepository;
-import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.GatewayStatusService;
-import com.safalifter.transformerservice.service.SensorReadingService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,9 +44,6 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
     private String loriotWsUrlProp;
 
     private final LoriotProperties loriotProperties;
-    private final SensorRepository sensorRepository;
-    private final SensorReadingRepository sensorReadingRepository;
-    private final SensorReadingService sensorReadingService;
     private final GatewayStatusService gatewayStatusService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Value("${loriot.ws.log:false}")
@@ -282,45 +274,8 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
                 log.info("UPLINK deveui={} port={} data={}", deveui, port, dataField);
             }
 
-            String sensorKey = deveui + "-" + port;
-            Optional<Sensor> sensorOpt = sensorRepository.findByDeviceId(sensorKey);
-            if (sensorOpt.isEmpty()) {
-                long tfId = resolveDefaultTransformerId();
-                Sensor newSensor = new Sensor();
-                newSensor.setDeviceId(sensorKey);
-                newSensor.setDevEui(deveui);
-                newSensor.setName(deveui + " Port " + port);
-                newSensor.setType(defaultSensorType == null || defaultSensorType.isBlank() ? null : defaultSensorType);
-                newSensor.setTransformerId(tfId);
-                newSensor = sensorRepository.save(newSensor);
-                log.info("Auto-created sensor id={} deviceId={} transformerId={}", newSensor.getId(), newSensor.getDeviceId(), newSensor.getTransformerId());
-                sensorOpt = Optional.of(newSensor);
-            }
-            Sensor sensor = sensorOpt.get();
-
-            try {
-                String decoded = buildDecodedSummary(msg);
-                java.util.Optional<SensorReading> latestOpt = sensorReadingRepository.findTopBySensorIdOrderByUpdatedAtDesc(sensor.getId());
-                SensorReading saved;
-                if (latestOpt.isPresent()) {
-                    SensorReading existing = latestOpt.get();
-                    existing.setRawPayload(rawMessage);
-                    existing.setDecoded(decoded);
-                    saved = sensorReadingRepository.save(existing);
-                    log.info("Updated SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
-                } else {
-                    SensorReading reading = new SensorReading();
-                    reading.setSensorId(sensor.getId());
-                    reading.setRawPayload(rawMessage);
-                    reading.setDecoded(decoded);
-                    saved = sensorReadingRepository.save(reading);
-                    log.info("Saved SensorReading id={} sensorId={} primary={}", saved.getId(), sensor.getId(), extractPrimaryValue(saved.getDecoded()));
-                }
-                try { sensorReadingService.processTriggers(saved); } catch (Exception ignored) {}
-                if (logWs) log.info("DECODE {}", saved.getDecoded());
-            } catch (Exception e) {
-                log.error("Failed to persist sensor reading for {}", sensorKey, e);
-            }
+            // Sensors were retired: device telemetry is handled per controller (supplier ingest). This socket only
+            // keeps gateway metadata up to date.
             try {
                 extractAndRegisterGatewayMetadata(msg);
             } catch (Exception gatewayMetaEx) {

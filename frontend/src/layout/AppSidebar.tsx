@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
 import { useAuth } from "../context/AuthContext";
+import { useScope, type Scope } from "../lib/scope";
 
 // Import icons from lucide-react
 import {
@@ -10,7 +11,6 @@ import {
   MapPinned,
   Warehouse,
   Zap,
-  Activity,
   User,
   Users,
   Shield,
@@ -42,6 +42,10 @@ interface NavItem {
   permission?: string;
   hideForSupplier?: boolean;
   supplierCodes?: string[];
+  /** Which scopes see this link (default: all). Depot and partner users only get pages about their own slice. */
+  scopes?: Scope[];
+  /** For depot users: shown if they hold any of these (depot staff see their own sites and gateways). */
+  depotAnyOf?: string[];
 }
 
 interface NavGroup {
@@ -63,6 +67,7 @@ const navGroups: NavGroup[] = [
         icon: <BarChart3 className="w-5 h-5" />,
         name: "Insights",
         path: "/insights",
+        scopes: ["NATIONAL"],
         permission: "dashboard.read",
       },
     ],
@@ -74,6 +79,7 @@ const navGroups: NavGroup[] = [
         icon: <MapPinned className="w-5 h-5" />,
         name: "Regions",
         path: "/regions",
+        scopes: ["NATIONAL"],
         permission: "regions.read",
         hideForSupplier: true,
       },
@@ -81,6 +87,7 @@ const navGroups: NavGroup[] = [
         icon: <MapPinned className="w-5 h-5" />,
         name: "Districts",
         path: "/districts",
+        scopes: ["NATIONAL"],
         permission: "districts.read",
         hideForSupplier: true,
       },
@@ -88,6 +95,7 @@ const navGroups: NavGroup[] = [
         icon: <Warehouse className="w-5 h-5" />,
         name: "Depots",
         path: "/depots",
+        scopes: ["NATIONAL"],
         permission: "depots.read",
         hideForSupplier: true,
       },
@@ -96,6 +104,7 @@ const navGroups: NavGroup[] = [
         name: "Sites",
         path: "/sites",
         permission: "sites.read",
+        depotAnyOf: ["sites.read", "transformers.read"],
       },
       {
         icon: <Zap className="w-5 h-5" />,
@@ -104,29 +113,28 @@ const navGroups: NavGroup[] = [
         permission: "transformers.read",
       },
       {
-        icon: <Activity className="w-5 h-5" />,
-        name: "Sensors",
-        path: "/sensors",
-        permission: "sensors.read",
-      },
-      {
         icon: <Router className="w-5 h-5" />,
         name: "Gateways",
         path: "/gateways",
+        scopes: ["NATIONAL", "DEPOT"],
         permission: "gateways.view",
+        depotAnyOf: ["gateways.view", "transformers.read"],
         hideForSupplier: true,
       },
       {
         icon: <MapIcon className="w-5 h-5" />,
         name: "Gateway Map",
         path: "/gateways-map",
+        scopes: ["NATIONAL", "DEPOT"],
         permission: "gateways.view",
+        depotAnyOf: ["gateways.view", "transformers.read"],
         hideForSupplier: true,
       },
       {
         icon: <CardSim className="w-5 h-5" />,
         name: "SIM Cards",
         path: "/sims",
+        scopes: ["NATIONAL"],
         permission: "sims.view",
         hideForSupplier: true,
       },
@@ -145,6 +153,7 @@ const navGroups: NavGroup[] = [
         icon: <Truck className="w-5 h-5" />,
         name: "Fleet",
         path: "/fleet",
+        scopes: ["NATIONAL", "DEPOT"],
         permission: "fleet.read",
         hideForSupplier: true,
       },
@@ -158,6 +167,7 @@ const navGroups: NavGroup[] = [
         icon: <Cpu className="w-5 h-5" />,
         name: "New Controllers",
         path: "/new-controllers",
+        scopes: ["NATIONAL"],
         permission: "controllers.read",
       },
       {
@@ -175,6 +185,7 @@ const navGroups: NavGroup[] = [
         icon: <Users className="w-5 h-5" />,
         name: "Users",
         path: "/users",
+        scopes: ["NATIONAL"],
         permission: "users.read",
         hideForSupplier: true,
       },
@@ -182,6 +193,7 @@ const navGroups: NavGroup[] = [
         icon: <Shield className="w-5 h-5" />,
         name: "Roles",
         path: "/roles",
+        scopes: ["NATIONAL"],
         permission: "roles.read",
         hideForSupplier: true,
       },
@@ -189,6 +201,7 @@ const navGroups: NavGroup[] = [
         icon: <Plug className="w-5 h-5" />,
         name: "Integrations",
         path: "/integrations",
+        scopes: ["NATIONAL"],
         permission: "integrations.read",
         hideForSupplier: true,
       },
@@ -196,6 +209,7 @@ const navGroups: NavGroup[] = [
         icon: <KeySquare className="w-5 h-5" />,
         name: "Permissions",
         path: "/permissions",
+        scopes: ["NATIONAL"],
         permission: "permissions.read",
         hideForSupplier: true,
       },
@@ -203,6 +217,7 @@ const navGroups: NavGroup[] = [
         icon: <Building className="w-5 h-5" />,
         name: "User Types",
         path: "/user-types",
+        scopes: ["NATIONAL"],
         permission: "usertypes.read",
         hideForSupplier: true,
       },
@@ -223,6 +238,7 @@ const navGroups: NavGroup[] = [
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen } = useSidebar();
   const { hasPermission, user } = useAuth();
+  const { scope, supplierCode } = useScope();
   const location = useLocation();
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
@@ -240,9 +256,19 @@ const AppSidebar: React.FC = () => {
     return navGroups
       .map((group) => ({
         ...group,
-        items: group.items.filter(
+        items: group.items
+          .filter((item) => !item.scopes || item.scopes.includes(scope))
+          // A partner user's "Partners" link opens their own partner page (their transformers and controls).
+          .map((item) =>
+            item.path === "/partners" && scope === "PARTNER"
+              ? { ...item, name: "My transformers", path: supplierCode ? `/partners/${encodeURIComponent(supplierCode)}` : "/partners" }
+              : item
+          )
+          .filter(
           (item) =>
-            (!item.permission || hasPermission(item.permission)) &&
+            (scope === "DEPOT" && item.depotAnyOf
+              ? item.depotAnyOf.some((p) => hasPermission(p))
+              : !item.permission || hasPermission(item.permission)) &&
             !(isSupplierUser && item.hideForSupplier) &&
             (!isSupplierUser ||
               !item.supplierCodes ||
@@ -250,7 +276,7 @@ const AppSidebar: React.FC = () => {
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [hasPermission, isSupplierUser, user?.supplierCode]);
+  }, [hasPermission, isSupplierUser, user?.supplierCode, scope, supplierCode]);
 
   return (
     <aside

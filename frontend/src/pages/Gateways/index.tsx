@@ -24,6 +24,8 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useScope } from "../../lib/scope";
+import { useGeography } from "../Registry/geo";
 import { useSearchParams } from "react-router-dom";
 import { Modal } from "../../components/ui/modal";
 import { EditGatewayModal } from "./EditGatewayModal";
@@ -268,6 +270,8 @@ function FilterButton({
 
 export default function GatewaysIndex() {
   const { token, hasPermission } = useAuth();
+  const { isDepot, depotId: myDepot } = useScope();
+  const myDepotName = useGeography(token).pathOf(myDepot).depotName;
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -566,6 +570,32 @@ export default function GatewaysIndex() {
     }
   };
 
+  // Deep link from the gateway map: /gateways?open=<id> opens that gateway's detail view.
+  const openParam = searchParams.get("open");
+  useEffect(() => {
+    if (!openParam || !token) return;
+    let alive = true;
+    const clearParam = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete("open");
+      setSearchParams(next, { replace: true });
+    };
+    axios
+      .get(`${API_BASE_URL}/api/v1/gateways/${openParam}`, { headers })
+      .then((r) => {
+        clearParam();
+        if (alive && r.data) void openDetailModal(normalizeGatewayItem<GatewayItem>(r.data));
+      })
+      .catch((e) => {
+        clearParam();
+        console.error(e);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openParam, token]);
+
   const closeDetailModal = () => {
     setDetailModalOpen(false);
     setSelectedGateway(null);
@@ -617,8 +647,8 @@ export default function GatewaysIndex() {
     <div className="space-y-4">
       <PageHero
         eyebrow="Assets · Gateways"
-        title="LoRaWAN gateways"
-        subtitle={`LORIOT-synced gateways with their status, SIM cards and location. Last sync: ${syncStatusLabel(summary.lastSyncStatus).toLowerCase()} · ${formatDateTime(summary.lastSyncAt)}.`}
+        title={isDepot ? `Gateways · ${myDepotName}` : "LoRaWAN gateways"}
+        subtitle={`${isDepot ? `Gateways assigned to ${myDepotName} depot. ` : ""}LORIOT-synced gateways with their status, SIM cards and location. Last sync: ${syncStatusLabel(summary.lastSyncStatus).toLowerCase()} · ${formatDateTime(summary.lastSyncAt)}.`}
         actions={
           <HeroButton
             onClick={() => {
@@ -759,6 +789,8 @@ export default function GatewaysIndex() {
             </div>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {isDepot ? null : (
+            <>
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Region</span>
               <select
@@ -795,6 +827,8 @@ export default function GatewaysIndex() {
                 ))}
               </select>
             </label>
+            </>
+            )}
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Network</span>
               <select

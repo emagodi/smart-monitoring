@@ -41,6 +41,11 @@ export function cachedGet<T>(url: string, token?: string | null, maxAgeMs = 30_0
 
 export const peekCache = <T,>(url: string, token?: string | null) => store.get(keyOf(url, token))?.data as T | undefined;
 
+/** Forget everything (sign in / sign out), so one account never sees another's cached figures. */
+export function clearCache() {
+  store.clear();
+}
+
 /** Forget cached responses whose URL contains the fragment (call after a create / update / delete). */
 export function invalidateCache(fragment: string) {
   for (const key of Array.from(store.keys())) {
@@ -84,6 +89,8 @@ export function useCachedGet<T>(url: string | null, token?: string | null, opts?
         setLoading(false);
         setRefreshing(true);
       } else {
+        // Nothing cached for this URL / user yet: never keep showing the previous user's (or URL's) data.
+        setData(undefined);
         setLoading(true);
       }
       try {

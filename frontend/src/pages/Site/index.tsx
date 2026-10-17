@@ -6,6 +6,7 @@ import { displayName } from "../../lib/brand";
 import { useGeography } from "../Registry/geo";
 import MapExplorer from "../../components/maps/MapExplorer";
 import type { EstateStats } from "../Dashboard/types";
+import { useScope } from "../../lib/scope";
 import { HeroButton, HeroStat, HeroStats, Notice, PageHero, fmtNum } from "../../components/ui/page";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
@@ -14,6 +15,7 @@ const API = import.meta.env.VITE_API_BASE_URL || "";
 export default function SiteIndex() {
   const { token, hasPermission } = useAuth();
   const geo = useGeography(token);
+  const { isNational } = useScope();
   const stats = useCachedGet<EstateStats>(token ? `${API}/api/v1/transformers/stats` : null, token, {
     maxAgeMs: 30_000,
     refreshMs: 60_000,
@@ -29,8 +31,9 @@ export default function SiteIndex() {
     return "Every transformer on one map · click a tile to drill into the list, or a dot to open that site";
   }, [geo, s]);
 
-  const canRegions = hasPermission("regions.read") && s?.scope !== "PARTNER";
-  const canDepots = hasPermission("depots.read") && s?.scope !== "PARTNER";
+  // Region and depot lists are national pages; depot and partner users only see their own sites.
+  const canRegions = isNational && hasPermission("regions.read") && s?.scope === "NATIONAL";
+  const canDepots = isNational && hasPermission("depots.read") && s?.scope === "NATIONAL";
   const canAlerts = hasPermission("alerts.read") || hasPermission("response.read");
   const incidentsLink = hasPermission("response.read") ? "/response" : hasPermission("alerts.read") ? "/alerts" : undefined;
   const tiles = 5 + (canAlerts ? 1 : 0) + (canRegions ? 1 : 0) + (canDepots ? 1 : 0);

@@ -24,6 +24,5 @@ public class TransformerResponse {
     private String locationLabel;
     private BigDecimal lat;
     private BigDecimal lng;
-    private List<SensorResponse> sensors;
     private List<ControllerResponse> controllers;
 }

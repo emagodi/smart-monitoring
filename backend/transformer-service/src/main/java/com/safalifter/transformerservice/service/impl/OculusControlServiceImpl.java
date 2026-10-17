@@ -157,6 +157,12 @@ public class OculusControlServiceImpl implements OculusControlService {
             if (built != null) result.add(built);
         }
 
+        // Depot users only see (and may only control) transformers in their own depot; unassigned devices are a registry job.
+        Long scopeDepot = accessScopeService.getCurrentDepotId();
+        if (scopeDepot != null) {
+            result.removeIf(r -> r.getDepotId() == null || !scopeDepot.equals(r.getDepotId()));
+        }
+
         result.sort(Comparator.comparing(
                 OculusTransformerControlResponse::getTransformerName,
                 Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
@@ -387,6 +393,10 @@ public class OculusControlServiceImpl implements OculusControlService {
 
         Transformer transformer = transformerRepository.findById(transformerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found"));
+        Long scopeDepot = accessScopeService.getCurrentDepotId();
+        if (scopeDepot != null && !scopeDepot.equals(transformer.getDepotId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer with id " + transformerId + " not found");
+        }
 
         List<Controller> controllers = controllerRepository.findByTransformerIdAndSupplierCode(transformerId, OCULUS_SUPPLIER_CODE);
         Controller controller = resolvePrimaryController(controllers);

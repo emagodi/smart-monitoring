@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
+import { clearCache } from '../lib/cache';
 
 export interface AuthUser {
   id: number;
@@ -124,6 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           permissions: Array.isArray(data?.permissions) ? data.permissions : [],
         };
         storage.setItem('user', JSON.stringify(userInfo));
+        clearCache();
 
         setToken(tokenValue);
         setUser(userInfo);
@@ -151,6 +153,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch {}
 
+    clearCache();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('refresh_token');

@@ -47,6 +47,8 @@ public class GatewayService {
 
     @Transactional(readOnly = true)
     public GatewaySummaryResponse getSummary() {
+        Long scopeDepot = accessScopeService.getCurrentDepotId();
+        if (scopeDepot != null) return depotSummary(scopeDepot);
         Map<GatewayStatus, Long> counts = new EnumMap<>(GatewayStatus.class);
         for (GatewayStatus s : GatewayStatus.values()) counts.put(s, 0L);
         List<Object[]> raw = gatewayRepository.countByEffectiveStatus();
@@ -71,6 +73,40 @@ public class GatewayService {
                 .build();
     }
 
+    /** Depot users: the same counts, for the gateways assigned to their depot only. */
+    private GatewaySummaryResponse depotSummary(Long depotId) {
+        List<GatewayResponse> mine = gatewayRepository.findAll().stream()
+                .filter(g -> depotId.equals(g.getDepotId()))
+                .map(this::toResponse)
+                .toList();
+        Map<String, Long> counts = new java.util.HashMap<>();
+        for (GatewayResponse g : mine) counts.merge(String.valueOf(g.getEffectiveStatus()), 1L, Long::sum);
+        long missingLocation = mine.stream().filter(g -> g.getLatitude() == null || g.getLongitude() == null).count();
+        long missingSim = mine.stream().filter(g -> !g.isSimAssigned()).count();
+        var lastRun = syncRunRepository.findTop5ByOrderByStartedAtDesc().stream().findFirst().orElse(null);
+        return GatewaySummaryResponse.builder()
+                .total(mine.size())
+                .online(counts.getOrDefault("ONLINE", 0L))
+                .offline(counts.getOrDefault("OFFLINE", 0L))
+                .degraded(counts.getOrDefault("DEGRADED", 0L))
+                .neverSeen(counts.getOrDefault("NEVER_SEEN", 0L))
+                .unknown(counts.getOrDefault("UNKNOWN", 0L))
+                .missingLocation(missingLocation)
+                .missingSim(missingSim)
+                .lastSyncStatus(lastRun != null ? lastRun.getStatus().name() : null)
+                .lastSyncAt(lastRun != null ? lastRun.getStartedAt() : null)
+                .build();
+    }
+
+    /** Depot users only reach gateways assigned to their depot (404 otherwise, so ids are not probed). */
+    private Gateway inScope(Gateway g) {
+        Long scopeDepot = accessScopeService.getCurrentDepotId();
+        if (scopeDepot != null && !scopeDepot.equals(g.getDepotId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found");
+        }
+        return g;
+    }
+
     @Transactional(readOnly = true)
     public Page<GatewayResponse> findPage(GatewayListFilterRequest filter, Pageable pageable) {
         forbidSupplier();
@@ -78,7 +114,7 @@ public class GatewayService {
                 filter.getStatus(),
                 filter.getRegionId(),
                 filter.getDistrictId(),
-                filter.getDepotId(),
+                accessScopeService.getCurrentDepotId() != null ? accessScopeService.getCurrentDepotId() : filter.getDepotId(),
                 filter.getNetworkId(),
                 filter.getModel(),
                 filter.getSearch(),
@@ -97,8 +133,8 @@ public class GatewayService {
     @Transactional(readOnly = true)
     public GatewayResponse getById(Long id) {
         forbidSupplier();
-        Gateway g = gatewayRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found"));
+        Gateway g = inScope(gatewayRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found")));
         return toResponse(g);
     }
 
@@ -159,8 +195,8 @@ public class GatewayService {
     @Transactional
     public GatewayResponse update(Long id, GatewayUpdateRequest request) {
         forbidSupplierCrud();
-        Gateway g = gatewayRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found"));
+        Gateway g = inScope(gatewayRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found")));
         g.setName(request.getName());
         g.setDescription(trimToNull(request.getDescription()));
         g.setAddress(trimToNull(request.getAddress()));
@@ -198,8 +234,8 @@ public class GatewayService {
     @Transactional
     public void decommission(Long id, GatewayDecommissionRequest request) {
         forbidSupplierCrud();
-        Gateway g = gatewayRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found"));
+        Gateway g = inScope(gatewayRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found")));
         GatewayStatus prev = g.getEffectiveStatus();
         g.setDecommissioned(true);
         g.setDecommissionedAt(Instant.now());
@@ -225,8 +261,10 @@ public class GatewayService {
     public List<GatewayMapPointResponse> getMapPoints() {
         forbidSupplier();
         List<Gateway> gateways = gatewayRepository.findAllMapPoints();
+        Long scopeDepot = accessScopeService.getCurrentDepotId();
         List<GatewayMapPointResponse> result = new ArrayList<>();
         for (Gateway g : gateways) {
+            if (scopeDepot != null && !scopeDepot.equals(g.getDepotId())) continue;
             if (g.getLatitude() == null || g.getLongitude() == null) continue;
             if (BigDecimal.ZERO.equals(g.getLatitude()) && BigDecimal.ZERO.equals(g.getLongitude())) continue;
             String msisdn = resolveActiveAssignedMsisdn(g.getId());
@@ -248,8 +286,8 @@ public class GatewayService {
     @Transactional(readOnly = true)
     public Page<GatewayStatusHistoryResponse> getStatusHistory(Long id, Pageable pageable) {
         forbidSupplier();
-        gatewayRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found"));
+        inScope(gatewayRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found")));
         return statusHistoryRepository.findByGatewayIdOrderByObservedAtDesc(id, pageable)
                 .map(h -> GatewayStatusHistoryResponse.builder()
                         .id(h.getId())

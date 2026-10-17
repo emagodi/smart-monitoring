@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
-import { Check, Cpu, Hash, Link2, Pencil, Radio, Search, Signal, Wifi, WifiOff, Zap } from "lucide-react";
+import { Check, Cpu, Hash, Link2, Pencil, Plus, Radio, Search, Signal, Wifi, WifiOff, Zap } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { invalidateCache, useCachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { useGeography } from "../Registry/geo";
+import AddFromEuiDrawer from "../Registry/AddFromEuiDrawer";
 import {
   Button,
   Chips,
@@ -85,6 +86,9 @@ export default function NewControllersIndex() {
   const [renaming, setRenaming] = useState<{ c: Unmatched; name: string } | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const canUpdate = hasPermission("controllers.update") || hasPermission("transformers.update");
+  const canCreate = hasPermission("transformers.create") || hasPermission("transformers.update");
+  // "New transformer from EUI": create the transformer straight from the device's EUI and link it in one go.
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
   const items = list.data ?? [];
   const partners = useMemo(() => {
@@ -135,7 +139,7 @@ export default function NewControllersIndex() {
       <PageHero
         eyebrow="Operations · New controllers"
         title="New controllers"
-        subtitle="Devices our partner feeds have heard that are not linked to a transformer yet. Link each one so its alerts reach the right depot."
+        subtitle="Devices our partner feeds have heard that are not linked to a transformer yet. Create a new transformer from the device EUI, or link it to one that exists, so its alerts reach the right depot."
         actions={<HeroButton onClick={refresh} busy={list.refreshing || list.loading}>Refresh</HeroButton>}
       >
         <HeroStats cols={4}>
@@ -186,7 +190,7 @@ export default function NewControllersIndex() {
         }
       >
         <div className={tableCls.wrap}>
-          <table className={`${tableCls.table} min-w-[900px]`}>
+          <table className={`${tableCls.table} min-w-[1120px]`}>
             <thead className={tableCls.thead}>
               <tr>
                 <th className={tableCls.th}>Controller</th>
@@ -194,7 +198,7 @@ export default function NewControllersIndex() {
                 <th className={tableCls.th}>Partner</th>
                 <th className={tableCls.th}>Status</th>
                 <th className={tableCls.th}>Last heard</th>
-                <th className={`${tableCls.th} text-right`}>Actions</th>
+                <th className={`${tableCls.th} w-[420px] text-center`}>Actions</th>
               </tr>
             </thead>
             <tbody className={tableCls.tbody}>
@@ -224,24 +228,40 @@ export default function NewControllersIndex() {
                       </span>
                     ) : null}
                   </td>
-                  <td className={`${tableCls.td} text-right`}>
-                    {canUpdate ? (
-                      <div className="inline-flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setRenaming({ c, name: label(c) })}
-                          title="Rename"
-                          className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAssigning(c)}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-700"
-                        >
-                          <Link2 className="h-3.5 w-3.5" /> Link to transformer
-                        </button>
+                  <td className={`${tableCls.td} text-center`}>
+                    {canUpdate || canCreate ? (
+                      <div className="flex items-center justify-center gap-2">
+                        {canUpdate ? (
+                          <button
+                            type="button"
+                            onClick={() => setRenaming({ c, name: label(c) })}
+                            title="Rename this controller"
+                            aria-label="Rename"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-blue-300 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {canCreate ? (
+                          <button
+                            type="button"
+                            onClick={() => setCreatingFor(c.devEui)}
+                            title="Create a new transformer from this device's EUI and link it"
+                            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#0a2a6b] to-[#0b4fc4] px-3.5 text-xs font-semibold text-white shadow-sm shadow-blue-700/25 transition hover:brightness-110"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> New transformer
+                          </button>
+                        ) : null}
+                        {canUpdate ? (
+                          <button
+                            type="button"
+                            onClick={() => setAssigning(c)}
+                            title="Link to a transformer that already exists"
+                            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
+                          >
+                            <Link2 className="h-3.5 w-3.5" /> Link to existing
+                          </button>
+                        ) : null}
                       </div>
                     ) : (
                       <span className="text-[11px] text-slate-400">View only</span>
@@ -282,6 +302,18 @@ export default function NewControllersIndex() {
           }}
         />
       ) : null}
+
+      <AddFromEuiDrawer
+        open={Boolean(creatingFor)}
+        initialEui={creatingFor ?? undefined}
+        geo={geo}
+        onClose={() => setCreatingFor(null)}
+        onCreated={() => {
+          setNotice({ tone: "success", text: `Transformer created and controller ${creatingFor} linked.` });
+          setCreatingFor(null);
+          refresh();
+        }}
+      />
 
       <Dialog
         open={Boolean(renaming)}

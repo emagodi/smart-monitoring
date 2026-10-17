@@ -132,6 +132,8 @@ public class RegistryService {
                 SELECT t.id, t.name, t.transformer_number, t.type, t.is_active, t.depot_id, t.supplier_code, t.supplier_name,
                        t.lat, t.lng, t.last_telemetry_at, t.created_at,
                        COUNT(c.id) AS controller_count,
+                       SUBSTRING_INDEX(GROUP_CONCAT(NULLIF(c.supplier_code, '') ORDER BY c.id SEPARATOR ','), ',', 1) AS ctl_supplier_code,
+                       SUBSTRING_INDEX(GROUP_CONCAT(NULLIF(c.supplier_name, '') ORDER BY c.id SEPARATOR ','), ',', 1) AS ctl_supplier_name,
                        GROUP_CONCAT(c.dev_eui ORDER BY c.id SEPARATOR ',') AS euis,
                        MAX(c.last_reading_at) AS last_reading_at,
                        MAX(c.last_command_at) AS last_command_at,
@@ -161,8 +163,15 @@ public class RegistryService {
         r.setActive(rs.getBoolean("is_active"));
         long depot = rs.getLong("depot_id");
         r.setDepotId(rs.wasNull() ? null : depot);
-        r.setSupplierCode(rs.getString("supplier_code"));
-        r.setSupplierName(rs.getString("supplier_name"));
+        // A transformer with no partner of its own belongs to the partner whose device is installed on it.
+        String sc = rs.getString("supplier_code");
+        String sn = rs.getString("supplier_name");
+        if (sc == null || sc.isBlank()) {
+            sc = rs.getString("ctl_supplier_code");
+            sn = rs.getString("ctl_supplier_name");
+        }
+        r.setSupplierCode(sc == null || sc.isBlank() ? null : sc.trim());
+        r.setSupplierName(sn);
         r.setLat(rs.getBigDecimal("lat"));
         r.setLng(rs.getBigDecimal("lng"));
         r.setControllerCount(rs.getInt("controller_count"));
@@ -191,6 +200,7 @@ public class RegistryService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> unmatchedControllers() {
+        if (accessScopeService.isDepotScoped()) return List.of();   // linking new devices is a national registry job
         MapSqlParameterSource p = new MapSqlParameterSource();
         String supplier = accessScopeService.getCurrentSupplierCode();
         String sql = """

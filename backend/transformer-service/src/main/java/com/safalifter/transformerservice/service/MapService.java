@@ -213,6 +213,7 @@ public class MapService {
     }
 
     private long unmatched() {
+        if (accessScopeService.isDepotScoped()) return 0;   // unmatched devices have no depot yet
         String supplier = accessScopeService.getCurrentSupplierCode();
         MapSqlParameterSource p = new MapSqlParameterSource();
         if (supplier != null) p.addValue("s", supplier);

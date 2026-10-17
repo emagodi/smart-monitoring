@@ -4,7 +4,6 @@ import com.safalifter.transformerservice.config.AccessScopeService;
 import com.safalifter.transformerservice.entities.Alert;
 import com.safalifter.transformerservice.entities.AlertCase;
 import com.safalifter.transformerservice.entities.AlertCaseActivity;
-import com.safalifter.transformerservice.entities.Sensor;
 import com.safalifter.transformerservice.enums.AlertCaseActivityType;
 import com.safalifter.transformerservice.enums.AlertCaseStatus;
 import com.safalifter.transformerservice.payload.request.AlertCaseUpdateRequest;
@@ -18,7 +17,6 @@ import com.safalifter.transformerservice.repository.AlertCaseActivityRepository;
 import com.safalifter.transformerservice.repository.AlertCaseRepository;
 import com.safalifter.transformerservice.repository.AlertQueryRepository;
 import com.safalifter.transformerservice.repository.AlertRepository;
-import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.AlertService;
 import com.safalifter.transformerservice.service.AlertStateService;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +48,6 @@ public class AlertServiceImpl implements AlertService {
     private static final int SENSOR_HISTORY_LIMIT = 100;
 
     private final AlertRepository alertRepository;
-    private final SensorRepository sensorRepository;
     private final AlertCaseRepository alertCaseRepository;
     private final AlertCaseActivityRepository alertCaseActivityRepository;
     private final AccessScopeService accessScopeService;
@@ -116,16 +113,8 @@ public class AlertServiceImpl implements AlertService {
     }
 
     private AlertResponse insertAlert(AlertRequest request) {
-        Sensor sensor = null;
-        if (request.getSensorId() != null) {
-            sensor = findSensorOrThrow(request.getSensorId());
-        }
         String supplierCode = request.getSupplierCode();
         String supplierName = request.getSupplierName();
-        if ((supplierCode == null || supplierCode.isBlank()) && sensor != null) {
-            supplierCode = sensor.getSupplierCode();
-            supplierName = sensor.getSupplierName();
-        }
         if ((supplierCode == null || supplierCode.isBlank()) && accessScopeService.isSupplierScoped()) {
             supplierCode = accessScopeService.getCurrentSupplierCode();
             supplierName = accessScopeService.getCurrentSupplierName();
@@ -236,23 +225,6 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AlertResponse> listBySensorId(Long sensorId) {
-        Pageable newest = PageRequest.of(0, SENSOR_HISTORY_LIMIT);
-        List<Alert> alerts = accessScopeService.isSupplierScoped()
-                ? alertRepository.findBySensorIdAndSupplierCodeOrderByIdDesc(sensorId, accessScopeService.getCurrentSupplierCode(), newest)
-                : alertRepository.findBySensorIdOrderByIdDesc(sensorId, newest);
-        List<Alert> visibleAlerts = alerts.stream()
-                .filter(this::isVisibleToCurrentUser)
-                .sorted((left, right) -> compareCreatedAtDesc(left.getCreatedAt(), right.getCreatedAt()))
-                .toList();
-        Map<Long, AlertCase> casesByAlertId = loadCasesByAlertId(visibleAlerts);
-        return visibleAlerts.stream()
-                .map(alert -> toResponse(alert, casesByAlertId.get(alert.getId())))
-                .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public List<AlertCaseActivityResponse> getTimeline(Long id) {
         Alert alert = findAlertOrThrow(id);
         AlertCase alertCase = alertCaseRepository.findByAlertId(alert.getId())
@@ -316,10 +288,6 @@ public class AlertServiceImpl implements AlertService {
     public AlertResponse update(Long id, AlertRequest request) {
         Alert alert = findAlertOrThrow(id);
         Long previousTransformerId = alert.getTransformerId();
-        Sensor sensor = null;
-        if (request.getSensorId() != null) {
-            sensor = findSensorOrThrow(request.getSensorId());
-        }
         alert.setSensorId(request.getSensorId());
         alert.setCameraId(request.getCameraId());
         alert.setValue(request.getValue());
@@ -336,10 +304,7 @@ public class AlertServiceImpl implements AlertService {
         alert.setDeviceId(request.getDeviceId());
         alert.setDeviceName(request.getDeviceName());
         alert.setSensorType(request.getSensorType());
-        if (sensor != null) {
-            alert.setSupplierCode(sensor.getSupplierCode());
-            alert.setSupplierName(sensor.getSupplierName());
-        } else if (accessScopeService.isSupplierScoped()) {
+        if (accessScopeService.isSupplierScoped()) {
             alert.setSupplierCode(accessScopeService.getCurrentSupplierCode());
             alert.setSupplierName(accessScopeService.getCurrentSupplierName());
         }
@@ -394,14 +359,6 @@ public class AlertServiceImpl implements AlertService {
         }
         Long depotId = accessScopeService.getCurrentDepotId();
         return depotId == null || depotId.equals(alert.getDepotId());
-    }
-
-    private Sensor findSensorOrThrow(Long sensorId) {
-        String supplierCode = accessScopeService.getCurrentSupplierCode();
-        return (supplierCode != null
-                ? sensorRepository.findByIdAndSupplierCode(sensorId, supplierCode)
-                : sensorRepository.findById(sensorId))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor with id " + sensorId + " not found"));
     }
 
     private AlertCase createInitialCase(Alert alert) {

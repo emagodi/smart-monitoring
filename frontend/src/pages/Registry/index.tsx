@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   ArrowDownUp,
   Cpu,
@@ -21,6 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useScope } from "../../lib/scope";
 import { API_BASE_URL, districtRegionId, useGeography } from "./geo";
 import { cachedGet, peekCache } from "../../lib/cache";
 import AddFromEuiDrawer from "./AddFromEuiDrawer";
@@ -92,12 +93,15 @@ const PAGE = 50;
 export default function TransformerRegistry() {
   const { token, hasPermission, user } = useAuth();
   const geo = useGeography(token);
+  const { isNational, isDepot, depotId: myDepot } = useScope();
+  // Linking new devices is a national registry job; depot users only see their own depot's transformers.
+  const showUnmatched = isNational;
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState<RegistryRow[]>([]);
   const [unmatched, setUnmatched] = useState<Unmatched[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"all" | "unmatched">(params.get("tab") === "unmatched" ? "unmatched" : "all");
+  const [tab] = useState<"all" | "unmatched">("all");
   const [regionId, setRegionId] = useState(params.get("region") || "");
   const [districtId, setDistrictId] = useState(params.get("district") || "");
   const [depotId, setDepotId] = useState(params.get("depot") || "");
@@ -152,6 +156,7 @@ export default function TransformerRegistry() {
 
   // keep filters in the URL so a filtered view can be shared or bookmarked
   useEffect(() => {
+    if (params.get("tab") === "unmatched") return; // being redirected to /new-controllers
     const next = new URLSearchParams();
     if (tab === "unmatched") next.set("tab", "unmatched");
     if (regionId) next.set("region", regionId);
@@ -268,6 +273,9 @@ export default function TransformerRegistry() {
     URL.revokeObjectURL(a.href);
   };
 
+  // Unmatched controllers live on the New controllers page (same list, with both "new transformer" and "link" actions).
+  if (params.get("tab") === "unmatched") return <Navigate to="/new-controllers" replace />;
+
   return (
     <div className="space-y-4">
       {/* Hero */}
@@ -278,7 +286,9 @@ export default function TransformerRegistry() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200/80">Asset register</p>
             <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">Transformers</h1>
             <p className="mt-1 max-w-2xl text-sm text-blue-100/80">
-              Every ZESA transformer under monitoring, with its partner devices, live status and alerts. Filter by region, district and depot.
+              {isDepot
+                ? `Every transformer in ${geo.pathOf(myDepot).depotName} depot, with its partner devices, live status and alerts.`
+                : "Every ZESA transformer under monitoring, with its partner devices, live status and alerts. Filter by region, district and depot."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -309,7 +319,7 @@ export default function TransformerRegistry() {
         </div>
 
         {/* Status composition of the current filter: label + count on every segment's legend */}
-        <div className="relative mt-5 grid gap-3 md:grid-cols-[1.4fr_1fr]">
+        <div className={`relative mt-5 grid gap-3 ${showUnmatched ? "md:grid-cols-[1.4fr_1fr]" : ""}`}>
           <div className="rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10">
             <div className="flex items-baseline justify-between">
               <p className="text-[11px] text-blue-100/75">Transformers in view</p>
@@ -331,39 +341,30 @@ export default function TransformerRegistry() {
               ))}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setTab("unmatched")}
+          {showUnmatched ? (
+          <Link
+            to="/new-controllers"
             className="flex items-center justify-between rounded-2xl bg-white/[0.07] p-3 text-left ring-1 ring-white/10 transition hover:bg-white/[0.12]"
           >
             <div>
               <p className="text-[11px] text-blue-100/75">Controllers waiting for a transformer</p>
               <p className="mt-0.5 text-2xl font-semibold">{unmatched.length}</p>
-              <p className="text-[11px] text-blue-100/70">Auto-registered by partner feeds. Match them to a transformer.</p>
+              <p className="text-[11px] text-blue-100/70">Auto-registered by partner feeds. Open New controllers to create or link their transformers →</p>
             </div>
             <Cpu className="h-8 w-8 text-amber-300" />
-          </button>
+          </Link>
+          ) : null}
         </div>
       </section>
 
       {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        <TabBtn active={tab === "all"} onClick={() => setTab("all")}>
-          All transformers <span className="ml-1 opacity-70">{rows.length}</span>
-        </TabBtn>
-        <TabBtn active={tab === "unmatched"} onClick={() => setTab("unmatched")}>
-          Unmatched controllers{" "}
-          <span className={`ml-1 rounded-full px-1.5 ${unmatched.length ? "bg-amber-500 text-white" : "opacity-70"}`}>{unmatched.length}</span>
-        </TabBtn>
-      </div>
 
       {tab === "all" ? (
         <>
           {/* Filters: one row, cascading Region -> District -> Depot */}
           <section className="enterprise-card space-y-3 p-3">
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_0.8fr]">
+            <div className={`grid gap-2 md:grid-cols-2 ${isDepot ? "xl:grid-cols-[2fr_1fr_0.8fr]" : "xl:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_0.8fr]"}`}>
               <div className="enterprise-chip flex items-center gap-2 px-3 py-2">
                 <Search className="h-4 w-4 text-slate-400" />
                 <input
@@ -373,6 +374,8 @@ export default function TransformerRegistry() {
                   className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:text-slate-100"
                 />
               </div>
+              {isDepot ? null : (
+              <>
               <Select
                 value={regionId}
                 onChange={(v) => {
@@ -393,6 +396,8 @@ export default function TransformerRegistry() {
                 options={districtOptions.map((d) => [String(d.id), d.name])}
               />
               <Select value={depotId} onChange={setDepotId} placeholder={districtId ? "All depots in district" : "All depots"} options={depotOptions.map((d) => [String(d.id), d.name])} />
+              </>
+              )}
               <Select value={partner} onChange={setPartner} placeholder="All partners" options={partners} />
               <Select value={type} onChange={setType} placeholder="GMT & PMT" options={[["GROUND_MOUNTED", "Ground mounted (GMT)"], ["POLE_MOUNTED", "Pole mounted (PMT)"]]} />
             </div>
@@ -775,20 +780,6 @@ function Th({ children, onClick, active }: { children: ReactNode; onClick?: () =
         children
       )}
     </th>
-  );
-}
-
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-        active ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 

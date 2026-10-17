@@ -20,6 +20,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useGeography } from "../Registry/geo";
 import { cachedGet } from "../../lib/cache";
 import { displayName } from "../../lib/brand";
 import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
@@ -223,6 +224,9 @@ const CASE_ACTIONS: Array<{ label: string; value: AlertCaseStatus; icon: ReactNo
 
 export default function AlertsIndex() {
   const { token, user } = useAuth();
+  const geo = useGeography(token);
+  const depotLabel = (a: { depotId?: number | null; depotName?: string | null }) =>
+    (a.depotId != null ? geo.depotById.get(a.depotId)?.name : undefined) || a.depotName || "Unscoped";
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
   const [items, setItems] = useState<AlertItem[]>([]);
@@ -538,7 +542,7 @@ export default function AlertsIndex() {
                       <Td>
                         <div className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-300">
                           <MapPinned className="h-3.5 w-3.5 text-blue-500" />
-                          <span>{item.depotName || "Unscoped"}</span>
+                          <span>{depotLabel(item)}</span>
                         </div>
                       </Td>
                       <Td>{item.supplierName || item.supplierCode || "ZESA"}</Td>
@@ -629,11 +633,11 @@ export default function AlertsIndex() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <InfoPill
                   label="Depot"
-                  value={selectedAlert.depotName || "Unscoped"}
+                  value={depotLabel(selectedAlert)}
                   icon={<MapPinned className="h-3.5 w-3.5" />}
                 />
                 <InfoPill
-                  label="Sensor"
+                  label="Source"
                   value={selectedAlert.sensorType || "Alert"}
                   icon={<ShieldAlert className="h-3.5 w-3.5" />}
                 />

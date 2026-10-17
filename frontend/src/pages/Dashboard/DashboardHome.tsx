@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Fragment, useMemo, type ReactNode } from "react";
+import { Link, Navigate, useParams } from "react-router-dom";
 import {
   Activity,
   AlarmClock,
@@ -29,6 +29,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useCachedGet } from "../../lib/cache";
 import { displayName, displayPartner } from "../../lib/brand";
 import { useGeography } from "../Registry/geo";
+import { useScope } from "../../lib/scope";
 import { HeroButton, HeroStat, HeroStats, Notice, PageHero, fmtNum, timeAgo } from "../../components/ui/page";
 import { AreaTrend, Bars, BarsWithLine, C, ChartCard, Donut, Empty, Pipeline, RankBars } from "../../components/charts/DashCharts";
 import type { AlertSummary, AlertTrends, EstateStats, Overview } from "./types";
@@ -60,48 +61,35 @@ const greeting = () => {
 
 const mins = (m: number | null | undefined) => (m == null ? "—" : m < 60 ? `${Math.round(m)} min` : `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`);
 
-const VIEW_STORE = "dash.view";
+/** Each view has its own address so it is always clear which dashboard is on screen: /dashboard/<slug>. */
+const VIEW_SLUG: Record<ViewKey, string> = { executive: "executive", control: "call-center", dispatch: "dispatch", partner: "partner" };
+const SLUG_VIEW: Record<string, ViewKey> = Object.fromEntries(Object.entries(VIEW_SLUG).map(([k, v]) => [v, k as ViewKey]));
 
 export default function DashboardHome() {
   const { token, user, roles, hasPermission } = useAuth();
   const geo = useGeography(token);
+  const { isNational, isDepot } = useScope();
 
   const isAdmin = roles.some((r) => /^(ROLE[_-])?(ADMIN|ADMINISTRATOR|SUPER_?ADMIN)$/i.test(String(r)));
-  const isExecRole = roles.some((r) => /supervisor|manager|director|executive|loss control/i.test(String(r)));
   const isSupplier = !!(user as { supplierCode?: string } | null)?.supplierCode;
   const canAlerts = hasPermission("alerts.read") || hasPermission("response.read") || isSupplier;
   const canResponse = hasPermission("response.read");
   const canDispatch = hasPermission("response.dispatch");
 
-  // Which views this user may open, best fit first.
+  // Which views this user may open, best fit first. Super admins and call centre agents share the
+  // executive dashboard; dispatchers start on dispatch. (The old call-centre view is retired:
+  // /dashboard/call-center now lands on the executive view.)
   const views = useMemo<ViewKey[]>(() => {
     if (isSupplier) return ["partner"];
-    if (isAdmin) return ["executive", "control", "dispatch"];
-    const v: ViewKey[] = [];
-    if (canDispatch) v.push("dispatch");
-    if (hasPermission("alerts.read")) v.push("control");
-    if (isExecRole || !v.length) v.unshift("executive");
-    return v;
+    if (isAdmin) return ["executive", "dispatch"];
+    return canDispatch ? ["dispatch", "executive"] : ["executive"];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSupplier, isAdmin, canDispatch, isExecRole, user]);
+  }, [isSupplier, isAdmin, canDispatch, user]);
 
-  const [view, setView] = useState<ViewKey>(() => {
-    try {
-      const saved = localStorage.getItem(VIEW_STORE) as ViewKey | null;
-      if (saved) return saved;
-    } catch {
-      /* storage unavailable */
-    }
-    return "executive";
-  });
-  const active: ViewKey = views.includes(view) ? view : views[0];
-  useEffect(() => {
-    try {
-      localStorage.setItem(VIEW_STORE, active);
-    } catch {
-      /* ignore */
-    }
-  }, [active]);
+  const { view: slug } = useParams<{ view?: string }>();
+  const requested = slug ? SLUG_VIEW[slug] : undefined;
+  const active: ViewKey = requested && views.includes(requested) ? requested : views[0];
+  const wrongUrl = !requested || requested !== active;
 
   // ------------------------------------------------------------------ data (only what this view needs)
   const opts = { maxAgeMs: 30_000, refreshMs: 60_000 };
@@ -236,11 +224,14 @@ export default function DashboardHome() {
       T("on", <HeroStat icon={<Gauge className="h-3.5 w-3.5 text-emerald-300" />} label="Devices online" value={s?.onlinePercent != null ? `${s.onlinePercent}%` : "—"} sub={s ? `${fmtNum(s.online)} reporting · ${fmtNum(s.offline)} offline` : undefined} tone={s?.onlinePercent != null && s.onlinePercent < 80 ? "warn" : "good"} to="/sites" loading={loading} />),
       T("arm", <HeroStat icon={<ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />} label="Armed" value={fmtNum(s?.armed)} sub={s ? `${fmtNum(s.disarmed)} disarmed` : undefined} to="/transformers?arm=ARMED" loading={loading} />),
       T("open", <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={fmtNum(sm?.open ?? s?.openAlerts)} sub={s ? `${s.transformersAlerting} transformers alerting` : undefined} tone={(sm?.open ?? s?.openAlerts) ? "bad" : "good"} to={incidentsLink} loading={loading} />),
-      T("thr", <HeroStat icon={<Flame className="h-3.5 w-3.5 text-red-300" />} label="Real threats · 30 d" value={fmtNum(sm?.realThreats30d)} sub={sm ? `${fmtNum(sm.falseAlarms30d)} false alarms` : undefined} tone={sm?.realThreats30d ? "bad" : undefined} to="/insights" loading={canAlerts && !sm} />),
+      T("thr", <HeroStat icon={<Flame className="h-3.5 w-3.5 text-red-300" />} label="Real threats · 30 d" value={fmtNum(sm?.realThreats30d)} sub={sm ? `${fmtNum(sm.falseAlarms30d)} false alarms` : undefined} tone={sm?.realThreats30d ? "bad" : undefined} to={isNational ? "/insights" : incidentsLink} loading={canAlerts && !sm} />),
       T("arr", <HeroStat icon={<Clock3 className="h-3.5 w-3.5" />} label="Avg time to scene" value={mins(sm?.avgArrivalMinutes)} sub={sm ? `acknowledge ${mins(sm.avgAcknowledgeMinutes)}` : undefined} loading={canAlerts && !sm} />),
     ];
   };
   const tiles = kpis();
+
+  // /dashboard (or a view this user may not open) goes to the user's own dashboard address.
+  if (wrongUrl) return <Navigate to={`/dashboard/${VIEW_SLUG[active]}`} replace />;
 
   return (
     <div className="space-y-4">
@@ -262,18 +253,19 @@ export default function DashboardHome() {
         {views.length > 1 ? (
           <div className="mb-3 inline-flex flex-wrap gap-1 rounded-full bg-white/10 p-1 ring-1 ring-white/15" role="tablist">
             {views.map((v) => (
-              <button
+              <Link
                 key={v}
+                to={`/dashboard/${VIEW_SLUG[v]}`}
+                replace
                 role="tab"
                 aria-selected={v === active}
-                onClick={() => setView(v)}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
                   v === active ? "bg-white text-blue-800 shadow" : "text-blue-100 hover:bg-white/10"
                 }`}
               >
                 {VIEW_META[v].icon}
                 {VIEW_META[v].label}
-              </button>
+              </Link>
             ))}
           </div>
         ) : null}
@@ -298,6 +290,8 @@ export default function DashboardHome() {
           overview={overview.data}
           canAlerts={canAlerts}
           depotName={(id) => geo.pathOf(id).depotName}
+          depotScoped={isDepot}
+          hot={hot}
         />
       ) : null}
 
@@ -310,7 +304,7 @@ export default function DashboardHome() {
             {sm ? <Pipeline stages={stages} /> : <Empty>Loading…</Empty>}
           </ChartCard>
           <ChartCard title="Latest open alerts" subtitle="Newest first" icon={<Siren className="h-4 w-4" />} height={null} action={<CardLink to={incidentsLink || "/alerts"}>Open queue</CardLink>}>
-            <LatestAlerts rows={latest.data?.content} loading={latest.loading && !latest.data} />
+            <LatestAlerts rows={latest.data?.content} loading={latest.loading && !latest.data} depotName={(id, fallback) => (id != null ? geo.depotById.get(id)?.name : null) || fallback || ""} />
           </ChartCard>
           <ChartCard title="Busiest transformers" subtitle="Most open alerts right now" icon={<Flame className="h-4 w-4" />} height={null}>
             {hot.length ? <RankBars data={hot} color={C.red} /> : <Empty>No transformer has open alerts.</Empty>}
@@ -392,6 +386,8 @@ function ExecutiveView({
   overview,
   canAlerts,
   depotName,
+  depotScoped,
+  hot,
 }: {
   s?: EstateStats | null;
   sm?: AlertSummary | null;
@@ -407,6 +403,8 @@ function ExecutiveView({
   overview?: Overview | null;
   canAlerts: boolean;
   depotName: (id?: number | null) => string;
+  depotScoped: boolean;
+  hot: Array<{ name: string; value: number; sub?: string; to?: string; color?: string }>;
 }) {
   const depots = (overview?.depots ?? [])
     .filter((d) => d.depotId != null && (d.openAlerts > 0 || d.alerts24h > 0))
@@ -461,9 +459,15 @@ function ExecutiveView({
           {sm ? <Pipeline stages={stages} /> : <Empty>Loading…</Empty>}
         </ChartCard>
       ) : null}
-      <ChartCard title="Depots under pressure" subtitle="Most open alerts" icon={<Building2 className="h-4 w-4" />} height={null} action={<CardLink to="/insights/depots">All depots</CardLink>}>
-        {overview ? depots.length ? <RankBars data={depots} /> : <Empty>No depot has open alerts.</Empty> : <Empty>Loading…</Empty>}
-      </ChartCard>
+      {depotScoped ? (
+        <ChartCard title="Busiest transformers" subtitle="Most open alerts in your depot" icon={<Flame className="h-4 w-4" />} height={null} action={<CardLink to="/transformers?alerting=1">All alerting</CardLink>}>
+          {hot.length ? <RankBars data={hot} color={C.red} /> : <Empty>No transformer has open alerts.</Empty>}
+        </ChartCard>
+      ) : (
+        <ChartCard title="Depots under pressure" subtitle="Most open alerts" icon={<Building2 className="h-4 w-4" />} height={null} action={<CardLink to="/insights/depots">All depots</CardLink>}>
+          {overview ? depots.length ? <RankBars data={depots} /> : <Empty>No depot has open alerts.</Empty> : <Empty>Loading…</Empty>}
+        </ChartCard>
+      )}
       <ChartCard title="Partner device uptime" subtitle="% of devices online, weakest first" icon={<Handshake className="h-4 w-4" />} height={null} action={<CardLink to="/partners">All partners</CardLink>}>
         {overview ? partners.length ? <RankBars data={partners} unit="%" max={100} /> : <Empty>No partner devices yet.</Empty> : <Empty>Loading…</Empty>}
       </ChartCard>
@@ -497,7 +501,7 @@ function CardLink({ to, children }: { to: string; children: ReactNode }) {
   );
 }
 
-function LatestAlerts({ rows, loading }: { rows?: IncidentAlert[]; loading: boolean }) {
+function LatestAlerts({ rows, loading, depotName }: { rows?: IncidentAlert[]; loading: boolean; depotName: (id?: number | null, fallback?: string | null) => string }) {
   if (loading) return <Empty>Loading…</Empty>;
   if (!rows?.length) return <Empty>No open alerts. All quiet.</Empty>;
   return (
@@ -512,7 +516,7 @@ function LatestAlerts({ rows, loading }: { rows?: IncidentAlert[]; loading: bool
                 <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{a.transformerName || "Unknown transformer"}</span>
                 <span className="block truncate text-xs text-slate-500">
                   {eventText(a)}
-                  {a.depotName ? ` · ${a.depotName}` : ""}
+                  {depotName(a.depotId, a.depotName) ? ` · ${depotName(a.depotId, a.depotName)}` : ""}
                 </span>
               </span>
               <span className="shrink-0 text-right text-[11px] text-slate-500">

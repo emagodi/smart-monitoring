@@ -28,7 +28,6 @@ public interface AlertService {
     List<TransformerAlertStateResponse> transformerStates(boolean openOnly);
     TransformerAlertStateResponse transformerState(Long transformerId);
     int rebuildTransformerStates();
-    List<AlertResponse> listBySensorId(Long sensorId);
     List<AlertCaseActivityResponse> getTimeline(Long id);
     AlertResponse updateCase(Long id, AlertCaseUpdateRequest request);
     AlertResponse update(Long id, AlertRequest request);

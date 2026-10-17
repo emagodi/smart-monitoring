@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { cachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { useGeography } from "../../pages/Registry/geo";
+import { useScope } from "../../lib/scope";
 import { Chips, SearchBox, STATUS_META, StatusPill, timeAgo } from "../ui/page";
 import TransformerMap, { type MapCluster, type MapFocus, type MapPoint, type MapView } from "./TransformerMap";
 
@@ -81,6 +82,32 @@ export default function MapExplorer({ height = "h-[620px]", showList = true }: {
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const focusKey = useRef(1);
   const lastFitQuery = useRef<string>("");
+  const { isNational } = useScope();
+  // Depot and partner users start zoomed to their own sites; "My area" brings them back there.
+  const [home, setHome] = useState<{ south: number; west: number; north: number; east: number } | null>(null);
+  useEffect(() => {
+    if (isNational || !token) return;
+    let cancelled = false;
+    cachedGet<Array<{ lat?: number | string | null; lng?: number | string | null }>>(`${API}/api/v1/transformers/registry`, token, 60_000)
+      .then((rows) => {
+        if (cancelled) return;
+        const pts = (rows ?? []).map((r) => [Number(r.lat), Number(r.lng)]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && (a !== 0 || b !== 0));
+        if (!pts.length) return;
+        const pad = 0.02;
+        const b = {
+          south: Math.min(...pts.map((x) => x[0])) - pad,
+          north: Math.max(...pts.map((x) => x[0])) + pad,
+          west: Math.min(...pts.map((x) => x[1])) - pad,
+          east: Math.max(...pts.map((x) => x[1])) + pad,
+        };
+        setHome(b);
+        if (!new URLSearchParams(window.location.search).get("t")) setFocus({ key: focusKey.current++, kind: "bounds", ...b });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isNational, token]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced(query.trim()), 350);
@@ -304,10 +331,10 @@ export default function MapExplorer({ height = "h-[620px]", showList = true }: {
         </div>
         <button
           type="button"
-          onClick={() => setFocus({ key: focusKey.current++, kind: "home" })}
+          onClick={() => setFocus(home && !isNational ? { key: focusKey.current++, kind: "bounds", ...home } : { key: focusKey.current++, kind: "home" })}
           className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-md ring-1 ring-slate-200 hover:text-blue-700 dark:bg-slate-900/95 dark:text-slate-200 dark:ring-slate-700"
         >
-          <LocateFixed className="h-3.5 w-3.5" /> Whole country
+          <LocateFixed className="h-3.5 w-3.5" /> {isNational ? "Whole country" : "My area"}
         </button>
         {loading ? (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white/95 px-3 py-1 text-[11px] font-medium text-slate-600 shadow ring-1 ring-slate-200 dark:bg-slate-900/95 dark:text-slate-300">

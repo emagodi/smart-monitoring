@@ -235,7 +235,7 @@ public class DashboardService {
             }
         }
 
-        if (scope.hasPermission("transformers.update") && !scope.isSupplierScoped()) {
+        if (scope.hasPermission("transformers.update") && !scope.isSupplierScoped() && !scope.isDepotScoped()) {
             try {
                 Map<String, Object> row = jdbc.queryForMap("""
                         SELECT COUNT(*) AS n, MAX(COALESCE(last_reading_at, created_at)) AS at

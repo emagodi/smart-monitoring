@@ -3,6 +3,8 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { ChevronRight, Cpu, Gauge, Handshake, Plug, ShieldCheck, ShieldOff, Siren, Zap } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useCachedGet } from "../../lib/cache";
+import { useScope } from "../../lib/scope";
+import { useGeography } from "../Registry/geo";
 import { displayPartner } from "../../lib/brand";
 import {
   Chips,
@@ -90,6 +92,9 @@ type SortKey = "name" | "transformers" | "controllers" | "onlinePercent" | "offl
 export default function PartnersPage() {
   const { token, user, hasPermission } = useAuth();
   const navigate = useNavigate();
+  const { isDepot, depotId } = useScope();
+  const geo = useGeography(token);
+  const depotName = isDepot ? geo.pathOf(depotId).depotName : "";
   const ov = useCachedGet<Overview>(token ? `${API}/api/v1/transformers/overview` : null, token, { maxAgeMs: 30_000, errorText: "Could not load partners." });
   const feeds = useCachedGet<Integration[]>(token && hasPermission("integrations.read") ? `${API}/api/v1/supplier-integrations` : null, token, { maxAgeMs: 60_000 });
 
@@ -153,18 +158,22 @@ export default function PartnersPage() {
   return (
     <div className="space-y-4">
       <PageHero
-        eyebrow="Operations · Partners"
-        title="Monitoring partners"
-        subtitle="Every partner that monitors ZESA transformers. Pick a partner to see its transformers, their devices and, where supported, arm or disarm sites."
+        eyebrow={isDepot ? `Operations · ${depotName || "Your"} depot` : "Operations · Partners"}
+        title={isDepot ? `Partners in ${depotName || "your"} depot` : "Monitoring partners"}
+        subtitle={
+          isDepot
+            ? "Partners with devices installed on your depot's transformers. Pick a partner to see those transformers and, where supported, arm or disarm them."
+            : "Every partner that monitors ZESA transformers. Pick a partner to see its transformers, their devices and, where supported, arm or disarm sites."
+        }
         actions={<HeroButton onClick={() => void ov.reload()} busy={ov.refreshing || ov.loading}>Refresh</HeroButton>}
       >
-        <HeroStats cols={6}>
+        <HeroStats cols={isDepot ? 5 : 6}>
           <HeroStat icon={<Handshake className="h-3.5 w-3.5" />} label="Partners" value={partners.length} sub={`${partners.filter((p) => p.control).length} with remote control`} loading={loading} />
           <HeroStat icon={<Zap className="h-3.5 w-3.5" />} label="Transformers" value={t.transformers.toLocaleString()} sub={`${t.controllers.toLocaleString()} devices`} loading={loading} />
           <HeroStat icon={<Gauge className="h-3.5 w-3.5 text-emerald-300" />} label="Online" value={t.withDevice ? `${Math.round((100 * t.online) / t.withDevice)}%` : "—"} sub={`${t.online} devices reporting`} tone="good" loading={loading} />
           <HeroStat icon={<ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />} label="Armed" value={t.armed.toLocaleString()} sub={`${t.disarmed} disarmed`} loading={loading} />
-          <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={t.openAlerts.toLocaleString()} sub="across all partners" tone={t.openAlerts ? "bad" : undefined} loading={loading} />
-          <HeroStat icon={<Cpu className="h-3.5 w-3.5 text-amber-300" />} label="Unmatched devices" value={t.unmatched.toLocaleString()} sub="waiting for a transformer" tone={t.unmatched ? "warn" : undefined} to="/transformers?tab=unmatched" loading={loading} />
+          <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={t.openAlerts.toLocaleString()} sub={isDepot ? "on your depot's transformers" : "across all partners"} tone={t.openAlerts ? "bad" : undefined} loading={loading} />
+          {isDepot ? null : <HeroStat icon={<Cpu className="h-3.5 w-3.5 text-amber-300" />} label="Unmatched devices" value={t.unmatched.toLocaleString()} sub="waiting for a transformer" tone={t.unmatched ? "warn" : undefined} to="/new-controllers" loading={loading} />}
         </HeroStats>
       </PageHero>
 
@@ -189,7 +198,7 @@ export default function PartnersPage() {
                 { value: "alerting", label: "Open incidents", dot: "bg-red-500", count: count("alerting") },
                 { value: "offline", label: "Offline devices", dot: "bg-amber-500", count: count("offline") },
                 { value: "control", label: "Remote control", dot: "bg-blue-500", count: count("control") },
-                { value: "unmatched", label: "Unmatched devices", dot: "bg-slate-400", count: count("unmatched") },
+                ...(isDepot ? [] : [{ value: "unmatched" as Filter, label: "Unmatched devices", dot: "bg-slate-400", count: count("unmatched") }]),
               ]}
             />
           </>
@@ -206,12 +215,12 @@ export default function PartnersPage() {
                 <SortTh k="armed" sort={sort} onSort={onSort}>Armed</SortTh>
                 <SortTh k="disarmed" sort={sort} onSort={onSort}>Disarmed</SortTh>
                 <SortTh k="openAlerts" sort={sort} onSort={onSort}>Open</SortTh>
-                <SortTh k="unmatchedControllers" sort={sort} onSort={onSort}>Unmatched</SortTh>
+                {isDepot ? null : <SortTh k="unmatchedControllers" sort={sort} onSort={onSort}>Unmatched</SortTh>}
                 <th className={`${tableCls.th} text-right`}> </th>
               </tr>
             </thead>
             <tbody className={tableCls.tbody}>
-              {loading ? <SkeletonRows rows={5} cols={9} /> : null}
+              {loading ? <SkeletonRows rows={5} cols={isDepot ? 8 : 9} /> : null}
               {shown.map((p) => {
                 const feed = feedByCode.get(String(p.supplierCode));
                 const fs = feed ? FEED[feed.enabled ? feed.status || "PENDING" : "STOPPED"] ?? FEED.PENDING : null;
@@ -268,9 +277,11 @@ export default function PartnersPage() {
                     <td className={tableCls.td} onClick={(e) => e.stopPropagation()}>
                       <CountBadge n={p.openAlerts} to="/response" />
                     </td>
-                    <td className={tableCls.td} onClick={(e) => e.stopPropagation()}>
-                      <CountBadge n={p.unmatchedControllers} tone="amber" to="/transformers?tab=unmatched" />
-                    </td>
+                    {isDepot ? null : (
+                      <td className={tableCls.td} onClick={(e) => e.stopPropagation()}>
+                        <CountBadge n={p.unmatchedControllers} tone="amber" to="/new-controllers" />
+                      </td>
+                    )}
                     <td className={`${tableCls.td} text-right`}>
                       <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/20">
                         Open <ChevronRight className="h-3.5 w-3.5" />
@@ -279,7 +290,13 @@ export default function PartnersPage() {
                   </tr>
                 );
               })}
-              {!loading && rows.length === 0 ? <EmptyRow cols={9}>{partners.length ? "No partner matches these filters." : "No partners yet. Add one under Integrations."}</EmptyRow> : null}
+              {!loading && rows.length === 0 ? <EmptyRow cols={isDepot ? 8 : 9}>
+                  {partners.length
+                    ? "No partner matches these filters."
+                    : isDepot
+                      ? "No partner has devices on your depot's transformers yet."
+                      : "No partners yet. Add one under Integrations."}
+                </EmptyRow> : null}
             </tbody>
           </table>
         </div>
@@ -298,7 +315,10 @@ export default function PartnersPage() {
       {noPartner && noPartner.transformers ? (
         <Notice tone="info">
           <span className="inline-flex items-center gap-1.5">
-            <Plug className="h-4 w-4" /> {noPartner.transformers} transformers have no partner yet. Set their partner on the Transformers page so they appear here.
+            <Plug className="h-4 w-4" />{" "}
+            {isDepot
+              ? `${noPartner.transformers} of your depot's transformers have no partner device yet.`
+              : `${noPartner.transformers} transformers have no partner yet. Set their partner on the Transformers page so they appear here.`}
           </span>
         </Notice>
       ) : null}

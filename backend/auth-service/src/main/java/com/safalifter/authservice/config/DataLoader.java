@@ -49,7 +49,8 @@ public class DataLoader implements CommandLineRunner {
         seedUserTypes();
         seedSuppliers();
         seedPermissions();
-        purgeObsoletePermissions(List.of("cameras", "simulation"));
+        // Sensors were retired (the system works with controllers only): drop their permissions everywhere.
+        purgeObsoletePermissions(List.of("cameras", "simulation", "sensors"));
         seedAdministratorRole();
         seedSupplierAdministratorRole();
         seedOperationalRoles();
@@ -161,7 +162,6 @@ public class DataLoader implements CommandLineRunner {
         moduleActions.put("sites", List.of("create", "read", "update", "delete"));
         moduleActions.put("transformers", List.of("create", "read", "update", "delete"));
         moduleActions.put("controllers", List.of("create", "read", "update", "delete"));
-        moduleActions.put("sensors", List.of("create", "read", "update", "delete"));
         moduleActions.put("alerts", List.of("create", "read", "update", "delete"));
         moduleActions.put("reports", List.of("read", "export"));
         moduleActions.put("gateways", List.of("view", "create", "edit", "sync", "assign_customer", "update_location", "audit_view"));
@@ -207,7 +207,7 @@ public class DataLoader implements CommandLineRunner {
         RoleEntity supplierRole = roleRepository.findByName("Supplier Administrator")
                 .orElseGet(() -> RoleEntity.builder()
                         .name("Supplier Administrator")
-                        .description("Supplier-scoped portal access for owned transformers, controllers, sensors, and alerts")
+                        .description("Supplier-scoped portal access for owned transformers, controllers and alerts")
                         .status("ACTIVE")
                         .build());
         supplierRole.setPermissions(resolvePermissionsByName(List.of(
@@ -220,9 +220,6 @@ public class DataLoader implements CommandLineRunner {
                 "controllers.create",
                 "controllers.read",
                 "controllers.update",
-                "sensors.create",
-                "sensors.read",
-                "sensors.update",
                 "alerts.read",
                 "sites.read",
                 "response.read",
@@ -241,7 +238,7 @@ public class DataLoader implements CommandLineRunner {
         createRoleIfMissing("Contact Centre Agent",
                 "Watches the live alert queue, acknowledges alerts and arms/disarms transformers",
                 List.of("dashboard.read", "dashboard.zesa", "regions.read", "districts.read", "depots.read",
-                        "transformers.read", "controllers.read", "sensors.read", "sites.read",
+                        "transformers.read", "controllers.read", "sites.read",
                         "alerts.read", "alerts.update", "response.read", "response.acknowledge",
                         "fleet.read", "control.arm", "control.disarm", "gateways.view"));
         createRoleIfMissing("Dispatcher",
@@ -253,7 +250,7 @@ public class DataLoader implements CommandLineRunner {
         createRoleIfMissing("Loss Control Supervisor",
                 "Oversees incidents, outcomes and response times across depots",
                 List.of("dashboard.read", "dashboard.zesa", "regions.read", "districts.read", "depots.read",
-                        "transformers.read", "controllers.read", "sensors.read", "sites.read",
+                        "transformers.read", "controllers.read", "sites.read",
                         "alerts.read", "alerts.update", "reports.read", "reports.export",
                         "response.read", "response.acknowledge", "response.dispatch", "response.close",
                         "fleet.read", "fleet.update", "gateways.view"));

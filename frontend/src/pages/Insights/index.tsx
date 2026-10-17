@@ -95,7 +95,7 @@ export default function Insights({ view = "partners" }: { view?: "partners" | "d
           <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={t?.openAlerts.toLocaleString() ?? "—"} sub={t ? `${t.alerts24h} alerts in the last 24 hours` : undefined} tone={t?.openAlerts ? "bad" : undefined} loading={!t} />
           <HeroStat icon={<ShieldAlert className="h-3.5 w-3.5 text-amber-300" />} label="Real threats · 24h" value={t?.realThreats24h ?? "—"} sub={t ? (t.falseAlarmPercent == null ? "No closed incidents" : `${t.falseAlarmPercent}% false alarms`) : undefined} loading={!t} />
           <HeroStat icon={<Truck className="h-3.5 w-3.5" />} label="Avg time to arrive" value={mins(t?.avgArrivalMinutes)} sub="detection → crew on scene" loading={!t} />
-          <HeroStat icon={<Cpu className="h-3.5 w-3.5 text-amber-300" />} label="Unmatched devices" value={t?.unmatchedControllers ?? "—"} sub="waiting for a transformer" to="/transformers?tab=unmatched" loading={!t} />
+          <HeroStat icon={<Cpu className="h-3.5 w-3.5 text-amber-300" />} label="Unmatched devices" value={t?.unmatchedControllers ?? "—"} sub="waiting for a transformer" to="/new-controllers" loading={!t} />
         </HeroStats>
       </PageHero>
 
@@ -276,7 +276,7 @@ function PartnerDetail({ p, label }: { p: Block; label: string }) {
             {label} transformers →
           </Link>
           {p.unmatchedControllers ? (
-            <Link to="/transformers?tab=unmatched" className="rounded-full border border-amber-300 px-3 py-1.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-50">
+            <Link to="/new-controllers" className="rounded-full border border-amber-300 px-3 py-1.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-50">
               Match devices
             </Link>
           ) : null}

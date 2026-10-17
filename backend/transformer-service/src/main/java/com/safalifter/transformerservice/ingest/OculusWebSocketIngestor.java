@@ -6,10 +6,7 @@ import com.safalifter.transformerservice.entities.Controller;
 import com.safalifter.transformerservice.entities.ControllerReading;
 import com.safalifter.transformerservice.repository.ControllerReadingRepository;
 import com.safalifter.transformerservice.repository.ControllerRepository;
-import com.safalifter.transformerservice.repository.SensorReadingRepository;
-import com.safalifter.transformerservice.repository.SensorRepository;
 import com.safalifter.transformerservice.service.ControllerReadingService;
-import com.safalifter.transformerservice.service.SensorReadingService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +41,6 @@ public class OculusWebSocketIngestor implements ApplicationRunner {
     @Value("${oculus.ws.url:}")
     private String oculusWsUrlProp;
 
-    private final SensorRepository sensorRepository;
-    private final SensorReadingRepository sensorReadingRepository;
-    private final SensorReadingService sensorReadingService;
     private final ControllerRepository controllerRepository;
     private final ControllerReadingRepository controllerReadingRepository;
     private final ControllerReadingService controllerReadingService;

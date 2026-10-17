@@ -18,6 +18,8 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useGeography } from "../Registry/geo";
+import { useScope } from "../../lib/scope";
 import IncidentDrawer from "./IncidentDrawer";
 import {
   API_BASE_URL,
@@ -86,7 +88,18 @@ const chime = () => {
 export default function ResponseDesk() {
   const { token, hasPermission } = useAuth();
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
-  const [board, setBoard] = useState<Board | null>(null);
+  const [rawBoard, setBoard] = useState<Board | null>(null);
+  const geo = useGeography(token);
+  const { isDepot } = useScope();
+  // Alerts carry a depot id; show the depot's real name from the geography instead of the stored placeholder.
+  const board = useMemo<Board | null>(() => {
+    if (!rawBoard || !geo.loaded) return rawBoard;
+    const fix = (c: BoardCase) => {
+      const name = c.alert.depotId != null ? geo.depotById.get(c.alert.depotId)?.name : undefined;
+      return name ? { ...c, alert: { ...c.alert, depotName: name } } : c;
+    };
+    return { ...rawBoard, open: rawBoard.open.map(fix), recentlyClosed: (rawBoard.recentlyClosed ?? []).map(fix) };
+  }, [rawBoard, geo.loaded, geo.depotById]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -282,6 +295,7 @@ export default function ResponseDesk() {
             className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:text-slate-100"
           />
         </div>
+        {isDepot || depots.length < 2 ? null : (
         <div className="enterprise-chip flex items-center gap-2 px-3 py-2">
           <Filter className="h-4 w-4 text-slate-400" />
           <select value={depotFilter} onChange={(e) => setDepotFilter(e.target.value)} className="bg-transparent text-sm outline-none dark:text-slate-100">
@@ -293,6 +307,7 @@ export default function ResponseDesk() {
             ))}
           </select>
         </div>
+        )}
       </section>
 
       {/* Lanes */}

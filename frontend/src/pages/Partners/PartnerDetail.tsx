@@ -6,6 +6,7 @@ import { Activity, ArrowLeft, ChevronRight, Cpu, DoorOpen, Gauge, Loader2, Lock,
 import { useAuth } from "../../context/AuthContext";
 import { cachedGet, invalidateCache, useCachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
+import { useScope } from "../../lib/scope";
 import { useGeography } from "../Registry/geo";
 import {
   Button,
@@ -126,6 +127,8 @@ export default function PartnerDetail() {
   const geo = useGeography(token);
   const control = CONTROL_PARTNERS.has(partnerCode);
   const isOwnPartner = Boolean(user?.supplierCode);
+  const { isDepot, depotId } = useScope();
+  const inDepot = isDepot ? ` in ${geo.pathOf(depotId).depotName} depot` : "";
 
   const ov = useCachedGet<Overview>(token ? `${API}/api/v1/transformers/overview` : null, token, { maxAgeMs: 30_000 });
   const reg = useCachedGet<RegistryRow[]>(token ? `${API}/api/v1/transformers/registry` : null, token, { maxAgeMs: 20_000, errorText: "Could not load the transformers." });
@@ -303,8 +306,8 @@ export default function PartnerDetail() {
         }
         subtitle={
           control
-            ? `Every ${name} transformer with its device, live sensors and site security. Arm or disarm a site from its row; the device confirms on its next check-in.`
-            : `Every ${name} transformer with its device health and alerts.`
+            ? `Every ${name} transformer${inDepot} with its device, live sensors and site security. Arm or disarm a site from its row; the device confirms on its next check-in.`
+            : `Every ${name} transformer${inDepot} with its device health and alerts.`
         }
         actions={
           <>
@@ -313,7 +316,7 @@ export default function PartnerDetail() {
                 to="/partners"
                 className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/20"
               >
-                <ArrowLeft className="h-4 w-4" /> All partners
+                <ArrowLeft className="h-4 w-4" /> {isDepot ? "Partners in my depot" : "All partners"}
               </Link>
             ) : null}
             <HeroButton
@@ -345,10 +348,10 @@ export default function PartnerDetail() {
         </Notice>
       ) : null}
       {reg.error && !reg.data ? <Notice>{reg.error}</Notice> : null}
-      {unassignedDevices > 0 ? (
+      {unassignedDevices > 0 && !isDepot ? (
         <Notice tone="warn">
           {unassignedDevices} {name} device{unassignedDevices === 1 ? " is" : "s are"} reporting but not linked to a transformer yet.{" "}
-          <Link to="/transformers?tab=unmatched" className="font-semibold underline">
+          <Link to="/new-controllers" className="font-semibold underline">
             Match them
           </Link>
           .

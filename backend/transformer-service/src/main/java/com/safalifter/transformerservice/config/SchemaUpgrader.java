@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Brings the database schema up to what this build expects, every startup, idempotently.
@@ -44,6 +45,11 @@ public class SchemaUpgrader implements ApplicationRunner {
         }
         int changes = 0;
         try {
+            changes += step("sensors retired (controllers only)", () -> {
+                int c = 0;
+                for (String table : List.of("sensor_readings", "sensors")) c += dropTable(table);
+                return c;
+            });
             changes += step("capacity renamed to transformer number", () -> {
                 int c = 0;
                 c += renameColumn("transformers", "capacity", "transformer_number", "VARCHAR(64) NULL");
@@ -242,6 +248,20 @@ public class SchemaUpgrader implements ApplicationRunner {
             log.error("Schema upgrade [{}] failed: {}", name, e.getMessage());
             return 0;
         }
+    }
+
+    /** Drops a retired table and any foreign keys other tables still point at it. Idempotent. */
+    private int dropTable(String table) {
+        if (!tableExists(table)) return 0;
+        List<Map<String, Object>> fks = jdbc.queryForList("""
+                SELECT TABLE_NAME, CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+                 WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ? AND TABLE_NAME <> ?""", table, table);
+        for (Map<String, Object> fk : fks) {
+            jdbc.execute("ALTER TABLE `" + fk.get("TABLE_NAME") + "` DROP FOREIGN KEY `" + fk.get("CONSTRAINT_NAME") + "`");
+        }
+        jdbc.execute("DROP TABLE `" + table + "`");
+        log.info("Dropped retired table {}", table);
+        return 1;
     }
 
     private boolean tableExists(String table) {

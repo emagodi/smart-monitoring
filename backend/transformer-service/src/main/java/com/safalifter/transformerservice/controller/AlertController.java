@@ -88,13 +88,6 @@ public class AlertController {
         return ResponseEntity.ok(java.util.Map.of("transformersRefreshed", alertService.rebuildTransformerStates()));
     }
 
-    @GetMapping("/sensor/{sensorId}")
-    @Operation(summary = "List alerts by sensor")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")
-    public ResponseEntity<List<AlertResponse>> listBySensor(@PathVariable Long sensorId) {
-        return ResponseEntity.ok(alertService.listBySensorId(sensorId));
-    }
-
     @GetMapping("/{id}/timeline")
     @Operation(summary = "Get alert case timeline")
     @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','TECHNICIAN','MANAGINGDIRECTOR','DISTRICTMANAGER','FINANCEDIRECTOR','TECHNICALDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER','USER')")

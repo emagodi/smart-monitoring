@@ -18,8 +18,6 @@ import TransformerDetail from "./pages/Dashboard/TransformerDetail";
 import RegionsIndex from "./pages/Regions";
 import DistrictsIndex from "./pages/Districts";
 import DepotsIndex from "./pages/Depots";
-import TransformersIndex from "./pages/Transformers";
-import SensorsIndex from "./pages/Sensors";
 import NewControllersIndex from "./pages/NewControllers";
 import EditController from "./pages/NewControllers/EditController";
 import CreateTransformer from "./pages/Transformers/CreateTransformer";
@@ -66,6 +64,14 @@ const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="dashboard/:view"
+          element={
+            <ProtectedRoute permission="dashboard.read">
+              <DashboardHome />
+            </ProtectedRoute>
+          }
+        />
         <Route path="signin" element={<Navigate to="/" replace />} />
         <Route path="signup" element={<Navigate to="/" replace />} />
         <Route path="profile" element={<UserProfiles />} />
@@ -75,7 +81,7 @@ const AppRoutes = () => {
         <Route
           path="regions"
           element={
-            <ProtectedRoute permission="regions.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="regions.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <RegionsIndex />}
             </ProtectedRoute>
           }
@@ -83,7 +89,7 @@ const AppRoutes = () => {
         <Route
           path="districts"
           element={
-            <ProtectedRoute permission="districts.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="districts.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <DistrictsIndex />}
             </ProtectedRoute>
           }
@@ -91,7 +97,7 @@ const AppRoutes = () => {
         <Route
           path="depots"
           element={
-            <ProtectedRoute permission="depots.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="depots.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <DepotsIndex />}
             </ProtectedRoute>
           }
@@ -104,14 +110,7 @@ const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="transformers/classic"
-          element={
-            <ProtectedRoute permission="transformers.read">
-              <TransformersIndex />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="transformers/classic" element={<Navigate to="/transformers" replace />} />
         <Route
           path="transformers/new"
           element={
@@ -128,18 +127,12 @@ const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="sensors"
-          element={
-            <ProtectedRoute permission="sensors.read">
-              <SensorsIndex />
-            </ProtectedRoute>
-          }
-        />
+        {/* Sensors were retired: the system works with controllers only. */}
+        <Route path="sensors" element={<Navigate to="/transformers" replace />} />
         <Route
           path="gateways"
           element={
-            <ProtectedRoute permission="gateways.view" disallowSupplier>
+            <ProtectedRoute scopes={["NATIONAL", "DEPOT"]} depotAnyOf={["gateways.view", "transformers.read"]} permission="gateways.view" disallowSupplier>
               <GatewaysIndex />
             </ProtectedRoute>
           }
@@ -147,7 +140,7 @@ const AppRoutes = () => {
         <Route
           path="gateways-map"
           element={
-            <ProtectedRoute permission="gateways.view" disallowSupplier>
+            <ProtectedRoute scopes={["NATIONAL", "DEPOT"]} depotAnyOf={["gateways.view", "transformers.read"]} permission="gateways.view" disallowSupplier>
               <GatewaysMapIndex />
             </ProtectedRoute>
           }
@@ -155,7 +148,7 @@ const AppRoutes = () => {
         <Route
           path="sims"
           element={
-            <ProtectedRoute permission="sims.view" disallowSupplier>
+            <ProtectedRoute scopes={["NATIONAL"]} permission="sims.view" disallowSupplier>
               <SimsIndex />
             </ProtectedRoute>
           }
@@ -163,7 +156,7 @@ const AppRoutes = () => {
         <Route
           path="new-controllers"
           element={
-            <ProtectedRoute permission="controllers.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="controllers.read">
               <NewControllersIndex />
             </ProtectedRoute>
           }
@@ -171,7 +164,7 @@ const AppRoutes = () => {
         <Route
           path="new-controllers/:id/edit"
           element={
-            <ProtectedRoute permission="controllers.update">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="controllers.update">
               <EditController />
             </ProtectedRoute>
           }
@@ -179,7 +172,7 @@ const AppRoutes = () => {
         <Route
           path="insights"
           element={
-            <ProtectedRoute permission="dashboard.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="dashboard.read">
               <InsightsPage />
             </ProtectedRoute>
           }
@@ -187,7 +180,7 @@ const AppRoutes = () => {
         <Route
           path="insights/depots"
           element={
-            <ProtectedRoute permission="dashboard.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="dashboard.read">
               <InsightsPage view="depots" />
             </ProtectedRoute>
           }
@@ -195,7 +188,7 @@ const AppRoutes = () => {
         <Route
           path="integrations"
           element={
-            <ProtectedRoute permission="integrations.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="integrations.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <IntegrationsPage />}
             </ProtectedRoute>
           }
@@ -211,7 +204,7 @@ const AppRoutes = () => {
         <Route
           path="fleet"
           element={
-            <ProtectedRoute permission="fleet.read">
+            <ProtectedRoute scopes={["NATIONAL", "DEPOT"]} permission="fleet.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <FleetPage />}
             </ProtectedRoute>
           }
@@ -227,7 +220,7 @@ const AppRoutes = () => {
         <Route
           path="sites"
           element={
-            <ProtectedRoute permission="sites.read">
+            <ProtectedRoute permission="sites.read" depotAnyOf={["sites.read", "transformers.read"]}>
               <SiteIndex />
             </ProtectedRoute>
           }
@@ -261,7 +254,7 @@ const AppRoutes = () => {
         <Route
           path="users"
           element={
-            <ProtectedRoute permission="users.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="users.read">
                 {isSupplierUser ? <Navigate to="/dashboard" replace /> : <Users />}
             </ProtectedRoute>
           }
@@ -269,7 +262,7 @@ const AppRoutes = () => {
         <Route
           path="roles"
           element={
-            <ProtectedRoute permission="roles.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="roles.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <RolesPage />}
             </ProtectedRoute>
           }
@@ -277,7 +270,7 @@ const AppRoutes = () => {
         <Route
           path="permissions"
           element={
-            <ProtectedRoute permission="permissions.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="permissions.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <PermissionsPage />}
             </ProtectedRoute>
           }
@@ -285,7 +278,7 @@ const AppRoutes = () => {
         <Route
           path="user-types"
           element={
-            <ProtectedRoute permission="usertypes.read">
+            <ProtectedRoute scopes={["NATIONAL"]} permission="usertypes.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <UserTypesPage />}
             </ProtectedRoute>
           }

@@ -41,7 +41,8 @@ public class InsightsService {
     private Map<String, Object> computeOverview() {
         List<RegistryService.RegistryRow> rows = registryService.scopedRows();
         Map<Long, long[]> incidents = incidentsByTransformer();   // last 24 h only: [alerts24h, real, false, technical, arrivalSecSum, arrivalCount]
-        Map<String, Long> unmatched = unmatchedBySupplier();
+        // Unmatched devices have no depot yet, so depot users never see them.
+        Map<String, Long> unmatched = accessScopeService.isDepotScoped() ? Map.of() : unmatchedBySupplier();
         Map<Long, int[]> fleet = fleetByDepot();                  // [total, available]
 
         Map<String, Map<String, Object>> partners = new LinkedHashMap<>();
