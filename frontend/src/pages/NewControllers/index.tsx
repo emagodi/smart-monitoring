@@ -140,8 +140,8 @@ export default function NewControllersIndex() {
       >
         <HeroStats cols={4}>
           <HeroStat icon={<Cpu className="h-3.5 w-3.5 text-amber-300" />} label="Waiting" value={items.length.toLocaleString()} sub="not linked to a transformer" tone={items.length ? "warn" : "good"} loading={loading} />
-          <HeroStat icon={<Wifi className="h-3.5 w-3.5 text-emerald-300" />} label="Reporting now" value={online.toLocaleString()} sub="heard in the last 15 min" tone="good" loading={loading} />
-          <HeroStat icon={<WifiOff className="h-3.5 w-3.5" />} label="Silent" value={(items.length - online).toLocaleString()} sub="not heard recently" loading={loading} />
+          <HeroStat icon={<Wifi className="h-3.5 w-3.5 text-emerald-300" />} label="Online" value={online.toLocaleString()} sub="heard in the last 15 min" tone="good" loading={loading} />
+          <HeroStat icon={<WifiOff className="h-3.5 w-3.5 text-red-300" />} label="Offline" value={(items.length - online).toLocaleString()} sub="not heard in 15 min" tone={items.length - online ? "bad" : undefined} loading={loading} />
           <HeroStat icon={<Zap className="h-3.5 w-3.5" />} label="Transformers" value={(reg.data?.length ?? 0).toLocaleString()} sub="available to link to" loading={!reg.data} />
         </HeroStats>
       </PageHero>
@@ -156,7 +156,7 @@ export default function NewControllersIndex() {
       <Panel
         icon={<Cpu className="h-4 w-4" />}
         title={`${rows.length.toLocaleString()} controller${rows.length === 1 ? "" : "s"} waiting`}
-        subtitle="Devices reporting now are listed first."
+        subtitle="Online devices are listed first."
         toolbar={
           <>
             <SearchBox value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Find by EUI or name…" className="max-w-sm" />
@@ -168,8 +168,8 @@ export default function NewControllersIndex() {
               }}
               options={[
                 { value: "all", label: "All", count: items.length },
-                { value: "online", label: "Reporting now", dot: "bg-emerald-500", count: online },
-                { value: "silent", label: "Silent", dot: "bg-slate-400", count: items.length - online },
+                { value: "online", label: "Online", dot: "bg-emerald-500", count: online },
+                { value: "silent", label: "Offline", dot: "bg-red-500", count: items.length - online },
               ]}
             />
             {partners.length > 1 ? (
@@ -186,18 +186,19 @@ export default function NewControllersIndex() {
         }
       >
         <div className={tableCls.wrap}>
-          <table className={`${tableCls.table} min-w-[860px]`}>
+          <table className={`${tableCls.table} min-w-[900px]`}>
             <thead className={tableCls.thead}>
               <tr>
                 <th className={tableCls.th}>Controller</th>
+                <th className={tableCls.th}>Device EUI</th>
                 <th className={tableCls.th}>Partner</th>
+                <th className={tableCls.th}>Status</th>
                 <th className={tableCls.th}>Last heard</th>
-                <th className={tableCls.th}>First seen</th>
                 <th className={`${tableCls.th} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody className={tableCls.tbody}>
-              {loading ? <SkeletonRows rows={6} cols={5} /> : null}
+              {loading ? <SkeletonRows rows={6} cols={6} /> : null}
               {shown.map((c) => (
                 <tr key={c.id} className={tableCls.tr}>
                   <td className={tableCls.td}>
@@ -207,30 +208,22 @@ export default function NewControllersIndex() {
                       </span>
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-slate-900 dark:text-slate-100">{label(c)}</p>
-                        <p className="font-mono text-[11px] tracking-wide text-slate-500">{c.devEui}</p>
                       </div>
                     </div>
                   </td>
+                  <td className={`${tableCls.td} font-mono text-[12px] tracking-wide`}>{c.devEui}</td>
                   <td className={tableCls.td}>{c.supplierCode ? displayPartner(c.supplierName, c.supplierCode) : <span className="text-slate-400">Unknown</span>}</td>
                   <td className={tableCls.td}>
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${
-                        c.online
-                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30"
-                          : "bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700"
-                      }`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${c.online ? "bg-emerald-500" : "bg-slate-400"}`} />
-                      {c.online ? "Reporting" : "Silent"}
-                    </span>
-                    <span className="ml-2 text-[11px] text-slate-500">{c.lastReadingAt ? timeAgo(c.lastReadingAt) : "never"}</span>
+                    <DeviceStatus c={c} />
+                  </td>
+                  <td className={tableCls.td}>
+                    <span className="text-[13px] text-slate-700 dark:text-slate-200">{c.lastReadingAt ? timeAgo(c.lastReadingAt) : "Never"}</span>
                     {c.rssi != null ? (
                       <span className="ml-2 inline-flex items-center gap-0.5 text-[11px] text-slate-400" title="Signal strength (RSSI)">
                         <Signal className="h-3 w-3" /> {c.rssi} dBm
                       </span>
                     ) : null}
                   </td>
-                  <td className={`${tableCls.td} text-[12px] text-slate-500`}>{c.createdAt ? timeAgo(c.createdAt) : "—"}</td>
                   <td className={`${tableCls.td} text-right`}>
                     {canUpdate ? (
                       <div className="inline-flex items-center gap-1.5">
@@ -257,7 +250,7 @@ export default function NewControllersIndex() {
                 </tr>
               ))}
               {!loading && rows.length === 0 ? (
-                <EmptyRow cols={5}>{items.length ? "Nothing matches these filters." : "Every controller is linked to a transformer."}</EmptyRow>
+                <EmptyRow cols={6}>{items.length ? "Nothing matches these filters." : "Every controller is linked to a transformer."}</EmptyRow>
               ) : null}
             </tbody>
           </table>
@@ -402,7 +395,7 @@ function AssignDialog({
         <div className="grid grid-cols-3 gap-2">
           <Fact icon={<Radio className="h-3.5 w-3.5" />} label="Partner" value={controller.supplierCode ? displayPartner(controller.supplierName, controller.supplierCode) : "Unknown"} />
           <Fact icon={controller.online ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5" />} label="Last heard" value={controller.lastReadingAt ? timeAgo(controller.lastReadingAt) : "never"} />
-          <Fact icon={<Cpu className="h-3.5 w-3.5" />} label="First seen" value={controller.createdAt ? timeAgo(controller.createdAt) : "—"} />
+          <Fact icon={<Cpu className="h-3.5 w-3.5" />} label="Status" value={controller.online ? "Online" : controller.lastReadingAt ? "Offline" : "Never heard"} />
         </div>
 
         <div className="space-y-2">
@@ -465,6 +458,22 @@ function AssignDialog({
         {error ? <Notice>{error}</Notice> : null}
       </div>
     </Dialog>
+  );
+}
+
+function DeviceStatus({ c }: { c: Unmatched }) {
+  const state = c.online ? "online" : c.lastReadingAt ? "offline" : "never";
+  const cls = {
+    online: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30",
+    offline: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30",
+    never: "bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700",
+  }[state];
+  const dot = { online: "bg-emerald-500", offline: "bg-red-500", never: "bg-slate-400" }[state];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${cls}`}>
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      {state === "online" ? "Online" : state === "offline" ? "Offline" : "Never heard"}
+    </span>
   );
 }
 
