@@ -40,7 +40,7 @@ public class InsightsService {
 
     private Map<String, Object> computeOverview() {
         List<RegistryService.RegistryRow> rows = registryService.scopedRows();
-        Map<Long, long[]> incidents = incidentsByTransformer();   // [alerts30d, real, false, technical, arrivalSecSum, arrivalCount]
+        Map<Long, long[]> incidents = incidentsByTransformer();   // last 24 h only: [alerts24h, real, false, technical, arrivalSecSum, arrivalCount]
         Map<String, Long> unmatched = unmatchedBySupplier();
         Map<Long, int[]> fleet = fleetByDepot();                  // [total, available]
 
@@ -100,7 +100,7 @@ public class InsightsService {
     private Map<String, Object> block() {
         Map<String, Object> b = new HashMap<>();
         for (String k : List.of("transformers", "online", "delayed", "offline", "neverSeen", "noDevice", "controllers",
-                "openAlerts", "alerts30d", "realThreats30d", "falseAlarms30d", "technicalFaults30d", "arrivalSecSum", "arrivalCount",
+                "openAlerts", "alerts24h", "realThreats24h", "falseAlarms24h", "technicalFaults24h", "arrivalSecSum", "arrivalCount",
                 "unmatchedControllers", "groundMounted", "poleMounted", "mapped", "armed", "disarmed")) {
             b.put(k, 0L);
         }
@@ -124,10 +124,10 @@ public class InsightsService {
         if ("DISARMED".equals(arm)) inc(b, "disarmed", 1);
         inc(b, "controllers", r.getControllerCount());
         inc(b, "openAlerts", r.getOpenAlerts());
-        inc(b, "alerts30d", inc[0]);
-        inc(b, "realThreats30d", inc[1]);
-        inc(b, "falseAlarms30d", inc[2]);
-        inc(b, "technicalFaults30d", inc[3]);
+        inc(b, "alerts24h", inc[0]);
+        inc(b, "realThreats24h", inc[1]);
+        inc(b, "falseAlarms24h", inc[2]);
+        inc(b, "technicalFaults24h", inc[3]);
         inc(b, "arrivalSecSum", inc[4]);
         inc(b, "arrivalCount", inc[5]);
     }
@@ -135,8 +135,8 @@ public class InsightsService {
     private void finish(Map<String, Object> b) {
         long devices = (long) b.get("transformers") - (long) b.get("noDevice");
         b.put("onlinePercent", devices == 0 ? null : Math.round(100.0 * (long) b.get("online") / devices));
-        long closed = (long) b.get("realThreats30d") + (long) b.get("falseAlarms30d") + (long) b.get("technicalFaults30d");
-        b.put("falseAlarmPercent", closed == 0 ? null : Math.round(100.0 * (long) b.get("falseAlarms30d") / closed));
+        long closed = (long) b.get("realThreats24h") + (long) b.get("falseAlarms24h") + (long) b.get("technicalFaults24h");
+        b.put("falseAlarmPercent", closed == 0 ? null : Math.round(100.0 * (long) b.get("falseAlarms24h") / closed));
         long n = (long) b.remove("arrivalCount");
         long sum = (long) b.remove("arrivalSecSum");
         b.put("avgArrivalMinutes", n == 0 ? null : Math.round(sum / 6.0 / n) / 10.0);
@@ -147,7 +147,7 @@ public class InsightsService {
     }
 
     private Map<Long, long[]> incidentsByTransformer() {
-        MapSqlParameterSource p = new MapSqlParameterSource("since", Timestamp.valueOf(LocalDateTime.now().minusDays(30)));
+        MapSqlParameterSource p = new MapSqlParameterSource("since", Timestamp.valueOf(LocalDateTime.now().minusHours(24)));
         Map<Long, long[]> out = new HashMap<>();
         jdbc.query("""
                 SELECT a.transformer_id AS tid, COUNT(*) AS n,
@@ -158,7 +158,7 @@ public class InsightsService {
                        SUM(CASE WHEN c.on_scene_at IS NOT NULL THEN 1 ELSE 0 END) AS arr_n
                   FROM alerts a
                   LEFT JOIN alert_cases c ON c.alert_id = a.id
-                 WHERE a.created_at >= :since AND a.transformer_id IS NOT NULL
+                 WHERE (a.created_at >= :since OR a.last_seen_at >= :since) AND a.transformer_id IS NOT NULL
                  GROUP BY a.transformer_id
                 """, p, rs -> {
             out.put(rs.getLong("tid"), new long[]{rs.getLong("n"), rs.getLong("rt"), rs.getLong("fa"), rs.getLong("tf"),

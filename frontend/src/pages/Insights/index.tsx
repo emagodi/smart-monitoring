@@ -42,10 +42,10 @@ type Block = {
   controllers: number;
   unmatchedControllers: number;
   openAlerts: number;
-  alerts30d: number;
-  realThreats30d: number;
-  falseAlarms30d: number;
-  technicalFaults30d: number;
+  alerts24h: number;
+  realThreats24h: number;
+  falseAlarms24h: number;
+  technicalFaults24h: number;
   groundMounted: number;
   poleMounted: number;
   mapped: number;
@@ -65,8 +65,8 @@ type Overview = {
   depots: Block[];
 };
 
-type PartnerSort = "name" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts30d" | "realThreats30d" | "falseAlarmPercent" | "avgArrivalMinutes" | "unmatchedControllers";
-type DepotSort = "name" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts30d" | "realThreats30d" | "avgArrivalMinutes";
+type PartnerSort = "name" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "realThreats24h" | "falseAlarmPercent" | "avgArrivalMinutes" | "unmatchedControllers";
+type DepotSort = "name" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "realThreats24h" | "avgArrivalMinutes";
 
 const mins = (n?: number | null) => (n == null ? "—" : `${Math.round(n)} min`);
 
@@ -92,8 +92,8 @@ export default function Insights({ view = "partners" }: { view?: "partners" | "d
         <HeroStats cols={6}>
           <HeroStat icon={<Zap className="h-3.5 w-3.5" />} label="Transformers" value={t?.transformers.toLocaleString() ?? "—"} sub={t ? `${t.groundMounted} GMT · ${t.poleMounted} PMT` : undefined} loading={!t} to="/transformers" />
           <HeroStat icon={<Gauge className="h-3.5 w-3.5 text-emerald-300" />} label="Online" value={t?.onlinePercent == null ? "—" : `${t.onlinePercent}%`} sub={t ? `${t.online} online · ${t.offline} offline` : undefined} tone="good" loading={!t} />
-          <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={t?.openAlerts.toLocaleString() ?? "—"} sub={t ? `${t.alerts30d} alerts in 30 days` : undefined} tone={t?.openAlerts ? "bad" : undefined} loading={!t} />
-          <HeroStat icon={<ShieldAlert className="h-3.5 w-3.5 text-amber-300" />} label="Real threats · 30d" value={t?.realThreats30d ?? "—"} sub={t ? (t.falseAlarmPercent == null ? "No closed incidents" : `${t.falseAlarmPercent}% false alarms`) : undefined} loading={!t} />
+          <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={t?.openAlerts.toLocaleString() ?? "—"} sub={t ? `${t.alerts24h} alerts in the last 24 hours` : undefined} tone={t?.openAlerts ? "bad" : undefined} loading={!t} />
+          <HeroStat icon={<ShieldAlert className="h-3.5 w-3.5 text-amber-300" />} label="Real threats · 24h" value={t?.realThreats24h ?? "—"} sub={t ? (t.falseAlarmPercent == null ? "No closed incidents" : `${t.falseAlarmPercent}% false alarms`) : undefined} loading={!t} />
           <HeroStat icon={<Truck className="h-3.5 w-3.5" />} label="Avg time to arrive" value={mins(t?.avgArrivalMinutes)} sub="detection → crew on scene" loading={!t} />
           <HeroStat icon={<Cpu className="h-3.5 w-3.5 text-amber-300" />} label="Unmatched devices" value={t?.unmatchedControllers ?? "—"} sub="waiting for a transformer" to="/transformers?tab=unmatched" loading={!t} />
         </HeroStats>
@@ -144,7 +144,7 @@ function PartnersPanel({ partners, loading }: { partners?: Block[]; loading: boo
     <Panel
       icon={<Handshake className="h-4 w-4" />}
       title="Monitoring partners"
-      subtitle={`${real.length} partner${real.length === 1 ? "" : "s"} · device health, incidents and how they ended over the last 30 days. Click a partner for detail.`}
+      subtitle={`${real.length} partner${real.length === 1 ? "" : "s"} · device health, incidents and how they ended in the last 24 hours. Click a partner for detail.`}
       actions={<StatusLegend className="hidden md:flex" />}
       toolbar={
         <>
@@ -166,8 +166,8 @@ function PartnersPanel({ partners, loading }: { partners?: Block[]; loading: boo
               <SortTh k="onlinePercent" sort={sort} onSort={onSort}>Device health</SortTh>
               <SortTh k="offline" sort={sort} onSort={onSort}>Offline</SortTh>
               <SortTh k="openAlerts" sort={sort} onSort={onSort}>Open</SortTh>
-              <SortTh k="alerts30d" sort={sort} onSort={onSort}>Alerts 30d</SortTh>
-              <SortTh k="realThreats30d" sort={sort} onSort={onSort}>Real threats</SortTh>
+              <SortTh k="alerts24h" sort={sort} onSort={onSort}>Alerts 24h</SortTh>
+              <SortTh k="realThreats24h" sort={sort} onSort={onSort}>Real threats</SortTh>
               <SortTh k="falseAlarmPercent" sort={sort} onSort={onSort}>False alarm</SortTh>
               <SortTh k="avgArrivalMinutes" sort={sort} onSort={onSort}>Avg arrival</SortTh>
               <SortTh k="unmatchedControllers" sort={sort} onSort={onSort}>Unmatched</SortTh>
@@ -199,8 +199,8 @@ function PartnersPanel({ partners, loading }: { partners?: Block[]; loading: boo
                     <td className={tableCls.td}>
                       <CountBadge n={p.openAlerts} />
                     </td>
-                    <td className={tableCls.td}>{p.alerts30d}</td>
-                    <td className={tableCls.td}>{p.realThreats30d}</td>
+                    <td className={tableCls.td}>{p.alerts24h}</td>
+                    <td className={tableCls.td}>{p.realThreats24h}</td>
                     <td className={tableCls.td}>{p.falseAlarmPercent == null ? "—" : `${p.falseAlarmPercent}%`}</td>
                     <td className={tableCls.td}>{mins(p.avgArrivalMinutes)}</td>
                     <td className={tableCls.td}>
@@ -236,7 +236,7 @@ function PartnersPanel({ partners, loading }: { partners?: Block[]; loading: boo
 }
 
 function PartnerDetail({ p, label }: { p: Block; label: string }) {
-  const closed = p.realThreats30d + p.falseAlarms30d + p.technicalFaults30d;
+  const closed = p.realThreats24h + p.falseAlarms24h + p.technicalFaults24h;
   return (
     <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
@@ -254,11 +254,11 @@ function PartnerDetail({ p, label }: { p: Block; label: string }) {
         </div>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Incidents · 30 days</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Incidents · last 24 hours</p>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <Small n={p.alerts30d} l="Alerts" big />
+          <Small n={p.alerts24h} l="Alerts" big />
           <Small n={p.openAlerts} l="Open now" c={p.openAlerts ? "text-red-600" : undefined} big />
-          <Small n={p.realThreats30d} l="Real threats" big />
+          <Small n={p.realThreats24h} l="Real threats" big />
           <Small n={closed} l="Closed" big />
         </div>
         <p className="mt-2 text-[11px] text-slate-500">{p.falseAlarmPercent == null ? "No closed incidents yet." : `${p.falseAlarmPercent}% of closed incidents were false alarms.`}</p>
@@ -342,8 +342,8 @@ function DepotsPanel({ data, geo }: { data?: Overview; geo: ReturnType<typeof us
               <SortTh k="onlinePercent" sort={sort} onSort={onSort}>Device health</SortTh>
               <SortTh k="offline" sort={sort} onSort={onSort}>Offline</SortTh>
               <SortTh k="openAlerts" sort={sort} onSort={onSort}>Open</SortTh>
-              <SortTh k="alerts30d" sort={sort} onSort={onSort}>Alerts 30d</SortTh>
-              <SortTh k="realThreats30d" sort={sort} onSort={onSort}>Real threats</SortTh>
+              <SortTh k="alerts24h" sort={sort} onSort={onSort}>Alerts 24h</SortTh>
+              <SortTh k="realThreats24h" sort={sort} onSort={onSort}>Real threats</SortTh>
               <SortTh k="avgArrivalMinutes" sort={sort} onSort={onSort}>Avg arrival</SortTh>
               {!partner ? <th className={tableCls.th}>Vehicles</th> : null}
             </tr>
@@ -368,9 +368,9 @@ function DepotsPanel({ data, geo }: { data?: Overview; geo: ReturnType<typeof us
                 <td className={tableCls.td}>
                   <CountBadge n={d.openAlerts} to="/response" />
                 </td>
-                <td className={tableCls.td}>{d.alerts30d}</td>
+                <td className={tableCls.td}>{d.alerts24h}</td>
                 <td className={tableCls.td}>
-                  {d.realThreats30d}
+                  {d.realThreats24h}
                   {d.falseAlarmPercent != null ? <span className="ml-1 text-[11px] text-slate-400">({d.falseAlarmPercent}% false)</span> : null}
                 </td>
                 <td className={tableCls.td}>{mins(d.avgArrivalMinutes)}</td>

@@ -41,10 +41,10 @@ export type PartnerBlock = {
   controllers: number;
   unmatchedControllers: number;
   openAlerts: number;
-  alerts30d: number;
-  realThreats30d: number;
-  falseAlarms30d: number;
-  technicalFaults30d: number;
+  alerts24h: number;
+  realThreats24h: number;
+  falseAlarms24h: number;
+  technicalFaults24h: number;
   groundMounted: number;
   poleMounted: number;
   mapped: number;

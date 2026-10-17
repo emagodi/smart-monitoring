@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Building2, ChevronRight, Gauge, MapPinned, Pencil, Plus, Siren, Trash2, Warehouse, Zap } from "lucide-react";
+import { Building2, Check, ChevronRight, Gauge, MapPinned, Pencil, Plus, Siren, Trash2, Warehouse, Zap } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import RemoteSelect from "../../components/ui/page/RemoteSelect";
 import { useCachedGet } from "../../lib/cache";
 import { API_BASE_URL, depotDistrictId, districtRegionId, useGeography } from "../Registry/geo";
 import {
@@ -11,7 +12,6 @@ import {
   CountBadge,
   Dialog,
   EmptyRow,
-  Field,
   HealthCell,
   HeroButton,
   HeroStat,
@@ -26,7 +26,6 @@ import {
   SortTh,
   StatusLegend,
   compareBy,
-  inputCls,
   nextSort,
   tableCls,
   type SortState,
@@ -42,8 +41,8 @@ type Rollup = {
   neverSeen: number;
   noDevice: number;
   openAlerts: number;
-  alerts30d: number;
-  realThreats30d: number;
+  alerts24h: number;
+  realThreats24h: number;
   vehicles: number;
   vehiclesAvailable: number;
   arrivalSum: number;
@@ -65,7 +64,7 @@ type Row = Rollup & {
   avgArrival: number | null;
 };
 
-type SortKey = "name" | "children" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts30d" | "avgArrival";
+type SortKey = "name" | "children" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "avgArrival";
 
 const META: Record<GeoLevel, { title: string; plural: string; eyebrow: string; icon: ReactNode; perm: string; api: string; subtitle: string }> = {
   region: {
@@ -97,10 +96,10 @@ const META: Record<GeoLevel, { title: string; plural: string; eyebrow: string; i
   },
 };
 
-const empty = (): Rollup => ({ transformers: 0, online: 0, delayed: 0, offline: 0, neverSeen: 0, noDevice: 0, openAlerts: 0, alerts30d: 0, realThreats30d: 0, vehicles: 0, vehiclesAvailable: 0, arrivalSum: 0, arrivalN: 0 });
+const empty = (): Rollup => ({ transformers: 0, online: 0, delayed: 0, offline: 0, neverSeen: 0, noDevice: 0, openAlerts: 0, alerts24h: 0, realThreats24h: 0, vehicles: 0, vehiclesAvailable: 0, arrivalSum: 0, arrivalN: 0 });
 
 const add = (into: Rollup, b: DepotBlock) => {
-  for (const k of ["transformers", "online", "delayed", "offline", "neverSeen", "noDevice", "openAlerts", "alerts30d", "realThreats30d", "vehicles", "vehiclesAvailable"] as const) {
+  for (const k of ["transformers", "online", "delayed", "offline", "neverSeen", "noDevice", "openAlerts", "alerts24h", "realThreats24h", "vehicles", "vehiclesAvailable"] as const) {
     into[k] += Number(b[k] ?? 0);
   }
   if (b.avgArrivalMinutes != null) {
@@ -237,7 +236,6 @@ export default function GeoAdmin({ level }: { level: GeoLevel }) {
     return r;
   }, [filtered]);
 
-  const parentOptions = level === "district" ? geo.regions : level === "depot" ? geo.districts : [];
   const districtsForFilter = geo.districts.filter((d) => !regionFilter || String(districtRegionId(d)) === regionFilter);
 
   const save = async () => {
@@ -313,7 +311,7 @@ export default function GeoAdmin({ level }: { level: GeoLevel }) {
           <HeroStat icon={<Building2 className="h-3.5 w-3.5" />} label="Depots" value={geo.depots.length} sub="service hubs" to="/depots" loading={loading} />
           <HeroStat icon={<Zap className="h-3.5 w-3.5" />} label="Transformers" value={view.transformers.toLocaleString()} sub={regionFilter || districtFilter || q ? "in this view" : "monitored"} loading={statsLoading} />
           <HeroStat icon={<Gauge className="h-3.5 w-3.5 text-emerald-300" />} label="Online" value={viewPct == null ? "—" : `${viewPct}%`} sub={`${view.online} online · ${view.offline} offline`} tone="good" loading={statsLoading} />
-          <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={view.openAlerts.toLocaleString()} sub={`${view.alerts30d} alerts in 30 days`} tone={view.openAlerts ? "bad" : undefined} loading={statsLoading} />
+          <HeroStat icon={<Siren className="h-3.5 w-3.5 text-red-300" />} label="Open incidents" value={view.openAlerts.toLocaleString()} sub={`${view.alerts24h} alerts in the last 24 hours`} tone={view.openAlerts ? "bad" : undefined} loading={statsLoading} />
         </HeroStats>
       </PageHero>
 
@@ -360,7 +358,7 @@ export default function GeoAdmin({ level }: { level: GeoLevel }) {
                 <SortTh k="onlinePercent" sort={sort} onSort={onSort}>Device health</SortTh>
                 <SortTh k="offline" sort={sort} onSort={onSort}>Offline</SortTh>
                 <SortTh k="openAlerts" sort={sort} onSort={onSort}>Open</SortTh>
-                <SortTh k="alerts30d" sort={sort} onSort={onSort}>Alerts 30d</SortTh>
+                <SortTh k="alerts24h" sort={sort} onSort={onSort}>Alerts 24h</SortTh>
                 <SortTh k="avgArrival" sort={sort} onSort={onSort}>Avg arrival</SortTh>
                 {level === "depot" ? <th className={tableCls.th}>Vehicles</th> : null}
                 <th className={`${tableCls.th} text-right`}>Actions</th>
@@ -386,7 +384,7 @@ export default function GeoAdmin({ level }: { level: GeoLevel }) {
                   <td className={tableCls.td} onClick={(e) => e.stopPropagation()}>
                     <CountBadge n={r.openAlerts} to="/response" />
                   </td>
-                  <td className={tableCls.td}>{r.alerts30d}</td>
+                  <td className={tableCls.td}>{r.alerts24h}</td>
                   <td className={tableCls.td}>{r.avgArrival == null ? "—" : `${r.avgArrival} min`}</td>
                   {level === "depot" ? (
                     <td className={tableCls.td}>
@@ -447,31 +445,46 @@ export default function GeoAdmin({ level }: { level: GeoLevel }) {
         icon={editing?.id ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
         title={editing?.id ? `Edit ${meta.title.toLowerCase()}` : `New ${meta.title.toLowerCase()}`}
         subtitle={level === "region" ? "Regions group districts." : level === "district" ? "A district belongs to one region." : "A depot belongs to one district."}
+        width="max-w-2xl"
         footer={
           <>
-            <Button onClick={() => setEditing(null)}>Cancel</Button>
-            <Button variant="primary" onClick={() => void save()} busy={busy}>
+            <Button size="lg" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button size="lg" variant="primary" onClick={() => void save()} busy={busy} icon={editing?.id ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}>
               {editing?.id ? "Save changes" : `Create ${meta.title.toLowerCase()}`}
             </Button>
           </>
         }
       >
         {editing ? (
-          <div className="space-y-3">
-            <Field label="Name">
-              <input autoFocus value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && void save()} className={inputCls} />
-            </Field>
+          <div className="space-y-5 py-1">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {meta.title} name <span className="text-red-500">*</span>
+              </span>
+              <input
+                autoFocus
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && void save()}
+                placeholder={level === "region" ? "e.g. Harare Region" : level === "district" ? "e.g. Harare District" : "e.g. Southerton Depot"}
+                className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-blue-500/20"
+              />
+            </label>
             {level !== "region" ? (
-              <Field label={level === "district" ? "Region" : "District"}>
-                <select value={editing.parentId} onChange={(e) => setEditing({ ...editing, parentId: e.target.value })} className={inputCls}>
-                  <option value="">Choose…</option>
-                  {parentOptions.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {level === "depot" ? `${o.name} (${geo.regionById.get(districtRegionId(o as never) ?? -1)?.name ?? "no region"})` : o.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <div className="space-y-1.5">
+                <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {level === "district" ? "Region" : "District"} <span className="text-red-500">*</span>
+                </span>
+                <RemoteSelect
+                  kind={level === "district" ? "region" : "district"}
+                  value={editing.parentId}
+                  onChange={(id) => setEditing((cur) => (cur ? { ...cur, parentId: id } : cur))}
+                  placeholder={level === "district" ? "Search and choose the region…" : "Search and choose the district…"}
+                />
+                <span className="block text-xs text-slate-500">
+                  {level === "district" ? "Type to search; regions load as you scroll." : "Type a district or region name; districts load as you scroll."}
+                </span>
+              </div>
             ) : null}
           </div>
         ) : null}
