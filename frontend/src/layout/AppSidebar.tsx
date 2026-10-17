@@ -227,7 +227,7 @@ const AppSidebar: React.FC = () => {
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   const toggleSubmenu = (index: string) => {
     setOpenSubmenus(prev => ({

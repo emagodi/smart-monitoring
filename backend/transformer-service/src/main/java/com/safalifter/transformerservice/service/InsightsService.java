@@ -1,6 +1,7 @@
 package com.safalifter.transformerservice.service;
 
 import com.safalifter.transformerservice.config.AccessScopeService;
+import com.safalifter.transformerservice.util.TtlCache;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -30,8 +31,15 @@ public class InsightsService {
     private final NamedParameterJdbcTemplate jdbc;
     private final AccessScopeService accessScopeService;
 
+    /** Overview per scope, kept 30 s: it reads 30 days of incidents, so it is the heaviest dashboard query. */
+    private final TtlCache<Map<String, Object>> overviewCache = new TtlCache<>(30_000, 512);
+
     public Map<String, Object> overview() {
-        List<RegistryService.RegistryRow> rows = registryService.registry(null);
+        return overviewCache.get(accessScopeService.scopeKey(), this::computeOverview);
+    }
+
+    private Map<String, Object> computeOverview() {
+        List<RegistryService.RegistryRow> rows = registryService.scopedRows();
         Map<Long, long[]> incidents = incidentsByTransformer();   // [alerts30d, real, false, technical, arrivalSecSum, arrivalCount]
         Map<String, Long> unmatched = unmatchedBySupplier();
         Map<Long, int[]> fleet = fleetByDepot();                  // [total, available]

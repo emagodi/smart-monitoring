@@ -19,6 +19,7 @@ import Alert from '../../components/ui/alert/Alert';
 import { ActionMenu } from '../../components/ui/dropdown/ActionMenu';
 import { Modal } from '../../components/ui/modal';
 import { SearchableSelect } from '../../components/ui/select/SearchableSelect';
+import { HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import { useAuth } from '../../context/AuthContext';
 
 interface Sensor {
@@ -324,33 +325,6 @@ export default function SensorsIndex() {
     };
   }, [items]);
 
-  const typeDistribution = useMemo(() => {
-    const grouped = new Map<string, number>();
-    items.forEach((sensor) => {
-      const key = sensor.type || 'unknown';
-      grouped.set(key, (grouped.get(key) || 0) + 1);
-    });
-
-    return Array.from(grouped.entries())
-      .map(([type, count]) => ({ type, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [items]);
-
-  const transformerDistribution = useMemo(() => {
-    const grouped = new Map<string, number>();
-    items.forEach((sensor) => {
-      const name =
-        transformerLookup.get(sensor.transformer?.id ?? sensor.transformerId ?? -1) ??
-        sensor.transformer?.name ??
-        'Unassigned';
-      grouped.set(name, (grouped.get(name) || 0) + 1);
-    });
-
-    return Array.from(grouped.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [items, transformerLookup]);
-
   const transformerFilterOptions = useMemo(
     () => [
       { id: ALL_TRANSFORMERS_OPTION, name: 'All transformers', description: 'Show the full sensor inventory' },
@@ -614,146 +588,23 @@ export default function SensorsIndex() {
     <div className="space-y-4">
       {notice && <Alert variant={notice.variant} title={notice.title} message={notice.message} />}
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: 'Sensors',
-            value: totals.totalSensors,
-            subtitle: 'Monitored devices across the fleet',
-            icon: <Cpu className="h-6 w-6" />,
-            tone: 'bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300',
-          },
-          {
-            label: 'Assigned',
-            value: totals.assignedSensors,
-            subtitle: 'Linked to a transformer',
-            icon: <Link2 className="h-6 w-6" />,
-            tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300',
-          },
-          {
-            label: 'Telemetry',
-            value: totals.telemetrySensors,
-            subtitle: 'Sensors with recent readings',
-            icon: <Activity className="h-6 w-6" />,
-            tone: 'bg-violet-50 text-violet-600 dark:bg-violet-500/14 dark:text-violet-300',
-          },
-          {
-            label: 'Types',
-            value: totals.distinctTypes,
-            subtitle: 'Unique sensor categories in use',
-            icon: <Radio className="h-6 w-6" />,
-            tone: 'bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300',
-          },
-        ].map((card) => (
-          <div key={card.label} className="enterprise-card p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{card.label}</p>
-                <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-                  {card.value.toLocaleString()}
-                </p>
-                <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{card.subtitle}</p>
-              </div>
-              <div className={`rounded-xl p-2.5 ${card.tone}`}>{card.icon}</div>
-            </div>
-          </div>
-        ))}
-      </section>
+      <PageHero
+        eyebrow="Assets · Sensors"
+        title="Sensors"
+        subtitle={isSupplierUser ? "Sensors and assignments for the transformers your organisation monitors." : "Every monitoring device: what it is, which transformer it sits on and whether it is reporting."}
+      >
+        <HeroStats cols={6}>
+          <HeroStat icon={<Cpu className="h-3.5 w-3.5" />} label="Sensors" value={totals.totalSensors.toLocaleString()} sub="in this scope" />
+          <HeroStat icon={<Link2 className="h-3.5 w-3.5 text-emerald-300" />} label="Assigned" value={totals.assignedSensors.toLocaleString()} sub="linked to a transformer" tone="good" />
+          <HeroStat icon={<Link2 className="h-3.5 w-3.5 text-amber-300" />} label="Unassigned" value={totals.unassignedSensors.toLocaleString()} sub="need a transformer" tone={totals.unassignedSensors ? "warn" : undefined} />
+          <HeroStat icon={<Activity className="h-3.5 w-3.5" />} label="Reporting" value={totals.telemetrySensors.toLocaleString()} sub={`${totals.totalSensors ? Math.round((totals.telemetrySensors / totals.totalSensors) * 100) : 0}% have readings`} />
+          <HeroStat icon={<Radio className="h-3.5 w-3.5" />} label="Types" value={totals.distinctTypes.toLocaleString()} sub="sensor categories" />
+          <HeroStat icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Scope" value={<span className="block truncate text-sm">{String(activeFilterName)}</span>} sub="current filter" />
+        </HeroStats>
+      </PageHero>
 
       <section className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="enterprise-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Sensor Summary</p>
-                <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">Operational overview</h3>
-              </div>
-              <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2.5">
-              {[
-                ['Assigned sensors', totals.assignedSensors],
-                ['Unassigned sensors', totals.unassignedSensors],
-                ['Telemetry coverage', `${totals.totalSensors ? Math.round((totals.telemetrySensors / totals.totalSensors) * 100) : 0}%`],
-                ['Current scope', activeFilterName],
-              ].map(([label, value]) => (
-                <div key={String(label)} className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Type Mix</p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">Active categories</h3>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {typeDistribution.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No sensor type data available yet.
-                </div>
-              ) : (
-                typeDistribution.slice(0, 5).map((item) => {
-                  const width = totals.totalSensors ? (item.count / totals.totalSensors) * 100 : 0;
-                  return (
-                    <div key={item.type}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{formatSensorType(item.type)}</span>
-                        <span className={item.count === 0 ? 'text-slate-400 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400'}>
-                          {item.count.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600" style={{ width: `${Math.max(width, item.count ? 8 : 0)}%` }} />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="enterprise-card p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Transformer Load</p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">Highest sensor density</h3>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {transformerDistribution.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  No transformer allocation data available.
-                </div>
-              ) : (
-                transformerDistribution.slice(0, 4).map((item) => {
-                  const width = totals.totalSensors ? (item.count / totals.totalSensors) * 100 : 0;
-                  return (
-                    <div key={item.name}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{item.name}</span>
-                        <span className={item.name === 'Unassigned' ? 'text-slate-400 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400'}>
-                          {item.count} sensors
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-blue-600" style={{ width: `${Math.max(width, item.count ? 8 : 0)}%` }} />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="enterprise-card overflow-hidden">
+        <div className="ui-panel overflow-hidden">
           <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>

@@ -206,7 +206,7 @@ export default function ResponseDesk() {
   return (
     <div className="space-y-4">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] p-5 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.8)]">
+      <section className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] px-5 py-4 text-white shadow-[0_18px_40px_-24px_rgba(11,79,196,0.7)]">
         <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-red-500/20 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-1/3 h-40 w-80 rounded-full bg-sky-400/10 blur-3xl" />
         <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -218,7 +218,7 @@ export default function ResponseDesk() {
               </span>
               Live · refreshes every 15s
             </p>
-            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">Response Desk</h1>
+            <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">Response Desk</h1>
             <p className="mt-1 max-w-xl text-sm text-blue-100/80">
               Every intrusion from detection to closure: acknowledge, dispatch the nearest vehicle, follow the crew, record what they found.
             </p>
@@ -262,7 +262,7 @@ export default function ResponseDesk() {
           <HeroStat
             icon={<ShieldCheck className="h-4 w-4" />}
             label="Real threats · 30d"
-            value={summary ? `${summary.realThreats30d} / ${summary.realThreats30d + summary.falseAlarms30d + summary.technicalFaults30d}` : "—"}
+            value={summary ? `${summary.realThreats30d ?? 0} / ${(summary.realThreats30d ?? 0) + (summary.falseAlarms30d ?? 0) + (summary.technicalFaults30d ?? 0)}` : "—"}
           />
         </div>
       </section>

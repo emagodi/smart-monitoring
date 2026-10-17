@@ -68,6 +68,13 @@ public class AccessScopeService {
     /** Marker authority added when the access profile carried an explicit permission list. */
     public static final String PERMISSIONS_LOADED = "PERMISSIONS_LOADED";
 
+    /** Cache key for data that depends only on what the caller may see (partner and depot scope). */
+    public String scopeKey() {
+        String supplier = getCurrentSupplierCode();
+        Long depot = getCurrentDepotId();
+        return (supplier == null ? "*" : supplier.toLowerCase()) + "|" + (depot == null ? "*" : depot);
+    }
+
     public boolean isDepotScoped() {
         return getCurrentDepotId() != null;
     }

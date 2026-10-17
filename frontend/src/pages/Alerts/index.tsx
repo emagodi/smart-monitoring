@@ -6,13 +6,11 @@ import {
   BellRing,
   CheckCircle2,
   Eye,
-  FileWarning,
   History,
   Loader2,
   Mail,
   MapPinned,
   MessageSquareText,
-  RefreshCcw,
   Search,
   Send,
   ShieldAlert,
@@ -22,6 +20,9 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { cachedGet } from "../../lib/cache";
+import { displayName } from "../../lib/brand";
+import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 
@@ -232,8 +233,8 @@ export default function AlertsIndex() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("q") || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => (new URLSearchParams(window.location.search).get("q") || "").trim());
   const [summary, setSummary] = useState<AlertSummary>(EMPTY_SUMMARY);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [page, setPage] = useState(0);
@@ -260,14 +261,20 @@ export default function AlertsIndex() {
     setPage(0);
   }, [filterMode, debouncedSearch]);
 
-  const fetchSummary = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/v1/alerts/summary`, { headers });
-      setSummary({ ...EMPTY_SUMMARY, ...(response.data as Partial<AlertSummary>) });
-    } catch (summaryError) {
-      console.error(summaryError);
-    }
-  }, [API_BASE_URL, headers]);
+  const [summaryLoaded, setSummaryLoaded] = useState(false);
+  const fetchSummary = useCallback(
+    async (force = false) => {
+      try {
+        // Cached briefly and loaded separately from the queue, so the list never waits for the counts.
+        const data = await cachedGet<Partial<AlertSummary>>(`${API_BASE_URL}/api/v1/alerts/summary`, token, 15_000, force);
+        setSummary({ ...EMPTY_SUMMARY, ...data });
+        setSummaryLoaded(true);
+      } catch (summaryError) {
+        console.error(summaryError);
+      }
+    },
+    [API_BASE_URL, token]
+  );
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -332,7 +339,7 @@ export default function AlertsIndex() {
 
   const refreshAll = () => {
     void fetchAlerts();
-    void fetchSummary();
+    void fetchSummary(true);
   };
 
   // Status filter and search are applied by the backend; the page already holds the result.
@@ -387,7 +394,7 @@ export default function AlertsIndex() {
       setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setSelectedAlert(updated);
       setSelectedStatus(getCaseStatus(updated));
-      void fetchSummary();
+      void fetchSummary(true);
       await fetchDetails(updated.id);
     } catch (saveError) {
       console.error(saveError);
@@ -404,57 +411,31 @@ export default function AlertsIndex() {
     <div className="space-y-4">
       {error ? <Alert variant="error" title="Alerts" message={error} /> : null}
 
-      <section className="enterprise-card p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-              Alert Operations Desk
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-              Compact response queue
-            </h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Scope: {summarizeScope(user?.supplierName, user?.depotId)}
-            </p>
-          </div>
+      <PageHero
+        eyebrow="Operations · Alerts"
+        title="Alert desk"
+        subtitle={`Every alert in your scope (${summarizeScope(displayName(user?.supplierName), user?.depotId)}). Repeat triggers on an open case are grouped into one row.`}
+        actions={<HeroButton onClick={refreshAll} busy={loading}>Refresh</HeroButton>}
+      >
+        <HeroStats cols={8}>
+          <HeroStat icon={<BellRing className="h-3.5 w-3.5 text-red-300" />} label="New" value={summary.newCount.toLocaleString()} sub="waiting for an agent" tone={summary.newCount ? "bad" : undefined} loading={!summaryLoaded} />
+          <HeroStat icon={<UserCheck className="h-3.5 w-3.5 text-amber-300" />} label="Acknowledged" value={summary.acknowledged.toLocaleString()} sub="being handled" loading={!summaryLoaded} />
+          <HeroStat icon={<Truck className="h-3.5 w-3.5" />} label="Dispatched" value={summary.dispatched.toLocaleString()} sub="crew on the way" loading={!summaryLoaded} />
+          <HeroStat icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />} label="Resolved" value={summary.resolved.toLocaleString()} sub="closed" tone="good" loading={!summaryLoaded} />
+          <HeroStat icon={<XCircle className="h-3.5 w-3.5" />} label="False alarm" value={summary.falseAlarm.toLocaleString()} sub="closed, no threat" loading={!summaryLoaded} />
+          <HeroStat icon={<AlertTriangle className="h-3.5 w-3.5 text-red-300" />} label="Transformers alerting" value={summary.transformersWithOpenAlerts.toLocaleString()} sub="with an open alert" loading={!summaryLoaded} />
+          <HeroStat icon={<ShieldAlert className="h-3.5 w-3.5" />} label="Last 24 hours" value={summary.last24h.toLocaleString()} sub={`${summary.totalEvents.toLocaleString()} trigger events in total`} loading={!summaryLoaded} />
+          <HeroStat icon={<History className="h-3.5 w-3.5 text-amber-300" />} label="Unassigned" value={summary.unassigned.toLocaleString()} sub={`of ${summary.total.toLocaleString()} alerts`} tone={summary.unassigned ? "warn" : undefined} loading={!summaryLoaded} />
+        </HeroStats>
+      </PageHero>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <InfoPill label="Alerts" value={summary.total.toLocaleString()} icon={<BellRing className="h-3.5 w-3.5" />} />
-            <InfoPill label="Trigger events" value={summary.totalEvents.toLocaleString()} icon={<History className="h-3.5 w-3.5" />} />
-            <InfoPill label="Last 24h" value={summary.last24h.toLocaleString()} icon={<ShieldAlert className="h-3.5 w-3.5" />} />
-            <InfoPill label="Unassigned" value={summary.unassigned.toLocaleString()} icon={<AlertTriangle className="h-3.5 w-3.5" />} />
-            <button
-              type="button"
-              onClick={refreshAll}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-            >
-              <RefreshCcw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-6">
-        <MetricTile label="New" value={summary.newCount} tone="red" />
-        <MetricTile label="Acknowledged" value={summary.acknowledged} tone="amber" />
-        <MetricTile label="Dispatched" value={summary.dispatched} tone="blue" />
-        <MetricTile label="Resolved" value={summary.resolved} tone="emerald" />
-        <MetricTile label="False Alarm" value={summary.falseAlarm} tone="slate" />
-        <MetricTile label="Transformers Alerting" value={summary.transformersWithOpenAlerts} tone="red" />
-      </section>
-
-      <section className="enterprise-card overflow-hidden">
-        <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 p-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
+      <section className="ui-panel overflow-hidden">
+        <div className="border-b border-slate-200/80 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div className="space-y-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Active Queue
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
-                  Click any alert row to open actions and detail in a modal
-                </h3>
+                <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-50">Alert queue</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Click an alert to acknowledge, dispatch or close it.</p>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -513,7 +494,7 @@ export default function AlertsIndex() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[980px] w-full">
-              <thead className="bg-gradient-to-r from-blue-50/80 via-white to-red-50/70 dark:from-blue-500/10 dark:via-slate-900 dark:to-red-500/10">
+              <thead className="bg-slate-50/80 dark:bg-slate-900/60">
                 <tr className="text-left">
                   <Th>Status</Th>
                   <Th>Transformer</Th>
@@ -762,7 +743,7 @@ export default function AlertsIndex() {
                           <div key={entry.id} className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
                             <div className="flex items-center justify-between gap-3">
                               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 dark:text-slate-200">
-                                {entry.activityType.replaceAll("_", " ")}
+                                {entry.activityType.replace(/_/g, " ")}
                               </p>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400">{formatDateTime(entry.createdAt)}</p>
                             </div>
@@ -860,33 +841,6 @@ function FilterButton({
     >
       {label}
     </button>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone: "red" | "amber" | "blue" | "emerald" | "slate";
-}) {
-  const toneClasses = {
-    red: "bg-red-50 text-red-600 dark:bg-red-500/14 dark:text-red-300",
-    amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/14 dark:text-amber-300",
-    blue: "bg-blue-50 text-blue-600 dark:bg-blue-500/14 dark:text-blue-300",
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/14 dark:text-emerald-300",
-    slate: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-  }[tone];
-
-  return (
-    <div className="enterprise-card px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{label}</p>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">
-        <span className={`inline-flex rounded-xl px-2.5 py-1 ${toneClasses}`}>{value}</span>
-      </div>
-    </div>
   );
 }
 

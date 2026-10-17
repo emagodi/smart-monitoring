@@ -1,6 +1,7 @@
 package com.safalifter.transformerservice.controller;
 
 import com.safalifter.transformerservice.service.InsightsService;
+import com.safalifter.transformerservice.service.MapService;
 import com.safalifter.transformerservice.service.RegistryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,7 @@ public class RegistryController {
 
     private final RegistryService registryService;
     private final InsightsService insightsService;
+    private final MapService mapService;
 
     @Data
     public static class AssignRequest {
@@ -31,13 +33,31 @@ public class RegistryController {
     @GetMapping("/api/v1/transformers/registry")
     @Operation(summary = "All transformers in scope with devices, live status and alert counts (one query)")
     public ResponseEntity<List<RegistryService.RegistryRow>> registry() {
-        return ResponseEntity.ok(registryService.registry(null));
+        return ResponseEntity.ok(registryService.scopedRows());
     }
 
     @GetMapping("/api/v1/transformers/registry/{id}")
     public ResponseEntity<RegistryService.RegistryRow> registryRow(@PathVariable Long id) {
         return registryService.registry(id).stream().findFirst().map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer not found"));
+    }
+
+    @GetMapping("/api/v1/transformers/stats")
+    @Operation(summary = "Headline figures for the dashboard (scoped to the caller, cached briefly)")
+    public ResponseEntity<Map<String, Object>> stats() {
+        return ResponseEntity.ok(mapService.stats());
+    }
+
+    @GetMapping("/api/v1/transformers/map")
+    @Operation(summary = "Transformers in the visible map area (or matching a search), grouped when there are too many to draw")
+    public ResponseEntity<Map<String, Object>> map(@RequestParam(required = false) Double south,
+                                                   @RequestParam(required = false) Double west,
+                                                   @RequestParam(required = false) Double north,
+                                                   @RequestParam(required = false) Double east,
+                                                   @RequestParam(required = false) Integer zoom,
+                                                   @RequestParam(required = false) String status,
+                                                   @RequestParam(required = false) String q) {
+        return ResponseEntity.ok(mapService.map(south, west, north, east, zoom, status, q));
     }
 
     @GetMapping("/api/v1/transformers/overview")

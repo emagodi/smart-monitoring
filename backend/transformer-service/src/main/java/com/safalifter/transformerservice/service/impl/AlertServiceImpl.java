@@ -63,6 +63,7 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public AlertResponse create(AlertRequest request) {
+        summaryCache.clear();
         alertStateService.lockTransformer(request.getTransformerId());
         AlertResponse response = insertAlert(request);
         alertStateService.refresh(request.getTransformerId());
@@ -192,11 +193,18 @@ public class AlertServiceImpl implements AlertService {
     @Override
     @Transactional(readOnly = true)
     public AlertSummaryResponse summary() {
-        AlertSummaryResponse summary = alertQueryRepository.summary(
-                accessScopeService.getCurrentSupplierCode(), accessScopeService.getCurrentDepotId());
-        summary.setTransformersWithOpenAlerts(transformerStates(true).size());
-        return summary;
+        // Counts over the whole alerts table: cached 15 s per scope so a busy contact centre
+        // (many agents, auto refresh) runs it a few times a minute instead of on every page view.
+        return summaryCache.get(accessScopeService.scopeKey(), () -> {
+            AlertSummaryResponse summary = alertQueryRepository.summary(
+                    accessScopeService.getCurrentSupplierCode(), accessScopeService.getCurrentDepotId());
+            summary.setTransformersWithOpenAlerts(transformerStates(true).size());
+            return summary;
+        });
     }
+
+    private final com.safalifter.transformerservice.util.TtlCache<AlertSummaryResponse> summaryCache =
+            new com.safalifter.transformerservice.util.TtlCache<>(15_000, 512);
 
     @Override
     @Transactional(readOnly = true)
@@ -256,6 +264,7 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public AlertResponse updateCase(Long id, AlertCaseUpdateRequest request) {
+        summaryCache.clear();
         Alert alert = findAlertOrThrow(id);
         AlertCase alertCase = alertCaseRepository.findByAlertId(alert.getId()).orElseGet(() -> createInitialCase(alert));
 

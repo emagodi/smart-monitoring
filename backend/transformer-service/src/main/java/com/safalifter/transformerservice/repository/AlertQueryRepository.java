@@ -151,8 +151,9 @@ public class AlertQueryRepository {
             }
         }
 
+        // "Last 24h" = alerts that fired in the last day, including repeats folded into an older open alert.
         String last24Sql = "SELECT COUNT(*) FROM alerts a" + scope
-                + (scope.isEmpty() ? " WHERE" : " AND") + " a.created_at >= :since";
+                + (scope.isEmpty() ? " WHERE" : " AND") + " (a.created_at >= :since OR a.last_seen_at >= :since)";
         params.addValue("since", Timestamp.valueOf(LocalDateTime.now().minusHours(24)));
         Long last24h = jdbc.queryForObject(last24Sql, params, Long.class);
 

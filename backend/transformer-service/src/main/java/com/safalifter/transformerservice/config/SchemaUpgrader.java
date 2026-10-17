@@ -80,6 +80,7 @@ public class SchemaUpgrader implements ApplicationRunner {
                 c += addIndex("alerts", "idx_alerts_depot_id", "depot_id, id");
                 c += addIndex("alerts", "idx_alerts_sensor_id", "sensor_id, id");
                 c += addIndex("alerts", "idx_alerts_created_at", "created_at");
+                c += addIndex("alerts", "idx_alerts_last_seen_at", "last_seen_at");
                 return c;
             });
             changes += step("alert cases (response lifecycle)", () -> {

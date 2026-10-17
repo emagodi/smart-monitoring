@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import { cachedGet, invalidateCache } from "../../lib/cache";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -29,18 +29,19 @@ export function useGeography(token: string | null) {
   const [districts, setDistricts] = useState<District[]>([]);
   const [depots, setDepots] = useState<Depot[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
-    const get = (url: string) => axios.get(`${API_BASE_URL}${url}`, { headers }).then((r) => r.data).catch(() => []);
+    // Cached for the session (5 min): the hierarchy rarely changes and many screens need it.
+    const get = (url: string) => cachedGet<unknown>(`${API_BASE_URL}${url}`, token, 300_000).catch(() => []);
     void Promise.all([get("/api/v1/regions"), get("/api/v1/districts?page=0&size=1000"), get("/api/v1/depots")]).then(([r, d, p]) => {
-      setRegions(list<Region>(r).sort((a, b) => a.name.localeCompare(b.name)));
-      setDistricts(list<District>(d).sort((a, b) => a.name.localeCompare(b.name)));
-      setDepots(list<Depot>(p).sort((a, b) => a.name.localeCompare(b.name)));
+      setRegions(list<Region>(r).slice().sort((a, b) => a.name.localeCompare(b.name)));
+      setDistricts(list<District>(d).slice().sort((a, b) => a.name.localeCompare(b.name)));
+      setDepots(list<Depot>(p).slice().sort((a, b) => a.name.localeCompare(b.name)));
       setLoaded(true);
     });
-  }, [token]);
+  }, [token, version]);
 
   const lookup = useMemo(() => {
     const regionById = new Map(regions.map((r) => [r.id, r]));
@@ -61,7 +62,15 @@ export function useGeography(token: string | null) {
     return { regionById, districtById, depotById, pathOf };
   }, [depots, districts, regions]);
 
-  return { regions, districts, depots, loaded, ...lookup };
+  /** Re-read the hierarchy after a region / district / depot was created, renamed or removed. */
+  const refresh = () => {
+    invalidateCache("/api/v1/regions");
+    invalidateCache("/api/v1/districts");
+    invalidateCache("/api/v1/depots");
+    setVersion((v) => v + 1);
+  };
+
+  return { regions, districts, depots, loaded, refresh, ...lookup };
 }
 
 /** Suggest a depot from free text such as the partner's station name ("Kuwadzana"). */

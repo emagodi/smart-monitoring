@@ -164,12 +164,12 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-4">
-      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] p-5 text-white">
+      <section className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] px-5 py-4 text-white shadow-[0_18px_40px_-24px_rgba(11,79,196,0.7)]">
         <div className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full bg-violet-400/15 blur-3xl" />
         <div className="relative flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200/80">Partner telemetry</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Integrations</h1>
+            <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">Integrations</h1>
             <p className="mt-1 max-w-2xl text-sm text-blue-100/80">
               One feed per partner LORIOT application (or HTTP push), each with its own decoder. Every decoder emits the same motion / door / vibration
               signals, so alerts and dispatch work identically for every partner.

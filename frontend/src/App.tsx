@@ -184,6 +184,14 @@ const AppRoutes = () => {
           }
         />
         <Route
+          path="insights/depots"
+          element={
+            <ProtectedRoute permission="dashboard.read">
+              <InsightsPage view="depots" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="integrations"
           element={
             <ProtectedRoute permission="integrations.read">

@@ -99,30 +99,10 @@ export default function RolesPage() {
     [roles]
   );
 
-  const inactiveRolesCount = roles.length - activeRolesCount;
   const totalAssignments = useMemo(
     () => roles.reduce((sum, role) => sum + role.usersAssigned, 0),
     [roles]
   );
-  const averagePermissions = roles.length
-    ? Math.round(
-        roles.reduce((sum, role) => sum + role.permissionsCount, 0) / roles.length
-      )
-    : 0;
-
-  const topAssignedRoles = useMemo(
-    () => roles.slice().sort((a, b) => b.usersAssigned - a.usersAssigned).slice(0, 4),
-    [roles]
-  );
-
-  const topPermissionModules = useMemo(
-    () =>
-      Object.entries(groupedPermissions)
-        .sort(([, left], [, right]) => right.length - left.length)
-        .slice(0, 4),
-    [groupedPermissions]
-  );
-
   const pushNotice = (
     variant: "success" | "error" | "info" | "warning",
     title: string,
@@ -250,126 +230,7 @@ export default function RolesPage() {
     >
       {notice ? <Alert variant={notice.variant} title={notice.title} message={notice.message} /> : null}
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="enterprise-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Summary
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Role portfolio health
-              </h3>
-            </div>
-            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-              <Shield className="h-5 w-5" />
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2.5">
-            {[
-              ["Active roles", activeRolesCount],
-              ["Inactive roles", inactiveRolesCount],
-              ["Assignments", totalAssignments],
-              ["Avg permissions", averagePermissions],
-            ].map(([label, value]) => (
-              <div
-                key={String(label)}
-                className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5"
-              >
-                <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="enterprise-card p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              Assignment Leaders
-            </p>
-            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-              Most deployed roles
-            </h3>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {topAssignedRoles.length === 0 ? (
-              <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                No role assignments are available yet.
-              </div>
-            ) : (
-              topAssignedRoles.map((role) => {
-                const width = totalAssignments
-                  ? (role.usersAssigned / totalAssignments) * 100
-                  : 0;
-
-                return (
-                  <div key={role.id}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100">
-                        {role.name}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400">
-                        {role.usersAssigned} assigned
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                        style={{ width: `${Math.max(width, role.usersAssigned > 0 ? 8 : 0)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        <div className="enterprise-card p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              Permission Landscape
-            </p>
-            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-              Heaviest modules
-            </h3>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {topPermissionModules.length === 0 ? (
-              <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                Permission modules will appear here once the catalog loads.
-              </div>
-            ) : (
-              topPermissionModules.map(([module, items]) => (
-                <div
-                  key={module}
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">
-                      {toTitleCase(module)}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {items.filter((item) => (item.status || "ACTIVE") === "ACTIVE").length} active actions
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                    {items.length}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="enterprise-card overflow-hidden">
+      <section className="ui-panel overflow-hidden">
         <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>

@@ -1062,3 +1062,36 @@ span.flatpickr-weekday,
 .react-datepicker__input-container input {
   @apply !outline-none;
 }
+
+/* ---------------------------------------------------------------- page kit
+   One look for every screen (see components/ui/page). Panels never "lift" on hover:
+   they hold tables and maps, and movement there is distracting. */
+.ui-panel {
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 22px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.dark .ui-panel {
+  border-color: rgba(51, 65, 85, 0.8);
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.3);
+}
+
+.ui-skeleton {
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.7) 25%, rgba(241, 245, 249, 0.95) 37%, rgba(226, 232, 240, 0.7) 63%);
+  background-size: 400% 100%;
+  animation: ui-shimmer 1.3s ease infinite;
+  border-radius: 8px;
+}
+
+.dark .ui-skeleton {
+  background: linear-gradient(90deg, rgba(30, 41, 59, 0.8) 25%, rgba(51, 65, 85, 0.8) 37%, rgba(30, 41, 59, 0.8) 63%);
+  background-size: 400% 100%;
+}
+
+@keyframes ui-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}

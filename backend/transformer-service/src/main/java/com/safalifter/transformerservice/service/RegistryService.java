@@ -7,6 +7,7 @@ import com.safalifter.transformerservice.entities.TransformerType;
 import com.safalifter.transformerservice.payload.response.ExternalTransformerLookupResponse;
 import com.safalifter.transformerservice.repository.ControllerRepository;
 import com.safalifter.transformerservice.repository.TransformerRepository;
+import com.safalifter.transformerservice.util.TtlCache;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -51,6 +52,9 @@ public class RegistryService {
     private final AccessScopeService accessScopeService;
     private final AlertStateService alertStateService;
 
+    /** Registry rows per scope, kept 20 s: dashboards, map, insights and the registry share one query. */
+    private final TtlCache<List<RegistryRow>> rowsCache = new TtlCache<>(20_000, 512);
+
     @Data
     public static class RegistryRow {
         private Long id;
@@ -94,6 +98,17 @@ public class RegistryService {
     }
 
     // --------------------------------------------------------------------- registry
+
+    /** Registry rows for the caller's scope, served from a short cache. Treat the list as read-only. */
+    @Transactional(readOnly = true)
+    public List<RegistryRow> scopedRows() {
+        return rowsCache.get(accessScopeService.scopeKey(), () -> registry(null));
+    }
+
+    /** Drop cached rows after anything that changes transformers or their devices. */
+    public void invalidate() {
+        rowsCache.clear();
+    }
 
     @Transactional(readOnly = true)
     public List<RegistryRow> registry(Long onlyTransformerId) {
@@ -232,6 +247,7 @@ public class RegistryService {
         Long previous = controller.getTransformerId();
         controller.setTransformerId(null);
         controllerRepository.save(controller);
+        invalidate();
         if (previous != null) alertStateService.refresh(previous);
     }
 
@@ -294,7 +310,7 @@ public class RegistryService {
         String supplierCode = !blank(r.getSupplierCode()) ? r.getSupplierCode().trim().toLowerCase(Locale.ROOT)
                 : existing.map(Controller::getSupplierCode).filter(s -> !blank(s)).orElse("oculus");
         String supplierName = !blank(r.getSupplierName()) ? r.getSupplierName().trim()
-                : existing.map(Controller::getSupplierName).filter(s -> !blank(s)).orElse("oculus".equals(supplierCode) ? "Oculus" : supplierCode);
+                : existing.map(Controller::getSupplierName).filter(s -> !blank(s)).orElse("oculus".equals(supplierCode) ? "Oqulus" : supplierCode);
 
         TransformerType type = parseType(!blank(r.getType()) ? r.getType() : remote != null ? remote.getTransformerType() : null);
         Transformer transformer = transformerRepository.save(Transformer.builder()
@@ -324,6 +340,7 @@ public class RegistryService {
     // ------------------------------------------------------------------ helpers
 
     private void link(Controller controller, Transformer transformer) {
+        invalidate();
         controller.setTransformerId(transformer.getId());
         controllerRepository.save(controller);
         boolean changed = false;

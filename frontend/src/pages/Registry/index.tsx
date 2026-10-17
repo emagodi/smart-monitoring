@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { API_BASE_URL, districtRegionId, useGeography } from "./geo";
+import { cachedGet, peekCache } from "../../lib/cache";
 import AddFromEuiDrawer from "./AddFromEuiDrawer";
 
 export type RegistryRow = {
@@ -90,7 +91,6 @@ const PAGE = 50;
 
 export default function TransformerRegistry() {
   const { token, hasPermission, user } = useAuth();
-  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : undefined), [token]);
   const geo = useGeography(token);
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState<RegistryRow[]>([]);
@@ -103,8 +103,14 @@ export default function TransformerRegistry() {
   const [depotId, setDepotId] = useState(params.get("depot") || "");
   const [partner, setPartner] = useState(params.get("partner") || "");
   const [type, setType] = useState("");
-  const [statuses, setStatuses] = useState<Status[]>([]);
-  const [search, setSearch] = useState("");
+  // Drill-down from the dashboard tiles: ?arm=ARMED|DISARMED, ?alerting=1
+  const [arm, setArm] = useState((params.get("arm") || "").toUpperCase());
+  const [alertingOnly, setAlertingOnly] = useState(params.get("alerting") === "1");
+  const [statuses, setStatuses] = useState<Status[]>(() => {
+    const st = (params.get("status") || "").toUpperCase();
+    return st in STATUS ? [st as Status] : [];
+  });
+  const [search, setSearch] = useState(params.get("q") || "");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "name", dir: 1 });
   const [page, setPage] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
@@ -113,25 +119,35 @@ export default function TransformerRegistry() {
   const isSupplier = Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
   const canEdit = !isSupplier && (hasPermission("transformers.create") || hasPermission("transformers.update"));
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [r, u] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/v1/transformers/registry`, { headers }),
-        axios.get(`${API_BASE_URL}/api/v1/controllers/unmatched`, { headers }).catch(() => ({ data: [] })),
-      ]);
-      setRows(Array.isArray(r.data) ? r.data : []);
-      setUnmatched(Array.isArray(u.data) ? u.data : []);
-      setError(null);
-    } catch {
-      setError("Could not load the transformer registry.");
-    } finally {
-      setLoading(false);
-    }
-  }, [headers]);
+  // Stale-while-revalidate: a revisit shows the last list at once, then refreshes in the background.
+  const load = useCallback(
+    async (force = true) => {
+      try {
+        if (!peekCache(`${API_BASE_URL}/api/v1/transformers/registry`, token)) setLoading(true);
+        const [r, u] = await Promise.all([
+          cachedGet<RegistryRow[]>(`${API_BASE_URL}/api/v1/transformers/registry`, token, 20_000, force),
+          cachedGet<Unmatched[]>(`${API_BASE_URL}/api/v1/controllers/unmatched`, token, 20_000, force).catch(() => [] as Unmatched[]),
+        ]);
+        setRows(Array.isArray(r) ? r : []);
+        setUnmatched(Array.isArray(u) ? u : []);
+        setError(null);
+      } catch {
+        setError("Could not load the transformer registry.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [token]
+  );
 
   useEffect(() => {
-    if (token) void load();
+    if (!token) return;
+    const cached = peekCache<RegistryRow[]>(`${API_BASE_URL}/api/v1/transformers/registry`, token);
+    if (cached) {
+      setRows(cached);
+      setLoading(false);
+    }
+    void load(false);
   }, [load, token]);
 
   // keep filters in the URL so a filtered view can be shared or bookmarked
@@ -177,6 +193,9 @@ export default function TransformerRegistry() {
       if (partner && row.supplierCode !== partner) return false;
       if (type && row.type !== type) return false;
       if (statuses.length && !statuses.includes(row.status)) return false;
+      if (arm === "ARMED" && row.lastCommandAction !== "ARM") return false;
+      if (arm === "DISARMED" && row.lastCommandAction !== "DISARM") return false;
+      if (alertingOnly && !(row.openAlerts > 0)) return false;
       if (!q) return true;
       return [row.name, path.depotName, path.districtName, path.regionName, row.supplierName, ...row.controllerEuis]
         .filter(Boolean)
@@ -206,9 +225,9 @@ export default function TransformerRegistry() {
       const y = val(b);
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
     });
-  }, [depotId, districtId, enriched, partner, regionId, search, sort, statuses, type]);
+  }, [alertingOnly, arm, depotId, districtId, enriched, partner, regionId, search, sort, statuses, type]);
 
-  useEffect(() => setPage(0), [regionId, districtId, depotId, partner, type, statuses, search]);
+  useEffect(() => setPage(0), [regionId, districtId, depotId, partner, type, statuses, search, arm, alertingOnly]);
 
   const counts = useMemo(() => {
     const c: Record<Status, number> = { ONLINE: 0, DELAYED: 0, OFFLINE: 0, NEVER_SEEN: 0, NO_DEVICE: 0 };
@@ -229,8 +248,10 @@ export default function TransformerRegistry() {
     setType("");
     setStatuses([]);
     setSearch("");
+    setArm("");
+    setAlertingOnly(false);
   };
-  const anyFilter = regionId || districtId || depotId || partner || type || statuses.length || search;
+  const anyFilter = regionId || districtId || depotId || partner || type || statuses.length || search || arm || alertingOnly;
 
   const exportCsv = () => {
     const header = ["Transformer", "Type", "Region", "District", "Depot", "Partner", "Status", "Last signal", "Controllers", "Open alerts", "Lat", "Lng"];
@@ -250,12 +271,12 @@ export default function TransformerRegistry() {
   return (
     <div className="space-y-4">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] p-5 text-white">
+      <section className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] px-5 py-4 text-white shadow-[0_18px_40px_-24px_rgba(11,79,196,0.7)]">
         <div className="pointer-events-none absolute -right-12 -top-20 h-64 w-64 rounded-full bg-sky-400/15 blur-3xl" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200/80">Asset register</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Transformers</h1>
+            <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">Transformers</h1>
             <p className="mt-1 max-w-2xl text-sm text-blue-100/80">
               Every ZESA transformer under monitoring, with its partner devices, live status and alerts. Filter by region, district and depot.
             </p>
@@ -389,6 +410,16 @@ export default function TransformerRegistry() {
                   {STATUS[s].label}
                 </button>
               ))}
+              {arm ? (
+                <button type="button" onClick={() => setArm("")} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
+                  {arm === "ARMED" ? "Armed sites" : "Disarmed sites"} <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+              {alertingOnly ? (
+                <button type="button" onClick={() => setAlertingOnly(false)} className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 ring-1 ring-red-200">
+                  With open alerts <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
               {anyFilter ? (
                 <button type="button" onClick={clearFilters} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
                   <X className="h-3.5 w-3.5" /> Clear filters

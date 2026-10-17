@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import {
   Activity,
   AlertTriangle,
   CloudOff,
   Eye,
   FileWarning,
-  HelpCircle,
   Link2,
   Link2Off,
   Loader2,
@@ -15,7 +15,6 @@ import {
   MapPinOff,
   Pencil,
   RefreshCw,
-  RefreshCcw,
   Router,
   Search,
   Server,
@@ -182,20 +181,6 @@ const statusTone = (status: GatewayStatus) => {
   }
 };
 
-const syncStatusTone = (status?: GatewaySyncStatus | null) => {
-  switch (status) {
-    case "SUCCESS":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "PARTIAL":
-      return "border-amber-200 bg-amber-50 text-amber-700";
-    case "FAILED":
-      return "border-red-200 bg-red-50 text-red-700";
-    case "RUNNING":
-      return "border-blue-200 bg-blue-50 text-blue-700";
-    default:
-      return "border-slate-200 bg-slate-50 text-slate-600";
-  }
-};
 
 const syncStatusLabel = (status?: GatewaySyncStatus | null) => {
   switch (status) {
@@ -244,59 +229,6 @@ const DETAIL_TABS: Array<{ value: string; label: string }> = [
   { value: "audit", label: "Audit" },
 ];
 
-const StatCard = ({
-  title,
-  value,
-  subtitle,
-  icon,
-  highlight,
-}: {
-  title: string;
-  value: number | string;
-  subtitle: string;
-  icon: ReactNode;
-  highlight?: "blue" | "red" | "emerald" | "amber" | "neutral" | "slate";
-}) => {
-  const hl = highlight || "neutral";
-  const valueTone =
-    hl === "blue"
-      ? "text-blue-700 dark:text-blue-300"
-      : hl === "red"
-        ? "text-red-600 dark:text-red-300"
-        : hl === "emerald"
-          ? "text-emerald-600 dark:text-emerald-300"
-          : hl === "amber"
-            ? "text-amber-600 dark:text-amber-300"
-            : hl === "slate"
-              ? "text-slate-600 dark:text-slate-300"
-              : "text-slate-950 dark:text-slate-50";
-  const iconTone =
-    hl === "red"
-      ? "border border-red-100 bg-red-50/90 text-red-600 dark:border-red-500/10 dark:bg-red-500/10 dark:text-red-300"
-      : hl === "emerald"
-        ? "border border-emerald-100 bg-emerald-50/80 text-emerald-600 dark:border-emerald-500/10 dark:bg-emerald-500/10 dark:text-emerald-300"
-        : hl === "amber"
-          ? "border border-amber-100 bg-amber-50/80 text-amber-600 dark:border-amber-500/10 dark:bg-amber-500/10 dark:text-amber-300"
-          : hl === "slate"
-            ? "border border-slate-200 bg-slate-100/80 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-            : "border border-blue-100 bg-blue-50/80 text-blue-600 dark:border-blue-500/10 dark:bg-blue-500/10 dark:text-blue-300";
-  return (
-    <div className="enterprise-card p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-            {title}
-          </p>
-          <p className={`mt-1 text-xl font-semibold leading-tight tracking-tight ${valueTone}`}>
-            {typeof value === "number" ? value.toLocaleString() : value}
-          </p>
-          <p className="mt-1 text-[11px] leading-[1.25rem] text-slate-500 dark:text-slate-400">{subtitle}</p>
-        </div>
-        <div className={`shrink-0 rounded-lg p-1.5 ${iconTone}`}>{icon}</div>
-      </div>
-    </div>
-  );
-};
 
 function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -683,117 +615,46 @@ export default function GatewaysIndex() {
 
   return (
     <div className="space-y-4">
-      <section className="enterprise-card p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-              Gateway Inventory
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-              LoRaWAN gateway estate
-            </h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              LORIOT-synced gateways with status engine, SIM assignments, and location tracking.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex rounded-full border px-3 py-1.5 text-[11px] font-semibold ${syncStatusTone(summary.lastSyncStatus)}`}>
-              {syncStatusLabel(summary.lastSyncStatus)} sync · {formatDateTime(summary.lastSyncAt)}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                void fetchSummary();
-                void fetchGateways();
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-            >
-              <RefreshCcw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </section>
+      <PageHero
+        eyebrow="Assets · Gateways"
+        title="LoRaWAN gateways"
+        subtitle={`LORIOT-synced gateways with their status, SIM cards and location. Last sync: ${syncStatusLabel(summary.lastSyncStatus).toLowerCase()} · ${formatDateTime(summary.lastSyncAt)}.`}
+        actions={
+          <HeroButton
+            onClick={() => {
+              void fetchSummary();
+              void fetchGateways();
+            }}
+          >
+            Refresh
+          </HeroButton>
+        }
+      >
+        <HeroStats cols={8}>
+          <HeroStat icon={<Router className="h-3.5 w-3.5" />} label="Gateways" value={summary.total.toLocaleString()} sub="in inventory" />
+          <HeroStat icon={<Wifi className="h-3.5 w-3.5 text-emerald-300" />} label="Online" value={summary.online.toLocaleString()} sub="healthy and reachable" tone="good" />
+          <HeroStat icon={<WifiOff className="h-3.5 w-3.5 text-red-300" />} label="Offline" value={summary.offline.toLocaleString()} sub="past the grace period" tone={summary.offline ? "bad" : undefined} />
+          <HeroStat icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-300" />} label="Degraded" value={summary.degraded.toLocaleString()} sub="likely to go offline" tone={summary.degraded ? "warn" : undefined} />
+          <HeroStat icon={<CloudOff className="h-3.5 w-3.5" />} label="Never seen" value={summary.neverSeen.toLocaleString()} sub={`${summary.unknown} unknown`} />
+          <HeroStat icon={<MapPinOff className="h-3.5 w-3.5 text-amber-300" />} label="No location" value={summary.missingLocation.toLocaleString()} sub="missing coordinates" tone={summary.missingLocation ? "warn" : undefined} />
+          <HeroStat icon={<CardSim className="h-3.5 w-3.5 text-red-300" />} label="No SIM" value={summary.missingSim.toLocaleString()} sub="no active SIM card" tone={summary.missingSim ? "bad" : undefined} />
+          <HeroStat
+            icon={summary.lastSyncStatus === "FAILED" ? <ServerCrash className="h-3.5 w-3.5 text-red-300" /> : <Server className="h-3.5 w-3.5" />}
+            label="Last sync"
+            value={syncStatusLabel(summary.lastSyncStatus)}
+            sub={formatDateTime(summary.lastSyncAt)}
+            tone={summary.lastSyncStatus === "FAILED" ? "bad" : summary.lastSyncStatus === "PARTIAL" ? "warn" : "good"}
+          />
+        </HeroStats>
+      </PageHero>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Total Gateways"
-          value={summary.total}
-          subtitle="Registered gateway devices tracked in inventory."
-          icon={<Router className="h-4 w-4" />}
-          highlight="blue"
-        />
-        <StatCard
-          title="Online"
-          value={summary.online}
-          subtitle="Gateways reporting as healthy and reachable."
-          icon={<Wifi className="h-4 w-4" />}
-          highlight="emerald"
-        />
-        <StatCard
-          title="Degraded"
-          value={summary.degraded}
-          subtitle="Grace-period held offline, likely to flip soon."
-          icon={<AlertTriangle className="h-4 w-4" />}
-          highlight="amber"
-        />
-        <StatCard
-          title="Last Sync"
-          value={syncStatusLabel(summary.lastSyncStatus)}
-          subtitle={`Ran ${formatDateTime(summary.lastSyncAt)}`}
-          icon={summary.lastSyncStatus === "FAILED" ? <ServerCrash className="h-4 w-4" /> : <Server className="h-4 w-4" />}
-          highlight={summary.lastSyncStatus === "FAILED" ? "red" : summary.lastSyncStatus === "PARTIAL" ? "amber" : "emerald"}
-        />
-        <StatCard
-          title="Offline"
-          value={summary.offline}
-          subtitle="Offline beyond grace period — needs attention."
-          icon={<WifiOff className="h-4 w-4" />}
-          highlight="red"
-        />
-        <StatCard
-          title="Never Seen"
-          value={summary.neverSeen}
-          subtitle="Created but never observed via LORIOT or traffic."
-          icon={<CloudOff className="h-4 w-4" />}
-          highlight="slate"
-        />
-        <StatCard
-          title="Unknown"
-          value={summary.unknown}
-          subtitle="No signal, no uplink, no manual status."
-          icon={<HelpCircle className="h-4 w-4" />}
-          highlight="slate"
-        />
-        <StatCard
-          title="Missing Location"
-          value={summary.missingLocation}
-          subtitle="Gateways without lat/lng coordinates set."
-          icon={<MapPinOff className="h-4 w-4" />}
-          highlight="amber"
-        />
-        <StatCard
-          title="Missing SIM"
-          value={summary.missingSim}
-          subtitle="Gateways without an active SIM assignment."
-          icon={<CardSim className="h-4 w-4" />}
-          highlight="red"
-        />
-      </section>
-
-      <section className="enterprise-card overflow-hidden">
-        <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 p-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-            <div className="space-y-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  Filters
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
-                  Filter the full-width compact gateway list
-                </h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
+      <section className="ui-panel overflow-hidden">
+        <div className="border-b border-slate-200/80 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
+          <div className="flex flex-col gap-3">
+            {/* One horizontal line of filters (scrolls sideways on small screens) */}
+            <div className="flex items-center gap-3 overflow-x-auto pb-1">
+              <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Filters</span>
+              <div className="flex shrink-0 flex-nowrap gap-2">
                 {STATUS_FILTERS.map((filter) => (
                   <FilterButton
                     key={filter.value}
@@ -806,7 +667,8 @@ export default function GatewaysIndex() {
                   />
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <span className="h-6 w-px shrink-0 bg-slate-200 dark:bg-slate-700" />
+              <div className="flex shrink-0 flex-nowrap gap-2 whitespace-nowrap">
                 <button
                   type="button"
                   onClick={() => {
@@ -865,8 +727,9 @@ export default function GatewaysIndex() {
                 </button>
               </div>
             </div>
-            <div className="flex w-full flex-col gap-2 xl:max-w-[560px]">
-              <div className="enterprise-chip flex items-center gap-3 px-3 py-2">
+            {/* Search and rows per page on one line */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="enterprise-chip flex flex-1 items-center gap-3 px-3 py-2">
                 <Search className="h-3.5 w-3.5 text-slate-400" />
                 <input
                   value={search}
@@ -878,10 +741,8 @@ export default function GatewaysIndex() {
                   className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400 xl:col-span-2">
-                  <label className="inline-flex items-center gap-2">
-                    <span>Rows</span>
+              <label className="inline-flex shrink-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>Rows</span>
                     <select
                       value={pageSize}
                       onChange={(event) => {
@@ -894,9 +755,7 @@ export default function GatewaysIndex() {
                       <option value={25}>25</option>
                       <option value={50}>50</option>
                     </select>
-                  </label>
-                </div>
-              </div>
+              </label>
             </div>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
@@ -1110,7 +969,6 @@ export default function GatewaysIndex() {
                           <button
                             type="button"
                             onClick={() => {
-                              setEditingGateway(item);
                               setAssignSimModalOpen(true);
                               setAssignSimTargetGatewayId(item.id);
                             }}
@@ -1433,7 +1291,7 @@ export default function GatewaysIndex() {
                                       if (selectedGateway) {
                                         void openDetailModal(selectedGateway);
                                       }
-                                      await Promise.all([fetchSummary(), fetchGateways(currentFetchRef)]);
+                                      await Promise.all([fetchSummary(), fetchGateways()]);
                                     } catch (err) {
                                       console.error(err);
                                     }

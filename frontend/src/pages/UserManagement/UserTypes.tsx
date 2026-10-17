@@ -65,11 +65,6 @@ export default function UserTypesPage() {
     [userTypes]
   );
 
-  const topAssignedTypes = useMemo(
-    () => userTypes.slice().sort((a, b) => b.userCount - a.userCount).slice(0, 4),
-    [userTypes]
-  );
-
   const fetchUserTypes = useCallback(async () => {
     try {
       setLoading(true);
@@ -170,119 +165,7 @@ export default function UserTypesPage() {
     >
       {notice ? <Alert variant={notice.variant} title={notice.title} message={notice.message} /> : null}
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="enterprise-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                Summary
-              </p>
-              <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-                Type portfolio health
-              </h3>
-            </div>
-            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-              <Building2 className="h-5 w-5" />
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2.5">
-            {[
-              ["Active user types", activeTypesCount],
-              ["Inactive user types", userTypes.length - activeTypesCount],
-              ["Assigned users", userTypes.reduce((sum, type) => sum + type.userCount, 0)],
-              ["Supplier scoped", userTypes.filter((type) => type.name.toLowerCase().includes("supplier")).length],
-            ].map(([label, value]) => (
-              <div
-                key={String(label)}
-                className="enterprise-subtle-card flex items-center justify-between px-3 py-2.5"
-              >
-                <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="enterprise-card p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              Assignment Leaders
-            </p>
-            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-              Most used classifications
-            </h3>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {topAssignedTypes.length === 0 ? (
-              <div className="rounded-[22px] border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                No user type assignments are available yet.
-              </div>
-            ) : (
-              topAssignedTypes.map((userType) => {
-                const totalUsers = userTypes.reduce((sum, type) => sum + type.userCount, 0);
-                const width = totalUsers ? (userType.userCount / totalUsers) * 100 : 0;
-
-                return (
-                  <div key={userType.id}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100">
-                        {userType.name}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400">
-                        {userType.userCount} users
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600"
-                        style={{ width: `${Math.max(width, userType.userCount > 0 ? 8 : 0)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        <div className="enterprise-card p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              Status Mix
-            </p>
-            <h3 className="mt-0.5 text-sm font-semibold text-slate-950 dark:text-slate-50 md:text-base">
-              Readiness for assignment
-            </h3>
-          </div>
-
-          <div className="mt-4 grid gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-              <p className="text-xs text-slate-500 dark:text-slate-400">Assignment coverage</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
-                {userTypes.filter((type) => type.userCount > 0).length}
-              </p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                User types currently in use across the platform
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-              <p className="text-xs text-slate-500 dark:text-slate-400">Unassigned templates</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
-                {userTypes.filter((type) => type.userCount === 0).length}
-              </p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Categories ready to be used in future onboarding
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="enterprise-card overflow-hidden">
+      <section className="ui-panel overflow-hidden">
         <div className="border-b border-slate-200/80 p-4 dark:border-slate-800">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>

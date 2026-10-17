@@ -78,7 +78,7 @@ const DEFAULT_MAP_STYLES = [
   },
 ];
 
-const loadGoogleMaps = (apiKey: string) =>
+export const loadGoogleMaps = (apiKey: string) =>
   new Promise<void>((resolve, reject) => {
     if (window.google?.maps) {
       resolve();
