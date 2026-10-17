@@ -96,11 +96,13 @@ public class LoriotWebSocketIngestor implements ApplicationRunner {
         boolean socketPresent = ws != null;
 
         Instant now = Instant.now();
+        // Idle time counts from the later of "last message" and "this session opened": a fresh session gets the
+        // full maxIdle window instead of being torn down every check because the previous session was quiet.
         Long idleSeconds = null;
-        if (lastMessageAt != null) {
-            idleSeconds = Duration.between(lastMessageAt, now).getSeconds();
-        } else if (connectedAt != null) {
-            idleSeconds = Duration.between(connectedAt, now).getSeconds();
+        Instant since = lastMessageAt;
+        if (connectedAt != null && (since == null || connectedAt.isAfter(since))) since = connectedAt;
+        if (since != null) {
+            idleSeconds = Duration.between(since, now).getSeconds();
         }
 
         boolean stale = idleSeconds != null && idleSeconds > Math.max(30L, maxIdleSeconds);
