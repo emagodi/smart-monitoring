@@ -22,4 +22,6 @@ public class ControllerResponse {
     private Long transformerId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** Last uplink heard from this device (drives the online / offline badge). */
+    private LocalDateTime lastReadingAt;
 }

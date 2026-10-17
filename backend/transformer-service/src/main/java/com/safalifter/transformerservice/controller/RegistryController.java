@@ -85,11 +85,13 @@ public class RegistryController {
     }
 
     @PostMapping("/api/v1/controllers/{id}/assign")
-    public ResponseEntity<RegistryService.RegistryRow> assign(@PathVariable Long id, @RequestBody AssignRequest request) {
+    public ResponseEntity<RegistryService.RegistryRow> assign(@PathVariable Long id, @RequestBody AssignRequest request,
+                                                              @RequestParam(name = "move", defaultValue = "false") boolean move) {
         if (request == null || request.getTransformerId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a transformer");
         }
-        return ResponseEntity.ok(registryService.assign(id, request.getTransformerId()));
+        // move=true moves a controller that is linked to the wrong transformer in one step.
+        return ResponseEntity.ok(registryService.assign(id, request.getTransformerId(), move));
     }
 
     @PostMapping("/api/v1/controllers/{id}/unassign")

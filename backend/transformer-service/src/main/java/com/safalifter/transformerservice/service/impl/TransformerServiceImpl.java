@@ -358,6 +358,7 @@ public class TransformerServiceImpl implements TransformerService {
                         .transformerId(transformer.getId())
                         .createdAt(c.getCreatedAt())
                         .updatedAt(c.getUpdatedAt())
+                        .lastReadingAt(c.getLastReadingAt())
                         .build())
                 .toList();
         return TransformerResponse.builder()

@@ -236,17 +236,37 @@ public class RegistryService {
     }
 
     public RegistryRow assign(Long controllerId, Long transformerId) {
+        return assign(controllerId, transformerId, false);
+    }
+
+    /** Links a controller to a transformer. With move=true a controller already on another transformer is moved. */
+    public RegistryRow assign(Long controllerId, Long transformerId, boolean move) {
         requireWrite();
         Controller controller = controllerRepository.findById(controllerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Controller not found"));
         Transformer transformer = transformerRepository.findById(transformerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer not found"));
-        if (controller.getTransformerId() != null && !controller.getTransformerId().equals(transformerId)) {
-            String other = transformerRepository.findById(controller.getTransformerId()).map(Transformer::getName).orElse("another transformer");
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Controller " + controller.getDevEui() + " is already linked to " + other + ". Unlink it first.");
+        requireInDepot(transformer);
+        Long previous = controller.getTransformerId();
+        if (previous != null && !previous.equals(transformerId)) {
+            Transformer from = transformerRepository.findById(previous).orElse(null);
+            if (!move) {
+                String other = from != null ? from.getName() : "another transformer";
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Controller " + controller.getDevEui() + " is already linked to " + other + ". Unlink it first.");
+            }
+            if (from != null) requireInDepot(from);
         }
         link(controller, transformer);
+        if (move && previous != null && !previous.equals(transformerId)) alertStateService.refresh(previous);
         return registry(transformerId).stream().findFirst().orElse(null);
+    }
+
+    /** Depot users may only change links on their own depot's transformers. */
+    private void requireInDepot(Transformer t) {
+        Long depot = accessScopeService.getCurrentDepotId();
+        if (depot != null && !depot.equals(t.getDepotId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transformer not found");
+        }
     }
 
     public void unassign(Long controllerId) {
@@ -254,6 +274,7 @@ public class RegistryService {
         Controller controller = controllerRepository.findById(controllerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Controller not found"));
         Long previous = controller.getTransformerId();
+        if (previous != null) transformerRepository.findById(previous).ifPresent(this::requireInDepot);
         controller.setTransformerId(null);
         controllerRepository.save(controller);
         invalidate();
