@@ -105,6 +105,76 @@ public class RegistryService {
         return rowsCache.get(accessScopeService.scopeKey(), () -> registry(null));
     }
 
+    /**
+     * One page of the registry for the Transformers list (filter, sort and page on the server so the browser only
+     * receives what is on screen). Works on the cached scoped rows, so paging is cheap.
+     */
+    public Map<String, Object> page(int page, int size, String q, java.util.Set<Long> qDepotIds, java.util.Set<String> statuses,
+                                    java.util.Set<Long> depotIds, String partner, String type, String arm, boolean alerting,
+                                    String sort, String dir) {
+        List<RegistryRow> all = scopedRows();
+        String term = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
+        List<RegistryRow> filtered = new ArrayList<>();
+        for (RegistryRow r : all) {
+            if (depotIds != null && !depotIds.isEmpty() && (r.getDepotId() == null || !depotIds.contains(r.getDepotId()))) continue;
+            if (!blank(partner) && !partner.equalsIgnoreCase(String.valueOf(r.getSupplierCode()))) continue;
+            if (!blank(type) && !type.equalsIgnoreCase(String.valueOf(r.getType()))) continue;
+            if ("ARMED".equalsIgnoreCase(arm) && !"ARM".equalsIgnoreCase(r.getLastCommandAction())) continue;
+            if ("DISARMED".equalsIgnoreCase(arm) && !"DISARM".equalsIgnoreCase(r.getLastCommandAction())) continue;
+            if (alerting && r.getOpenAlerts() <= 0) continue;
+            if (!term.isEmpty()) {
+                boolean hit = (r.getDepotId() != null && qDepotIds != null && qDepotIds.contains(r.getDepotId()))
+                        || contains(r.getName(), term) || contains(r.getTransformerNumber(), term) || contains(r.getSupplierName(), term)
+                        || contains(String.valueOf(r.getId()), term)
+                        || (r.getControllerEuis() != null && r.getControllerEuis().stream().anyMatch(e -> contains(e, term)));
+                if (!hit) continue;
+            }
+            filtered.add(r);
+        }
+        // Status counts are taken before the status filter, so the chips always show what each status would give.
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (String st : List.of("ONLINE", "DELAYED", "OFFLINE", "NEVER_SEEN", "NO_DEVICE")) counts.put(st, 0L);
+        for (RegistryRow r : filtered) counts.merge(String.valueOf(r.getStatus()), 1L, Long::sum);
+        if (statuses != null && !statuses.isEmpty()) filtered.removeIf(r -> !statuses.contains(r.getStatus()));
+
+        Map<String, Integer> rank = Map.of("OFFLINE", 0, "DELAYED", 1, "NEVER_SEEN", 2, "ONLINE", 3, "NO_DEVICE", 4);
+        java.util.Comparator<RegistryRow> byName = java.util.Comparator.comparing(r -> String.valueOf(r.getName()).toLowerCase(Locale.ROOT));
+        java.util.Comparator<RegistryRow> cmp = switch (sort == null ? "name" : sort) {
+            case "status" -> java.util.Comparator.<RegistryRow>comparingInt(r -> rank.getOrDefault(r.getStatus(), 9)).thenComparing(byName);
+            case "alerts" -> java.util.Comparator.<RegistryRow>comparingInt(RegistryRow::getOpenAlerts).thenComparing(byName);
+            case "partner" -> java.util.Comparator.<RegistryRow, String>comparing(r -> String.valueOf(r.getSupplierName())).thenComparing(byName);
+            case "depot", "region" -> java.util.Comparator.<RegistryRow, Long>comparing(r -> r.getDepotId() == null ? Long.MAX_VALUE : r.getDepotId()).thenComparing(byName);
+            case "signal" -> java.util.Comparator.<RegistryRow, Long>comparing(r -> r.getMinutesSinceSignal() == null ? Long.MAX_VALUE : r.getMinutesSinceSignal()).thenComparing(byName);
+            default -> byName;
+        };
+        if ("desc".equalsIgnoreCase(dir)) cmp = cmp.reversed();
+        filtered.sort(cmp);
+
+        int sz = Math.max(1, Math.min(size, 10_000));
+        int total = filtered.size();
+        int pg = Math.max(0, Math.min(page, Math.max(0, (total - 1) / sz)));
+        List<RegistryRow> content = filtered.subList(Math.min(total, pg * sz), Math.min(total, pg * sz + sz));
+
+        Map<String, String> partners = new java.util.TreeMap<>();
+        for (RegistryRow r : all) if (!blank(r.getSupplierCode())) partners.putIfAbsent(r.getSupplierCode(), r.getSupplierName() == null ? r.getSupplierCode() : r.getSupplierName());
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("content", new ArrayList<>(content));
+        out.put("page", pg);
+        out.put("size", sz);
+        out.put("totalElements", total);
+        out.put("totalPages", total == 0 ? 1 : (total + sz - 1) / sz);
+        out.put("counts", counts);
+        out.put("matched", counts.values().stream().mapToLong(Long::longValue).sum());
+        out.put("allTotal", all.size());
+        out.put("partners", partners);
+        return out;
+    }
+
+    private static boolean contains(String v, String term) {
+        return v != null && v.toLowerCase(Locale.ROOT).contains(term);
+    }
+
     /** Drop cached rows after anything that changes transformers or their devices. */
     public void invalidate() {
         rowsCache.clear();
