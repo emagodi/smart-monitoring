@@ -43,6 +43,7 @@ export type RegistryRow = {
   status: Status;
   controllerCount: number;
   controllerEuis: string[];
+  reportedArmState?: "ARMED" | "DISARMED" | null;
   lastCommandAction?: string | null;
   lastCommandStatus?: string | null;
   lastCommandAt?: string | null;
@@ -124,7 +125,7 @@ export default function TransformerRegistry() {
   const canEdit = !isSupplier && (hasPermission("transformers.create") || hasPermission("transformers.update"));
 
   // Lazy loading: only the page on screen comes from the server (filtered, sorted and paged there).
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Record<Status, number>>({ ONLINE: 0, DELAYED: 0, OFFLINE: 0, NEVER_SEEN: 0, NO_DEVICE: 0 });
   const [partners, setPartners] = useState<Array<[string, string]>>([]);
@@ -490,15 +491,18 @@ export default function TransformerRegistry() {
                           {row.status !== "NO_DEVICE" ? <p className="mt-1 text-[11px] text-slate-500">{ago(row.minutesSinceSignal, row.lastSignalAt)}</p> : null}
                         </td>
                         <td className="px-4 py-3">
-                          {row.lastCommandAction ? (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                              {row.lastCommandAction === "ARM" ? <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> : <ShieldOff className="h-3.5 w-3.5 text-amber-600" />}
-                              {row.lastCommandAction === "ARM" ? "Armed" : "Disarmed"}
-                              <span className="text-slate-400">· {(row.lastCommandStatus || "").toLowerCase()}</span>
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
+                          {(() => {
+                            // The relay state the controller reports (same source as the partner page); last command as fallback.
+                            const arm = row.reportedArmState || (row.lastCommandAction === "ARM" ? "ARMED" : row.lastCommandAction === "DISARM" ? "DISARMED" : null);
+                            if (!arm) return <span className="text-slate-400">—</span>;
+                            return (
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                                {arm === "ARMED" ? <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> : <ShieldOff className="h-3.5 w-3.5 text-amber-600" />}
+                                {arm === "ARMED" ? "Armed" : "Disarmed"}
+                                {!row.reportedArmState && row.lastCommandStatus ? <span className="text-slate-400">· {row.lastCommandStatus.toLowerCase()}</span> : null}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           {row.openAlerts > 0 ? (

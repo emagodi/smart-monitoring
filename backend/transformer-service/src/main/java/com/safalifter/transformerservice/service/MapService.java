@@ -203,7 +203,12 @@ public class MapService {
     }
 
     /** ARMED / DISARMED from the last arm or disarm command sent to the site, else UNKNOWN. */
+    /**
+     * What the controller says its relay is doing (RO1 in its latest uplink) - the same source the partner page uses.
+     * Only when a controller has never reported RO1 do we fall back to the last command sent to it.
+     */
     static String armState(RegistryService.RegistryRow r) {
+        if (r.getReportedArmState() != null) return r.getReportedArmState();
         String a = r.getLastCommandAction();
         if (a == null) return "UNKNOWN";
         String v = a.toUpperCase(Locale.ROOT);

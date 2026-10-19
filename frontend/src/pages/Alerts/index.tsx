@@ -242,7 +242,7 @@ export default function AlertsIndex() {
   const [summary, setSummary] = useState<AlertSummary>(EMPTY_SUMMARY);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);

@@ -45,6 +45,7 @@ type Detail = {
   status: string;
   controllerCount: number;
   controllerEuis: string[];
+  reportedArmState?: "ARMED" | "DISARMED" | null;
   lastCommandAction?: string | null;
   lastCommandStatus?: string | null;
   lastCommandAt?: string | null;
@@ -110,7 +111,7 @@ export default function TransformerDetail() {
   const d = det.data;
   const path = geo.pathOf(d?.depotId);
   const partner = displayPartner(d?.supplierName, d?.supplierCode);
-  const armed = d?.lastCommandAction ? (d.lastCommandAction.toUpperCase().startsWith("DISARM") ? false : d.lastCommandAction.toUpperCase().startsWith("ARM") ? true : null) : null;
+  const armed = d?.reportedArmState ? d.reportedArmState === "ARMED" : d?.lastCommandAction ? (d.lastCommandAction.toUpperCase().startsWith("DISARM") ? false : d.lastCommandAction.toUpperCase().startsWith("ARM") ? true : null) : null;
   const control = Boolean(d?.supplierCode && CONTROL_PARTNERS.has(d.supplierCode.toLowerCase()) && d.controllerCount > 0);
   const canEdit = !user?.supplierCode && hasPermission("transformers.update");
   const meta = STATUS_META[d?.status ?? "NO_DEVICE"] ?? STATUS_META.NO_DEVICE;

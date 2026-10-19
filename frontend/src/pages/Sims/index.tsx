@@ -207,7 +207,7 @@ export default function SimsIndex() {
   const [statusFilter, setStatusFilter] = useState<SimStatus | "ALL">("ALL");
   const [selectedOperator, setSelectedOperator] = useState<string>("ALL");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 

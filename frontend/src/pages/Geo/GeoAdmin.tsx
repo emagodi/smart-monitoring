@@ -138,7 +138,7 @@ export default function GeoAdmin({ level }: { level: GeoLevel }) {
   const districtFilter = params.get("district") || "";
   const [sort, setSort] = useState<SortState<SortKey>>({ key: level === "depot" ? "openAlerts" : "transformers", dir: -1 });
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [editing, setEditing] = useState<{ id?: number; name: string; parentId: string } | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);

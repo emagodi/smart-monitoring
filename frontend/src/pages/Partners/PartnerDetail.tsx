@@ -142,7 +142,7 @@ export default function PartnerDetail() {
   const [filter, setFilter] = useState<Filter>("all");
   const [depot, setDepot] = useState("");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [confirm, setConfirm] = useState<{ site: Site; action: "arm" | "disarm" } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);

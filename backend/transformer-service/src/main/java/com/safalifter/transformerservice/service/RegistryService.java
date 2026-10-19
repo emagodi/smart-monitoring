@@ -73,6 +73,8 @@ public class RegistryService {
         private String status;
         private int controllerCount;
         private List<String> controllerEuis;
+        /** Relay state the controller itself last reported (RO1 in its latest uplink): ARMED, DISARMED or null. */
+        private String reportedArmState;
         private String lastCommandAction;
         private String lastCommandStatus;
         private LocalDateTime lastCommandAt;
@@ -119,8 +121,7 @@ public class RegistryService {
             if (depotIds != null && !depotIds.isEmpty() && (r.getDepotId() == null || !depotIds.contains(r.getDepotId()))) continue;
             if (!blank(partner) && !partner.equalsIgnoreCase(String.valueOf(r.getSupplierCode()))) continue;
             if (!blank(type) && !type.equalsIgnoreCase(String.valueOf(r.getType()))) continue;
-            if ("ARMED".equalsIgnoreCase(arm) && !"ARM".equalsIgnoreCase(r.getLastCommandAction())) continue;
-            if ("DISARMED".equalsIgnoreCase(arm) && !"DISARM".equalsIgnoreCase(r.getLastCommandAction())) continue;
+            if (!blank(arm) && !arm.equalsIgnoreCase(MapService.armState(r))) continue;
             if (alerting && r.getOpenAlerts() <= 0) continue;
             if (!term.isEmpty()) {
                 boolean hit = (r.getDepotId() != null && qDepotIds != null && qDepotIds.contains(r.getDepotId()))
@@ -208,6 +209,11 @@ public class RegistryService {
                        MAX(c.last_reading_at) AS last_reading_at,
                        MAX(c.last_command_at) AS last_command_at,
                        SUBSTRING_INDEX(GROUP_CONCAT(c.last_command_action ORDER BY c.last_command_at DESC SEPARATOR ','), ',', 1) AS last_command_action,
+                       SUBSTRING_INDEX(GROUP_CONCAT(
+                           CASE WHEN JSON_VALID(c.last_reading_decoded_payload)
+                                THEN COALESCE(JSON_UNQUOTE(JSON_EXTRACT(c.last_reading_decoded_payload, '$.RO1')),
+                                              JSON_UNQUOTE(JSON_EXTRACT(c.last_reading_decoded_payload, '$.ro1'))) END
+                           ORDER BY c.last_reading_at DESC SEPARATOR ','), ',', 1) AS reported_ro1,
                        SUBSTRING_INDEX(GROUP_CONCAT(c.last_command_status ORDER BY c.last_command_at DESC SEPARATOR ','), ',', 1) AS last_command_status,
                        MAX(s.open_alert_count) AS open_alerts,
                        MAX(s.total_alert_count) AS total_alerts,
@@ -258,6 +264,10 @@ public class RegistryService {
         r.setLastCommandAt(ts(rs, "last_command_at"));
         r.setLastCommandAction(rs.getString("last_command_action"));
         r.setLastCommandStatus(rs.getString("last_command_status"));
+        String ro1 = rs.getString("reported_ro1");
+        r.setReportedArmState(ro1 == null ? null
+                : ("true".equalsIgnoreCase(ro1.trim()) || "1".equals(ro1.trim())) ? "ARMED"
+                : ("false".equalsIgnoreCase(ro1.trim()) || "0".equals(ro1.trim())) ? "DISARMED" : null);
         r.setOpenAlerts(rs.getInt("open_alerts"));
         r.setTotalAlerts(rs.getLong("total_alerts"));
         r.setLastAlertAt(ts(rs, "last_alert_at"));
