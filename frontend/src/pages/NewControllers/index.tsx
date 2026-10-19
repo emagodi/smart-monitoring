@@ -81,7 +81,7 @@ export default function NewControllersIndex() {
   const [filter, setFilter] = useState<Filter>("all");
   const [partner, setPartner] = useState("");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [assigning, setAssigning] = useState<Unmatched | null>(null);
   const [renaming, setRenaming] = useState<{ c: Unmatched; name: string } | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);

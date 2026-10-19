@@ -45,6 +45,7 @@ type Detail = {
   lastSignalAt?: string | null;
   controllerEuis?: string[];
   controllerCount?: number;
+  reportedArmState?: "ARMED" | "DISARMED" | null;
   lastCommandAction?: string | null;
   lastCommandAt?: string | null;
   openAlerts?: number;
@@ -400,7 +401,7 @@ function DetailPanel({
   }, [id, token]);
 
   const path = geo.pathOf(d?.depotId);
-  const armed = d?.lastCommandAction ? d.lastCommandAction.toUpperCase().startsWith("ARM") : null;
+  const armed = d?.reportedArmState ? d.reportedArmState === "ARMED" : d?.lastCommandAction ? d.lastCommandAction.toUpperCase().startsWith("ARM") : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
