@@ -24,14 +24,21 @@ import com.safalifter.authservice.repository.UserRepository;
 import com.safalifter.authservice.repository.UserTypeRepository;
 import com.safalifter.authservice.service.AdminIamService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -43,6 +50,10 @@ public class AdminIamServiceImpl implements AdminIamService {
     private final UserTypeRepository userTypeRepository;
     private final SupplierRepository supplierRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
+
+    /** The built-in super administrator; DataLoader recreates it on every start, so it cannot be deleted. */
+    private static final String BUILT_IN_ADMIN = "emagodi1@powertel.co.zw";
 
     @Override
     @Transactional(readOnly = true)
@@ -81,7 +92,62 @@ public class AdminIamServiceImpl implements AdminIamService {
 
     @Override
     public void deleteUser(Long userId) {
-        userRepository.deleteById(userId);
+        User user = getUser(userId);
+        String email = user.getEmail() == null ? "" : user.getEmail().trim();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getName() != null && auth.getName().equalsIgnoreCase(email)) {
+            throw new IllegalArgumentException("You cannot delete your own account. Ask another administrator to do it.");
+        }
+        if (BUILT_IN_ADMIN.equalsIgnoreCase(email)) {
+            throw new IllegalArgumentException("The built-in super administrator cannot be deleted (it is recreated on every start). Set it to Inactive instead.");
+        }
+        // Rows in other tables point at the user (sign-in tokens, password resets, notification settings, role links).
+        // Before this, deleteById failed on those foreign keys and the user could never be removed.
+        removeReferencesTo(userId);
+        if (user.getRoles() != null) user.getRoles().clear();
+        userRepository.delete(user);
+        userRepository.flush();
+        log.info("Deleted user id={} email={} by={}", userId, email, auth != null ? auth.getName() : "system");
+    }
+
+    /**
+     * Clears every foreign key that points at _user.id: rows that only exist for this user (tokens, preferences,
+     * role links) are deleted; optional references elsewhere (e.g. "created by") are set to NULL so history stays.
+     */
+    private void removeReferencesTo(Long userId) {
+        List<Map<String, Object>> refs;
+        try {
+            refs = jdbcTemplate.queryForList("""
+                    SELECT k.TABLE_NAME AS t, k.COLUMN_NAME AS c, col.IS_NULLABLE AS n
+                      FROM information_schema.KEY_COLUMN_USAGE k
+                      JOIN information_schema.COLUMNS col
+                        ON col.TABLE_SCHEMA = k.TABLE_SCHEMA AND col.TABLE_NAME = k.TABLE_NAME AND col.COLUMN_NAME = k.COLUMN_NAME
+                     WHERE k.TABLE_SCHEMA = DATABASE() AND k.REFERENCED_TABLE_NAME = '_user' AND k.TABLE_NAME <> '_user'""");
+        } catch (Exception e) {
+            log.warn("Could not read user foreign keys ({}); deleting known dependants only", e.getMessage());
+            refs = List.of();
+        }
+        if (refs.isEmpty()) {
+            for (String t : List.of("refresh_token", "refresh_tokens", "forgot_password", "notification_preferences", "user_roles", "users_roles", "_user_roles")) {
+                try {
+                    jdbcTemplate.update("DELETE FROM `" + t + "` WHERE user_id = ?", userId);
+                } catch (Exception ignored) {
+                    // table not present in this schema
+                }
+            }
+            return;
+        }
+        for (Map<String, Object> r : refs) {
+            String table = String.valueOf(r.get("t"));
+            String column = String.valueOf(r.get("c"));
+            String lower = table.toLowerCase(Locale.ROOT);
+            boolean ownedByUser = lower.contains("token") || lower.contains("forgot") || lower.contains("preference") || lower.contains("role");
+            if (!ownedByUser && "YES".equalsIgnoreCase(String.valueOf(r.get("n")))) {
+                jdbcTemplate.update("UPDATE `" + table + "` SET `" + column + "` = NULL WHERE `" + column + "` = ?", userId);
+            } else {
+                jdbcTemplate.update("DELETE FROM `" + table + "` WHERE `" + column + "` = ?", userId);
+            }
+        }
     }
 
     @Override

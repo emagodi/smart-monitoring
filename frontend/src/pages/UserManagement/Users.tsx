@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   AlertTriangle,
+  BadgeCheck,
   Building2,
+  Check,
+  Mail,
+  MessageCircle,
+  Phone,
+  UserPlus,
   KeyRound,
   Loader2,
   Plus,
@@ -144,6 +150,9 @@ export default function Users() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [activeUser, setActiveUser] = useState<AdminUser | null>(null);
   const [formState, setFormState] = useState<UserFormState>(defaultFormState);
+  const [showPassword, setShowPassword] = useState(false);
+  // Inline validation: which required fields are missing, shown on the fields themselves (not a toast behind the window).
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showEditor, setShowEditor] = useState(false);
   const [showViewer, setShowViewer] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -360,11 +369,19 @@ export default function Users() {
 
   const closeEditor = () => {
     setShowEditor(false);
+    setFormErrors({});
+    setShowPassword(false);
     resetForm();
   };
 
   const updateForm = <K extends keyof UserFormState>(key: K, value: UserFormState[K]) => {
     setFormState((current) => ({ ...current, [key]: value }));
+    setFormErrors((current) => {
+      if (!current[key as string]) return current;
+      const next = { ...current };
+      delete next[key as string];
+      return next;
+    });
   };
 
   const handleRegionChange = async (value: string) => {
@@ -404,20 +421,19 @@ export default function Users() {
 
   const submitUser = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!formState.firstname.trim() || !formState.lastname.trim() || !formState.email.trim()) {
-      showNotice("warning", "Validation", "First name, last name, and email are required.");
-      return;
-    }
-    if (!activeUser && !formState.password.trim()) {
-      showNotice("warning", "Validation", "Set an initial password for the new user.");
-      return;
-    }
-    if (formState.roleIds.length === 0) {
-      showNotice("warning", "Validation", "Assign at least one role.");
-      return;
-    }
-    if (isSupplierUserType && !formState.supplierId) {
-      showNotice("warning", "Validation", "Select a supplier for supplier-scoped users.");
+    const errs: Record<string, string> = {};
+    if (!formState.firstname.trim()) errs.firstname = "Enter the first name.";
+    if (!formState.lastname.trim()) errs.lastname = "Enter the last name.";
+    if (!formState.email.trim()) errs.email = "Enter the email address they will sign in with.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email.trim())) errs.email = "This doesn't look like an email address.";
+    if (!activeUser && !formState.password.trim()) errs.password = "Set a first password so they can sign in.";
+    else if (formState.password.trim() && formState.password.trim().length < 6) errs.password = "Use at least 6 characters.";
+    if (!formState.userTypeId) errs.userTypeId = "Choose the user type.";
+    if (formState.roleIds.length === 0) errs.roleIds = "Pick at least one role.";
+    if (isSupplierUserType && !formState.supplierId) errs.supplierId = "Choose the partner this user belongs to.";
+    setFormErrors(errs);
+    if (Object.keys(errs).length) {
+      window.setTimeout(() => document.querySelector("[data-field-error]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
       return;
     }
 
@@ -480,7 +496,9 @@ export default function Users() {
       showNotice("success", "User deleted", "The user was removed from the system.");
     } catch (deleteError) {
       console.error(deleteError);
-      showNotice("error", "Delete failed", "Could not delete the selected user.");
+      const msg = (deleteError as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setShowDelete(false);
+      showNotice("error", "Delete failed", msg || "Could not delete the selected user.");
     } finally {
       setSaving(false);
     }
@@ -970,31 +988,37 @@ export default function Users() {
         variant="center"
         showCloseButton={false}
         backdropBlur={true}
-        className="max-h-[92vh] max-w-5xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+        className="max-h-[94vh] w-full max-w-4xl overflow-hidden rounded-[28px] border border-slate-200 bg-white p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950"
       >
-        <div className="flex max-h-[92vh] flex-col bg-white dark:bg-slate-950">
-          <div className="border-b border-slate-200 bg-slate-50/90 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/90">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
-                  {activeUser ? <UserCog className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+        <div className="flex max-h-[94vh] flex-col bg-white dark:bg-slate-950">
+          {/* Header: same blue hero as every page */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] px-6 py-4 text-white">
+            <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-sky-400/20 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-red-400/10 blur-3xl" />
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20">
+                  {activeUser ? <UserCog className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                    {activeUser ? "Edit User" : "Create User"}
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200/80">
+                    Users · {activeUser ? "Edit user" : "New user"}
                   </p>
-                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-                    {activeUser ? "Update user profile and access" : "Add a new user account"}
+                  <h3 className="mt-0.5 truncate text-xl font-semibold tracking-tight">
+                    {activeUser
+                      ? `${activeUser.firstname ?? ""} ${activeUser.lastname ?? ""}`.trim() || activeUser.email
+                      : [formState.firstname, formState.lastname].filter(Boolean).join(" ") || "Add a new user"}
                   </h3>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Configure personal details, role membership, access scope, and authentication settings in a centered modal.
+                  <p className="mt-0.5 truncate text-[13px] text-blue-100/80">
+                    {formState.email || "Their details, how they sign in, what they can do and which part of the network they look after."}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={closeEditor}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+                aria-label="Close"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20 transition hover:bg-white/20"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1002,225 +1026,214 @@ export default function Users() {
           </div>
 
           <form onSubmit={submitUser} className="flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-slate-50/70 px-6 py-6 dark:bg-slate-950">
-              <div className="grid grid-cols-2 gap-3">
-                <InfoTile label="Workflow" value={activeUser ? "Edit in modal" : "Create in modal"} />
-                <InfoTile label="Module" value="User Management" />
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-2">
-                <section className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex items-center gap-2">
-                    <Users2 className="h-4 w-4 text-blue-500" />
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-                        Personal Information
-                      </p>
-                      <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
-                        Identity and contact details
-                      </h4>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <Field label="First Name" value={formState.firstname} onChange={(value) => updateForm("firstname", value)} />
-                    <Field label="Last Name" value={formState.lastname} onChange={(value) => updateForm("lastname", value)} />
-                  </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <Field
-                      label="Email"
-                      type="email"
-                      value={formState.email}
-                      onChange={(value) => updateForm("email", value)}
-                    />
-                    <Field label="Phone" value={formState.phone} onChange={(value) => updateForm("phone", value)} />
-                  </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <Field
-                      label="WhatsApp Number"
-                      value={formState.whatsappNumber}
-                      onChange={(value) => updateForm("whatsappNumber", value)}
-                    />
-                    <Field
-                      label="Employee Number"
-                      value={formState.employeeNumber}
-                      onChange={(value) => updateForm("employeeNumber", value)}
-                    />
-                  </div>
-                </section>
-
-                <section className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex items-center gap-2">
-                    <UserCog className="h-4 w-4 text-blue-500" />
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-                        Account & Access
-                      </p>
-                      <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
-                        Authentication and permissions
-                      </h4>
-                    </div>
-                  </div>
-
-                  <div className="mt-5">
-                    <Field
-                      label={activeUser ? "New Password (optional)" : "Password"}
-                      type="password"
-                      value={formState.password}
-                      onChange={(value) => updateForm("password", value)}
-                    />
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                      {activeUser
-                        ? "Leave blank to keep the current password unchanged."
-                        : "Set an initial password so the new user can sign in."}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <SelectField
-                      label="User Type"
-                      value={formState.userTypeId}
-                      onChange={(value) => updateForm("userTypeId", value)}
-                      options={userTypes.map((item) => ({ value: String(item.id), label: item.name }))}
-                    />
-                    <SelectField
-                      label="Status"
-                      value={formState.status}
-                      onChange={(value) => updateForm("status", value)}
-                      options={[
-                        { value: "ACTIVE", label: "Active" },
-                        { value: "INACTIVE", label: "Inactive" },
-                      ]}
-                    />
-                  </div>
-
-                  {isSupplierUserType ? (
-                    <div className="mt-4">
-                      <SelectField
-                        label="Supplier"
-                        value={formState.supplierId}
-                        onChange={(value) => updateForm("supplierId", value)}
-                        options={suppliers.map((item) => ({
-                          value: String(item.id),
-                          label: item.name,
-                        }))}
-                      />
-                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                        Supplier users are restricted to the selected organisation&apos;s devices, transformers, alerts, and related records.
-                      </p>
-                    </div>
-                  ) : null}
-                </section>
-              </div>
-
-              <section className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-blue-500" />
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-                      Role Membership
-                    </p>
-                    <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
-                      Access entitlements
-                    </h4>
-                  </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 px-5 py-4 dark:bg-slate-950">
+              {Object.keys(formErrors).length ? (
+                <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    <b>{Object.keys(formErrors).length} thing{Object.keys(formErrors).length === 1 ? "" : "s"} to fix before saving:</b>{" "}
+                    {Object.values(formErrors).join(" ")}
+                  </span>
                 </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Fields marked <span className="font-semibold text-red-600">*</span> are required.
+                </p>
+              )}
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+                <EditorCard icon={<Users2 className="h-4 w-4" />} title="Personal details" subtitle="Who this person is and how to reach them">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field required error={formErrors.firstname} label="First name" value={formState.firstname} onChange={(v) => updateForm("firstname", v)} placeholder="e.g. Elisha" />
+                    <Field required error={formErrors.lastname} label="Last name" value={formState.lastname} onChange={(v) => updateForm("lastname", v)} placeholder="e.g. Mufambirwi" />
+                    <Field
+                      className="sm:col-span-2"
+                      label="Email address"
+                      required
+                      error={formErrors.email}
+                      type="email"
+                      icon={<Mail className="h-4 w-4" />}
+                      value={formState.email}
+                      onChange={(v) => updateForm("email", v)}
+                      placeholder="name@powertel.co.zw"
+                      hint="They sign in with this address."
+                    />
+                    <Field label="Phone" icon={<Phone className="h-4 w-4" />} value={formState.phone} onChange={(v) => updateForm("phone", v)} placeholder="+263 …" />
+                    <Field label="WhatsApp" icon={<MessageCircle className="h-4 w-4" />} value={formState.whatsappNumber} onChange={(v) => updateForm("whatsappNumber", v)} placeholder="+263 …" />
+                    <Field className="sm:col-span-2" label="Employee number" icon={<BadgeCheck className="h-4 w-4" />} value={formState.employeeNumber} onChange={(v) => updateForm("employeeNumber", v)} placeholder="Optional" />
+                  </div>
+                </EditorCard>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <EditorCard icon={<KeyRound className="h-4 w-4" />} title="Sign-in" subtitle="Password, account type and status">
+                  <div className="space-y-3">
+                    <Field
+                      label={activeUser ? "New password (optional)" : "Password"}
+                      required={!activeUser}
+                      error={formErrors.password}
+                      type={showPassword ? "text" : "password"}
+                      icon={<KeyRound className="h-4 w-4" />}
+                      value={formState.password}
+                      onChange={(v) => updateForm("password", v)}
+                      placeholder={activeUser ? "Leave blank to keep the current one" : "At least 6 characters"}
+                      hint={activeUser ? "Only fill this in to reset their password." : "Share it with them securely; they can change it from their profile."}
+                      trailing={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="rounded-full px-2 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-slate-800"
+                        >
+                          {showPassword ? "Hide" : "Show"}
+                        </button>
+                      }
+                    />
+                    <SelectField
+                      required
+                      error={formErrors.userTypeId}
+                      label="User type"
+                      value={formState.userTypeId}
+                      onChange={(v) => updateForm("userTypeId", v)}
+                      options={userTypes.map((item) => ({ value: String(item.id), label: item.name }))}
+                      placeholder="Choose a user type"
+                    />
+                    <div className="space-y-1.5">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Status</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(
+                          [
+                            ["ACTIVE", "Active", "Can sign in", "bg-emerald-600 ring-emerald-600 shadow-emerald-600/25"],
+                            ["INACTIVE", "Inactive", "Sign-in blocked", "bg-red-600 ring-red-600 shadow-red-600/25"],
+                          ] as const
+                        ).map(([v, l, sub, on]) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => updateForm("status", v)}
+                            className={`rounded-xl px-3 py-2 text-left ring-1 transition ${
+                              formState.status === v
+                                ? `${on} text-white shadow-sm`
+                                : "bg-white text-slate-600 ring-slate-200 hover:ring-blue-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"
+                            }`}
+                          >
+                            <span className="block text-sm font-semibold">{l}</span>
+                            <span className={`block text-[11px] ${formState.status === v ? "text-white/80" : "text-slate-400"}`}>{sub}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {isSupplierUserType ? (
+                      <SelectField
+                        required
+                        error={formErrors.supplierId}
+                        label="Partner organisation"
+                        value={formState.supplierId}
+                        onChange={(v) => updateForm("supplierId", v)}
+                        options={suppliers.map((item) => ({ value: String(item.id), label: item.name }))}
+                        placeholder="Choose the partner"
+                        hint="Partner users only see their own organisation's devices, transformers and alerts."
+                      />
+                    ) : null}
+                  </div>
+                </EditorCard>
+              </div>
+
+              <EditorCard
+                icon={<ShieldCheck className="h-4 w-4" />}
+                title="Roles *"
+                subtitle="What this person can do. Pick one or more."
+                aside={<span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/20">{formState.roleIds.length} selected</span>}
+              >
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {roles.map((role) => {
                     const checked = formState.roleIds.includes(String(role.id));
                     return (
-                      <label
+                      <button
                         key={role.id}
-                        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                        type="button"
+                        onClick={() =>
+                          updateForm(
+                            "roleIds",
+                            checked ? formState.roleIds.filter((id) => id !== String(role.id)) : [...formState.roleIds, String(role.id)]
+                          )
+                        }
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm ring-1 transition ${
                           checked
-                            ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-                            : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                            ? "bg-blue-50 text-blue-800 ring-blue-300 dark:bg-blue-500/10 dark:text-blue-200 dark:ring-blue-500/40"
+                            : "bg-white text-slate-700 ring-slate-200 hover:ring-blue-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            updateForm(
-                              "roleIds",
-                              checked
-                                ? formState.roleIds.filter((id) => id !== String(role.id))
-                                : [...formState.roleIds, String(role.id)]
-                            )
-                          }
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="font-medium">{role.name}</span>
-                      </label>
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
+                            checked ? "bg-blue-600 text-white" : "ring-1 ring-slate-300 dark:ring-slate-600"
+                          }`}
+                        >
+                          {checked ? <Check className="h-3.5 w-3.5" /> : null}
+                        </span>
+                        <span className="truncate font-medium">{role.name}</span>
+                      </button>
                     );
                   })}
                 </div>
-              </section>
+                {formErrors.roleIds ? (
+                  <p data-field-error className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+                    {formErrors.roleIds}
+                  </p>
+                ) : null}
+              </EditorCard>
 
-              <section className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-blue-500" />
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-                      Scope & Location
-                    </p>
-                    <h4 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
-                      Operational assignment
-                    </h4>
-                  </div>
-                </div>
-
+              <EditorCard icon={<Building2 className="h-4 w-4" />} title="Area of responsibility" subtitle="Leave the depot empty for national users; a depot limits them to that depot's sites">
                 {isSupplierUserType ? (
-                  <div className="mt-5 rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                    Supplier-scoped users inherit organisation access from the selected supplier and do not use internal region, district, or depot fields.
+                  <div className="rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    Partner users follow their organisation; they do not use region, district or depot.
                   </div>
                 ) : (
-                  <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-3 md:grid-cols-3">
                     <SelectField
                       label="Region"
                       value={formState.region}
                       onChange={handleRegionChange}
                       options={regionOptions.map((item) => ({ value: item.name, label: item.name }))}
-                      placeholder="Select Region"
+                      placeholder="All regions"
                     />
                     <SelectField
                       label="District"
                       value={formState.district}
                       onChange={handleDistrictChange}
                       options={districtOptions.map((item) => ({ value: item.name, label: item.name }))}
-                      placeholder="Select District"
+                      placeholder={formState.region ? "All districts" : "Choose a region first"}
                       disabled={!formState.region}
                     />
                     <SelectField
                       label="Depot"
                       value={formState.depot}
-                      onChange={(value) => updateForm("depot", value)}
+                      onChange={(v) => updateForm("depot", v)}
                       options={depotOptions.map((item) => ({ value: item.name, label: item.name }))}
-                      placeholder="Select Depot"
+                      placeholder={formState.district ? "No depot (wider access)" : "Choose a district first"}
                       disabled={!formState.district}
                     />
                   </div>
                 )}
-              </section>
+              </EditorCard>
             </div>
 
-            <div className="border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
-              <div className="flex items-center justify-end gap-3">
+            <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-950">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {formState.roleIds.length ? `${formState.roleIds.length} role${formState.roleIds.length === 1 ? "" : "s"}` : "No role yet"}
+                {formState.depot ? ` · ${formState.depot} depot` : formState.region ? ` · ${formState.region}` : isSupplierUserType ? " · partner portal" : " · national"}
+              </p>
+              <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={closeEditor}
-                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="h-10 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-10 min-w-[150px] items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#0a2a6b] to-[#0b4fc4] px-5 text-sm font-semibold text-white shadow-lg shadow-blue-700/25 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {saving ? "Saving..." : activeUser ? "Save User" : "Create User"}
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : activeUser ? <Check className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                  {saving ? "Saving…" : activeUser ? "Save changes" : "Create user"}
                 </button>
               </div>
             </div>
@@ -1471,21 +1484,55 @@ function Field({
   value,
   onChange,
   type = "text",
+  icon,
+  placeholder,
+  hint,
+  trailing,
+  className = "",
+  required = false,
+  error,
 }: {
+  required?: boolean;
+  error?: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  icon?: React.ReactNode;
+  placeholder?: string;
+  hint?: string;
+  trailing?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
-      />
+    <label className={`block space-y-1 ${className}`} {...(error ? { "data-field-error": true } : {})}>
+      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+        {label}
+        {required ? <span className="ml-0.5 text-red-600">*</span> : null}
+      </span>
+      <span className="relative block">
+        {icon ? <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{icon}</span> : null}
+        <input
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={error ? true : undefined}
+          className={`h-9 w-full rounded-xl border bg-white text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 dark:bg-slate-900 dark:text-slate-100 ${
+            error
+              ? "border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-100 dark:border-red-500/60 dark:focus:ring-red-500/20"
+              : "border-slate-200 focus:border-blue-400 focus:ring-blue-100 dark:border-slate-700 dark:focus:ring-blue-500/20"
+          } ${
+            icon ? "pl-9" : "pl-3"
+          } ${trailing ? "pr-16" : "pr-3"}`}
+        />
+        {trailing ? <span className="absolute right-1.5 top-1/2 -translate-y-1/2">{trailing}</span> : null}
+      </span>
+      {error ? (
+        <span className="block text-[11px] font-medium text-red-600 dark:text-red-400">{error}</span>
+      ) : hint ? (
+        <span className="block text-[11px] text-slate-500 dark:text-slate-400">{hint}</span>
+      ) : null}
     </label>
   );
 }
@@ -1497,22 +1544,36 @@ function SelectField({
   options,
   disabled = false,
   placeholder,
+  hint,
+  required = false,
+  error,
 }: {
+  required?: boolean;
+  error?: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
   disabled?: boolean;
   placeholder?: string;
+  hint?: string;
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+    <label className="block space-y-1" {...(error ? { "data-field-error": true } : {})}>
+      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+        {label}
+        {required ? <span className="ml-0.5 text-red-600">*</span> : null}
+      </span>
       <select
+        aria-invalid={error ? true : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+        className={`h-9 w-full rounded-xl border bg-white px-3 text-sm text-slate-900 outline-none transition focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 dark:bg-slate-900 dark:text-slate-100 ${
+          error
+            ? "border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-100 dark:border-red-500/60"
+            : "border-slate-200 focus:border-blue-400 focus:ring-blue-100 dark:border-slate-700 dark:focus:ring-blue-500/20"
+        }`}
       >
         <option value="">{placeholder || `Select ${label}`}</option>
         {options.map((option) => (
@@ -1521,7 +1582,30 @@ function SelectField({
           </option>
         ))}
       </select>
+      {error ? (
+        <span className="block text-[11px] font-medium text-red-600 dark:text-red-400">{error}</span>
+      ) : hint ? (
+        <span className="block text-[11px] text-slate-500 dark:text-slate-400">{hint}</span>
+      ) : null}
     </label>
+  );
+}
+
+function EditorCard({ icon, title, subtitle, aside, children }: { icon: React.ReactNode; title: string; subtitle?: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/20">{icon}</span>
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-50">{title}</h4>
+            {subtitle ? <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p> : null}
+          </div>
+        </div>
+        {aside}
+      </div>
+      {children}
+    </section>
   );
 }
 

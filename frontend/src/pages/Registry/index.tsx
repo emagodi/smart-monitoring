@@ -25,6 +25,7 @@ import { useScope } from "../../lib/scope";
 import { API_BASE_URL, districtRegionId, useGeography } from "./geo";
 import { cachedGet, peekCache } from "../../lib/cache";
 import AddFromEuiDrawer from "./AddFromEuiDrawer";
+import { Pager } from "../../components/ui/page";
 
 export type RegistryRow = {
   id: number;
@@ -88,7 +89,6 @@ export const ago = (minutes?: number | null, iso?: string | null) => {
 };
 
 type SortKey = "name" | "region" | "depot" | "partner" | "status" | "alerts" | "signal";
-const PAGE = 50;
 
 export default function TransformerRegistry() {
   const { token, hasPermission, user } = useAuth();
@@ -123,16 +123,70 @@ export default function TransformerRegistry() {
   const isSupplier = Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
   const canEdit = !isSupplier && (hasPermission("transformers.create") || hasPermission("transformers.update"));
 
-  // Stale-while-revalidate: a revisit shows the last list at once, then refreshes in the background.
+  // Lazy loading: only the page on screen comes from the server (filtered, sorted and paged there).
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<Record<Status, number>>({ ONLINE: 0, DELAYED: 0, OFFLINE: 0, NEVER_SEEN: 0, NO_DEVICE: 0 });
+  const [partners, setPartners] = useState<Array<[string, string]>>([]);
+  const [debounced, setDebounced] = useState(search.trim());
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  // Region / district / depot choice -> the depot ids to show; a text search also matches depot, district and region names.
+  const scopeDepotIds = useMemo(() => {
+    if (depotId) return [Number(depotId)];
+    if (!districtId && !regionId) return [];
+    const ids = geo.depots
+      .filter((d) => {
+        const p = geo.pathOf(d.id);
+        return districtId ? String(p.districtId) === districtId : String(p.regionId) === regionId;
+      })
+      .map((d) => d.id);
+    return ids.length ? ids : [-1];
+  }, [depotId, districtId, regionId, geo]);
+  const searchDepotIds = useMemo(() => {
+    const q = debounced.toLowerCase();
+    if (!q) return [];
+    return geo.depots
+      .filter((d) => {
+        const p = geo.pathOf(d.id);
+        return [p.depotName, p.districtName, p.regionName].some((n) => n.toLowerCase().includes(q));
+      })
+      .map((d) => d.id);
+  }, [debounced, geo]);
+
+  const queryString = useCallback(
+    (pg: number, size: number) => {
+      const qs = new URLSearchParams({ page: String(pg), size: String(size), sort: sort.key, dir: sort.dir === 1 ? "asc" : "desc" });
+      if (debounced) qs.set("q", debounced);
+      if (searchDepotIds.length) qs.set("qDepotIds", searchDepotIds.join(","));
+      if (scopeDepotIds.length) qs.set("depotIds", scopeDepotIds.join(","));
+      if (statuses.length) qs.set("status", statuses.join(","));
+      if (partner) qs.set("partner", partner);
+      if (type) qs.set("type", type);
+      if (arm) qs.set("arm", arm);
+      if (alertingOnly) qs.set("alerting", "true");
+      return qs.toString();
+    },
+    [alertingOnly, arm, debounced, partner, scopeDepotIds, searchDepotIds, sort, statuses, type]
+  );
+
+  type PageResponse = { content: RegistryRow[]; totalElements: number; counts: Record<Status, number>; partners: Record<string, string> };
   const load = useCallback(
     async (force = true) => {
+      const url = `${API_BASE_URL}/api/v1/transformers/registry/page?${queryString(page, pageSize)}`;
       try {
-        if (!peekCache(`${API_BASE_URL}/api/v1/transformers/registry`, token)) setLoading(true);
+        if (!peekCache(url, token)) setLoading(true);
         const [r, u] = await Promise.all([
-          cachedGet<RegistryRow[]>(`${API_BASE_URL}/api/v1/transformers/registry`, token, 20_000, force),
-          cachedGet<Unmatched[]>(`${API_BASE_URL}/api/v1/controllers/unmatched`, token, 20_000, force).catch(() => [] as Unmatched[]),
+          cachedGet<PageResponse>(url, token, 20_000, force),
+          cachedGet<Unmatched[]>(`${API_BASE_URL}/api/v1/controllers/unmatched`, token, 30_000, false).catch(() => [] as Unmatched[]),
         ]);
-        setRows(Array.isArray(r) ? r : []);
+        setRows(Array.isArray(r?.content) ? r.content : []);
+        setTotal(r?.totalElements ?? 0);
+        if (r?.counts) setCounts({ ...({ ONLINE: 0, DELAYED: 0, OFFLINE: 0, NEVER_SEEN: 0, NO_DEVICE: 0 } as Record<Status, number>), ...(r.counts as Partial<Record<Status, number>>) });
+        setPartners(Object.entries(r?.partners ?? {}).sort((a, b) => a[1].localeCompare(b[1])));
         setUnmatched(Array.isArray(u) ? u : []);
         setError(null);
       } catch {
@@ -141,16 +195,11 @@ export default function TransformerRegistry() {
         setLoading(false);
       }
     },
-    [token]
+    [page, pageSize, queryString, token]
   );
 
   useEffect(() => {
     if (!token) return;
-    const cached = peekCache<RegistryRow[]>(`${API_BASE_URL}/api/v1/transformers/registry`, token);
-    if (cached) {
-      setRows(cached);
-      setLoading(false);
-    }
     void load(false);
   }, [load, token]);
 
@@ -181,67 +230,10 @@ export default function TransformerRegistry() {
     [districtId, geo, regionId]
   );
 
-  const partners = useMemo(() => {
-    const m = new Map<string, string>();
-    rows.forEach((r) => r.supplierCode && m.set(r.supplierCode, r.supplierName || r.supplierCode));
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [rows]);
+  useEffect(() => setPage(0), [regionId, districtId, depotId, partner, type, statuses, debounced, arm, alertingOnly, pageSize, sort]);
 
-  const enriched = useMemo(() => rows.map((r) => ({ row: r, path: geo.pathOf(r.depotId) })), [geo, rows]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const out = enriched.filter(({ row, path }) => {
-      if (regionId && String(path.regionId) !== regionId) return false;
-      if (districtId && String(path.districtId) !== districtId) return false;
-      if (depotId && String(row.depotId) !== depotId) return false;
-      if (partner && row.supplierCode !== partner) return false;
-      if (type && row.type !== type) return false;
-      if (statuses.length && !statuses.includes(row.status)) return false;
-      if (arm === "ARMED" && row.lastCommandAction !== "ARM") return false;
-      if (arm === "DISARMED" && row.lastCommandAction !== "DISARM") return false;
-      if (alertingOnly && !(row.openAlerts > 0)) return false;
-      if (!q) return true;
-      return [row.name, path.depotName, path.districtName, path.regionName, row.supplierName, ...row.controllerEuis]
-        .filter(Boolean)
-        .some((t) => String(t).toLowerCase().includes(q));
-    });
-    const statusRank: Record<Status, number> = { OFFLINE: 0, DELAYED: 1, NEVER_SEEN: 2, ONLINE: 3, NO_DEVICE: 4 };
-    const val = (e: (typeof out)[number]): string | number => {
-      switch (sort.key) {
-        case "region":
-          return `${e.path.regionName} ${e.path.districtName} ${e.path.depotName}`;
-        case "depot":
-          return e.path.depotName;
-        case "partner":
-          return e.row.supplierName || "";
-        case "status":
-          return statusRank[e.row.status];
-        case "alerts":
-          return e.row.openAlerts;
-        case "signal":
-          return e.row.minutesSinceSignal ?? 1e12;
-        default:
-          return e.row.name.toLowerCase();
-      }
-    };
-    return out.sort((a, b) => {
-      const x = val(a);
-      const y = val(b);
-      return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
-    });
-  }, [alertingOnly, arm, depotId, districtId, enriched, partner, regionId, search, sort, statuses, type]);
-
-  useEffect(() => setPage(0), [regionId, districtId, depotId, partner, type, statuses, search, arm, alertingOnly]);
-
-  const counts = useMemo(() => {
-    const c: Record<Status, number> = { ONLINE: 0, DELAYED: 0, OFFLINE: 0, NEVER_SEEN: 0, NO_DEVICE: 0 };
-    filtered.forEach(({ row }) => (c[row.status] += 1));
-    return c;
-  }, [filtered]);
-
-  const pageRows = filtered.slice(page * PAGE, page * PAGE + PAGE);
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
+  const pageRows = useMemo(() => rows.map((r) => ({ row: r, path: geo.pathOf(r.depotId) })), [geo, rows]);
+  const matched = Object.values(counts).reduce((a, b) => a + b, 0);
 
   const toggleStatus = (s: Status) => setStatuses((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
   const sortBy = (key: SortKey) => setSort((cur) => ({ key, dir: cur.key === key ? (cur.dir === 1 ? -1 : 1) : 1 }));
@@ -258,7 +250,9 @@ export default function TransformerRegistry() {
   };
   const anyFilter = regionId || districtId || depotId || partner || type || statuses.length || search || arm || alertingOnly;
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
+    const all = await cachedGet<{ content: RegistryRow[] }>(`${API_BASE_URL}/api/v1/transformers/registry/page?${queryString(0, 10000)}`, token, 0, true).catch(() => ({ content: [] as RegistryRow[] }));
+    const filtered = all.content.map((row) => ({ row, path: geo.pathOf(row.depotId) }));
     const header = ["Transformer", "Type", "Region", "District", "Depot", "Partner", "Status", "Last signal", "Controllers", "Open alerts", "Lat", "Lng"];
     const lines = filtered.map(({ row, path }) =>
       [row.name, typeLabel(row.type), path.regionName, path.districtName, path.depotName, row.supplierName || "", STATUS[row.status].label, row.lastSignalAt || "", row.controllerEuis.join(" "), row.openAlerts, row.lat ?? "", row.lng ?? ""]
@@ -292,7 +286,7 @@ export default function TransformerRegistry() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold ring-1 ring-white/15 hover:bg-white/15">
+            <button type="button" onClick={() => void exportCsv()} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold ring-1 ring-white/15 hover:bg-white/15">
               <Download className="h-4 w-4" /> Export CSV
             </button>
             <button type="button" onClick={() => void load()} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold ring-1 ring-white/15 hover:bg-white/15">
@@ -323,12 +317,12 @@ export default function TransformerRegistry() {
           <div className="rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10">
             <div className="flex items-baseline justify-between">
               <p className="text-[11px] text-blue-100/75">Transformers in view</p>
-              <p className="text-2xl font-semibold">{filtered.length.toLocaleString()}</p>
+              <p className="text-2xl font-semibold">{matched.toLocaleString()}</p>
             </div>
             <div className="mt-2 flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full bg-white/10">
               {(Object.keys(STATUS) as Status[]).map((s) =>
                 counts[s] > 0 ? (
-                  <div key={s} className={`${STATUS[s].dot} h-full first:rounded-l-full last:rounded-r-full`} style={{ width: `${(counts[s] / Math.max(filtered.length, 1)) * 100}%` }} title={`${STATUS[s].label}: ${counts[s]}`} />
+                  <div key={s} className={`${STATUS[s].dot} h-full first:rounded-l-full last:rounded-r-full`} style={{ width: `${(counts[s] / Math.max(matched, 1)) * 100}%` }} title={`${STATUS[s].label}: ${counts[s]}`} />
                 ) : null
               )}
             </div>
@@ -540,22 +534,7 @@ export default function TransformerRegistry() {
                 </table>
               </div>
             )}
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500 dark:border-slate-800">
-              <span>
-                Showing {filtered.length === 0 ? 0 : page * PAGE + 1}–{Math.min(filtered.length, page * PAGE + PAGE)} of {filtered.length.toLocaleString()}
-              </span>
-              <div className="flex items-center gap-2">
-                <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="rounded-full border border-slate-200 px-3 py-1.5 font-medium disabled:opacity-40 dark:border-slate-700">
-                  Previous
-                </button>
-                <span>
-                  Page {page + 1} of {pages}
-                </span>
-                <button type="button" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)} className="rounded-full bg-blue-600 px-3 py-1.5 font-semibold text-white disabled:opacity-40">
-                  Next
-                </button>
-              </div>
-            </div>
+            <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={(n) => setPageSize(n)} />
           </section>
         </>
       ) : (

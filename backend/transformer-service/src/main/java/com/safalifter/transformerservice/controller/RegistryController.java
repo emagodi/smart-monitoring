@@ -36,6 +36,23 @@ public class RegistryController {
         return ResponseEntity.ok(registryService.scopedRows());
     }
 
+    @GetMapping("/api/v1/transformers/registry/page")
+    @Operation(summary = "One page of the transformer registry, filtered and sorted on the server")
+    public ResponseEntity<Map<String, Object>> registryPage(@RequestParam(defaultValue = "0") int page,
+                                                            @RequestParam(defaultValue = "25") int size,
+                                                            @RequestParam(required = false) String q,
+                                                            @RequestParam(required = false) java.util.Set<Long> qDepotIds,
+                                                            @RequestParam(required = false) java.util.Set<String> status,
+                                                            @RequestParam(required = false) java.util.Set<Long> depotIds,
+                                                            @RequestParam(required = false) String partner,
+                                                            @RequestParam(required = false) String type,
+                                                            @RequestParam(required = false) String arm,
+                                                            @RequestParam(defaultValue = "false") boolean alerting,
+                                                            @RequestParam(defaultValue = "name") String sort,
+                                                            @RequestParam(defaultValue = "asc") String dir) {
+        return ResponseEntity.ok(registryService.page(page, size, q, qDepotIds, status, depotIds, partner, type, arm, alerting, sort, dir));
+    }
+
     @GetMapping("/api/v1/transformers/registry/{id}")
     public ResponseEntity<RegistryService.RegistryRow> registryRow(@PathVariable Long id) {
         return registryService.registry(id).stream().findFirst().map(ResponseEntity::ok)
@@ -85,11 +102,13 @@ public class RegistryController {
     }
 
     @PostMapping("/api/v1/controllers/{id}/assign")
-    public ResponseEntity<RegistryService.RegistryRow> assign(@PathVariable Long id, @RequestBody AssignRequest request) {
+    public ResponseEntity<RegistryService.RegistryRow> assign(@PathVariable Long id, @RequestBody AssignRequest request,
+                                                              @RequestParam(name = "move", defaultValue = "false") boolean move) {
         if (request == null || request.getTransformerId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a transformer");
         }
-        return ResponseEntity.ok(registryService.assign(id, request.getTransformerId()));
+        // move=true moves a controller that is linked to the wrong transformer in one step.
+        return ResponseEntity.ok(registryService.assign(id, request.getTransformerId(), move));
     }
 
     @PostMapping("/api/v1/controllers/{id}/unassign")
