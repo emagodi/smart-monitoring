@@ -73,7 +73,7 @@ export function ChartCard({
         </div>
         {action}
       </div>
-      <div className="flex-1 px-2 pb-3" style={height ? { height } : undefined}>
+      <div className="flex-1 px-2 pb-3" style={height ? { height, minHeight: height } : undefined}>
         {children}
       </div>
     </section>

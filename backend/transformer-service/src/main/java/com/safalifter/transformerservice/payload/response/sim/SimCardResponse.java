@@ -24,6 +24,9 @@ public class SimCardResponse {
     private String puk;
     private String pin2;
     private String puk2;
+    /** Whether a PIN / PUK is on file (values themselves are never returned here). */
+    private Boolean hasPin;
+    private Boolean hasPuk;
     private String ki;
     private String opc;
     private String cardSerialNumber;

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
 type SidebarContextType = {
   isExpanded: boolean;
@@ -8,6 +9,7 @@ type SidebarContextType = {
   openSubmenu: string | null;
   toggleSidebar: () => void;
   toggleMobileSidebar: () => void;
+  closeMobileSidebar: () => void;
   setIsHovered: (isHovered: boolean) => void;
   setActiveItem: (item: string | null) => void;
   toggleSubmenu: (item: string) => void;
@@ -50,6 +52,15 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  // On phones and tablets the menu slides over the page: close it as soon as the user picks a page,
+  // so they land on what they tapped instead of staring at the menu.
+  const location = useLocation();
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname, location.search]);
+
+  const closeMobileSidebar = () => setIsMobileOpen(false);
+
   const toggleSidebar = () => {
     setIsExpanded((prev) => !prev);
   };
@@ -72,6 +83,7 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({
         openSubmenu,
         toggleSidebar,
         toggleMobileSidebar,
+        closeMobileSidebar,
         setIsHovered,
         setActiveItem,
         toggleSubmenu,

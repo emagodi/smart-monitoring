@@ -3,9 +3,9 @@
  * filters, pagination, status colours). Built from the Insights page so the whole system
  * reads as one product. Use these instead of hand-rolled cards on new or redesigned pages.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, RefreshCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Loader2, RefreshCcw, Search, SlidersHorizontal, X } from "lucide-react";
 
 // ------------------------------------------------------------------ hero
 
@@ -23,18 +23,18 @@ export function PageHero({
   children?: ReactNode;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] px-5 py-4 text-white shadow-[0_18px_40px_-24px_rgba(11,79,196,0.7)]">
+    <section className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] px-4 py-3.5 text-white sm:rounded-[26px] sm:px-5 sm:py-4 shadow-[0_18px_40px_-24px_rgba(11,79,196,0.7)]">
       <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-emerald-400/15 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-sky-400/10 blur-3xl" />
       <div className="relative flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200/80">{eyebrow}</p>
-          <h1 className="mt-0.5 truncate text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-          {subtitle ? <p className="mt-0.5 max-w-3xl text-[13px] text-blue-100/80">{subtitle}</p> : null}
+          <h1 className="mt-0.5 truncate text-lg font-semibold tracking-tight sm:text-2xl">{title}</h1>
+          {subtitle ? <p className="mt-0.5 line-clamp-2 max-w-3xl text-xs text-blue-100/80 sm:line-clamp-none sm:text-[13px]">{subtitle}</p> : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="hero-actions flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      {children ? <div className="relative mt-4">{children}</div> : null}
+      {children ? <div className="relative mt-3 sm:mt-4">{children}</div> : null}
     </section>
   );
 }
@@ -42,7 +42,14 @@ export function PageHero({
 /** Grid for HeroStat tiles; columns adapt to how many tiles there are. */
 export function HeroStats({ children, cols = 6 }: { children: ReactNode; cols?: 3 | 4 | 5 | 6 | 7 | 8 }) {
   const xl = { 3: "xl:grid-cols-3", 4: "xl:grid-cols-4", 5: "xl:grid-cols-5", 6: "xl:grid-cols-6", 7: "xl:grid-cols-7", 8: "xl:grid-cols-8" }[cols];
-  return <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 ${xl}`}>{children}</div>;
+  // Phones: one swipeable row of tiles (so the page content starts on the first screen); larger screens: a grid.
+  return (
+    <div
+      className={`no-scrollbar -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-0.5 [&>*]:w-[42%] [&>*]:shrink-0 [&>*]:snap-start sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-2.5 sm:overflow-visible sm:px-0 sm:pb-0 sm:[&>*]:w-auto lg:grid-cols-4 ${xl}`}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function HeroStat({
@@ -51,6 +58,8 @@ export function HeroStat({
   value,
   sub,
   to,
+  onClick,
+  active,
   loading,
   tone,
 }: {
@@ -59,6 +68,9 @@ export function HeroStat({
   value: ReactNode;
   sub?: ReactNode;
   to?: string;
+  /** Makes the tile a button (e.g. to apply a filter); `active` highlights it. */
+  onClick?: () => void;
+  active?: boolean;
   loading?: boolean;
   tone?: "good" | "bad" | "warn";
 }) {
@@ -77,13 +89,46 @@ export function HeroStat({
       {sub ? <p className="truncate text-[11px] text-blue-100/60">{loading ? " " : sub}</p> : null}
     </>
   );
-  const cls = "min-w-0 rounded-2xl bg-white/[0.07] px-3 py-2.5 ring-1 ring-white/10";
+  const cls = `min-w-0 rounded-2xl px-3 py-2.5 text-left ring-1 ${active ? "bg-white/[0.18] ring-white/50" : "bg-white/[0.07] ring-white/10"}`;
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} aria-pressed={active} className={`${cls} transition hover:bg-white/[0.13]`}>
+        {body}
+      </button>
+    );
+  }
   return to ? (
     <Link to={to} className={`${cls} transition hover:bg-white/[0.13]`}>
       {body}
     </Link>
   ) : (
     <div className={cls}>{body}</div>
+  );
+}
+
+/**
+ * Filter controls that fold away on phones behind a "Filters" button (with a count of active filters), and are always
+ * shown on tablets and desktops. On md+ the wrapper uses `display: contents`, so the page's own grid/flex layout is kept.
+ */
+export function MobileFilters({ children, active = 0, label = "Filters" }: { children: ReactNode; active?: number; label?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex h-10 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 md:hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+      >
+        <span className="inline-flex items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+          {label}
+          {active ? <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{active}</span> : null}
+        </span>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div className={`${open ? "flex" : "hidden"} w-full flex-col gap-2 md:contents`}>{children}</div>
+    </>
   );
 }
 
@@ -549,9 +594,9 @@ export function Dialog({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4" role="dialog" aria-modal="true" onKeyDown={(e) => e.key === "Escape" && onClose()}>
+    <div className="fixed inset-0 z-[100000] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" onKeyDown={(e) => e.key === "Escape" && onClose()}>
       <button type="button" aria-label="Close" className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${width} overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950`}>
+      <div className={`relative flex max-h-[92dvh] w-full ${width} flex-col overflow-hidden rounded-t-[24px] border border-slate-200 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-[24px] dark:border-slate-800 dark:bg-slate-950`}>
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
           <div className="flex items-start gap-3">
             {icon ? <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">{icon}</span> : null}
@@ -564,8 +609,8 @@ export function Dialog({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
-        {footer ? <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3 dark:border-slate-800">{footer}</div> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 dark:border-slate-800">{footer}</div> : null}
       </div>
     </div>
   );

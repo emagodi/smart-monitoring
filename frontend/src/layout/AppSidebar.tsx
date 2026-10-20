@@ -236,7 +236,7 @@ const navGroups: NavGroup[] = [
 ];
 
 const AppSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen } = useSidebar();
+  const { isExpanded, isMobileOpen, closeMobileSidebar } = useSidebar();
   const { hasPermission, user } = useAuth();
   const { scope, supplierCode } = useScope();
   const location = useLocation();
@@ -284,6 +284,10 @@ const AppSidebar: React.FC = () => {
         ${isExpanded || isMobileOpen ? "w-[220px]" : "w-[72px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0 font-outfit`}
+      onClick={(e) => {
+        // Tapping a page link on a phone/tablet closes the slide-over menu (also when it is the page already open).
+        if (isMobileOpen && (e.target as HTMLElement).closest("a")) closeMobileSidebar();
+      }}
     >
       <div className="absolute inset-0 bg-[#071a4a]" />
 

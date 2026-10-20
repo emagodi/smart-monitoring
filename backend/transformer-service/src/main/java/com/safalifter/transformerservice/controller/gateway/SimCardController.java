@@ -5,6 +5,7 @@ import com.safalifter.transformerservice.payload.request.sim.*;
 import com.safalifter.transformerservice.payload.response.sim.GatewaySimAssignmentResponse;
 import com.safalifter.transformerservice.payload.response.sim.SimCardRevealResponse;
 import com.safalifter.transformerservice.payload.response.sim.SimCardResponse;
+import com.safalifter.transformerservice.payload.response.sim.SimImportResponse;
 import com.safalifter.transformerservice.service.SimCardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +35,9 @@ public class SimCardController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String operator,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean hasPin,
+            @RequestParam(required = false) Boolean hasPuk,
+            @RequestParam(required = false) Boolean assigned,
             @PageableDefault(size = 25, sort = "id", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         SimCardListFilterRequest filter = new SimCardListFilterRequest();
@@ -45,7 +49,17 @@ public class SimCardController {
         }
         filter.setOperator(operator);
         filter.setSearch(search);
+        filter.setHasPin(hasPin);
+        filter.setHasPuk(hasPuk);
+        filter.setAssigned(assigned);
         return ResponseEntity.ok(simCardService.findPage(filter, pageable));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "Inventory counts: by status, in a gateway vs spare, PIN/PUK on file, operators")
+    @PreAuthorize("hasAuthority('sims.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
+    public ResponseEntity<java.util.Map<String, Object>> summary() {
+        return ResponseEntity.ok(simCardService.summary());
     }
 
     @GetMapping("/{id}")
@@ -86,6 +100,13 @@ public class SimCardController {
     public ResponseEntity<Void> retire(@PathVariable Long id) {
         simCardService.retire(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "Bulk load SIM inventory from an operator spreadsheet (rows parsed client-side; PIN/PUK not included)")
+    @PreAuthorize("(hasAuthority('sims.create') OR hasAuthority('WRITE_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN'))")
+    public ResponseEntity<SimImportResponse> importSims(@RequestBody SimImportRequest request) {
+        return ResponseEntity.ok(simCardService.importSims(request));
     }
 
     @GetMapping("/available")

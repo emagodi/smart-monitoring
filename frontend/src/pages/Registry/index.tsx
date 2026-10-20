@@ -25,7 +25,7 @@ import { useScope } from "../../lib/scope";
 import { API_BASE_URL, districtRegionId, useGeography } from "./geo";
 import { cachedGet, peekCache } from "../../lib/cache";
 import AddFromEuiDrawer from "./AddFromEuiDrawer";
-import { Pager } from "../../components/ui/page";
+import { MobileFilters, Pager } from "../../components/ui/page";
 
 export type RegistryRow = {
   id: number;
@@ -369,6 +369,7 @@ export default function TransformerRegistry() {
                   className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:text-slate-100"
                 />
               </div>
+              <MobileFilters active={[regionId, districtId, depotId, partner, type].filter(Boolean).length}>
               {isDepot ? null : (
               <>
               <Select
@@ -395,14 +396,15 @@ export default function TransformerRegistry() {
               )}
               <Select value={partner} onChange={setPartner} placeholder="All partners" options={partners} />
               <Select value={type} onChange={setType} placeholder="GMT & PMT" options={[["GROUND_MOUNTED", "Ground mounted (GMT)"], ["POLE_MOUNTED", "Pole mounted (PMT)"]]} />
+              </MobileFilters>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="no-scrollbar -mx-3 flex items-center gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0">
               {(Object.keys(STATUS) as Status[]).map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => toggleStatus(s)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
                     statuses.includes(s) ? `${STATUS[s].chip} ring-2` : "bg-white text-slate-600 ring-slate-200 hover:ring-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"
                   }`}
                 >

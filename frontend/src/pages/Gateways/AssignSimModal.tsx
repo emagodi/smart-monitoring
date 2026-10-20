@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
-import { CardSim, Link2, Loader2, X } from "lucide-react";
+import { CardSim, Link2, Loader2, Search, X } from "lucide-react";
 import { Modal } from "../../components/ui/modal";
+import { PinPukFields, pinPukError, type PinPuk } from "../Sims/PinPukFields";
 
 interface AvailableSim {
   id: number;
@@ -9,6 +10,8 @@ interface AvailableSim {
   msisdn?: string | null;
   operator?: string | null;
   status?: string | null;
+  hasPin?: boolean | null;
+  hasPuk?: boolean | null;
 }
 
 const normalizeList = <T,>(payload: unknown): T[] => {
@@ -64,13 +67,15 @@ export function AssignSimModal({
   const [simId, setSimId] = useState<number | null>(null);
   const [slotNumber, setSlotNumber] = useState<number>(1);
   const [reason, setReason] = useState("");
+  const [pinPuk, setPinPuk] = useState<PinPuk>({ pin: "", puk: "" });
+  const [q, setQ] = useState("");
 
   const loadAvailableSims = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const resp = await axios.get(
-        `${apiBaseUrl}/api/v1/sim-cards/available`,
+        `${apiBaseUrl}/api/v1/sim-cards/available?size=2000`,
         { headers }
       );
       setAvailableSims(normalizeList<AvailableSim>(resp.data));
@@ -91,6 +96,8 @@ export function AssignSimModal({
       setSimId(null);
       setSlotNumber(1);
       setReason("");
+      setPinPuk({ pin: "", puk: "" });
+      setQ("");
       setError(null);
       void loadAvailableSims();
     }
@@ -101,12 +108,17 @@ export function AssignSimModal({
       setError("Please select a SIM card to assign.");
       return;
     }
+    const pe = pinPukError(pinPuk);
+    if (pe) {
+      setError(pe);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       await axios.post(
         `${apiBaseUrl}/api/v1/gateways/${gatewayId}/sims/assign`,
-        { simId, slotNumber, reason },
+        { simId, slotNumber, reason, pin: pinPuk.pin || undefined, puk: pinPuk.puk || undefined },
         { headers }
       );
       onSaved();
@@ -123,15 +135,22 @@ export function AssignSimModal({
     }
   };
 
+  const term = q.trim().toLowerCase().replace(/\s/g, "");
+  const shownSims = term
+    ? availableSims.filter((s) => [s.iccid, s.msisdn, s.operator].some((v) => (v || "").toLowerCase().replace(/\s/g, "").includes(term)))
+    : availableSims;
+  const selectedSim = availableSims.find((s) => s.id === simId) || null;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       className="max-w-3xl overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
       backdropBlur
+      showCloseButton={false}
     >
       <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">
               Assign SIM Card
@@ -189,23 +208,19 @@ export function AssignSimModal({
 
         <div className="space-y-2">
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Available SIM Card</span>
-            <select
-              value={simId ?? ""}
-              onChange={(e) =>
-                setSimId(e.target.value ? Number(e.target.value) : null)
-              }
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            >
-              <option value="">Select a SIM card...</option>
-              {availableSims.map((sim) => (
-                <option key={sim.id} value={sim.id}>
-                  {maskIccid(sim.iccid)}
-                  {sim.operator ? ` · ${sim.operator}` : ""}
-                  {sim.msisdn ? ` · MSISDN ${maskMsisdn(sim.msisdn)}` : ""}
-                </option>
-              ))}
-            </select>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Available SIM card {availableSims.length ? <span className="normal-case tracking-normal text-slate-400">· {availableSims.length.toLocaleString()} in stock</span> : null}
+            </span>
+            <span className="flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 focus-within:border-blue-400 focus-within:bg-white dark:border-slate-700 dark:bg-slate-900">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                inputMode="numeric"
+                placeholder="Type the last digits of the ICCID or phone number"
+                className="h-full min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
+              />
+            </span>
           </label>
 
           <div className="max-h-[340px] overflow-y-auto rounded-[22px] border border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/60">
@@ -214,13 +229,15 @@ export function AssignSimModal({
                 <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
                 Loading available SIMs...
               </div>
+            ) : availableSims.length > 0 && shownSims.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">No available SIM matches “{q}”.</div>
             ) : availableSims.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                 No available SIMs found. Add SIM cards in the SIM Inventory page.
               </div>
             ) : (
               <div className="divide-y divide-slate-200/70 dark:divide-slate-800">
-                {availableSims.map((sim) => (
+                {shownSims.slice(0, 200).map((sim) => (
                   <button
                     key={sim.id}
                     type="button"
@@ -255,6 +272,8 @@ export function AssignSimModal({
             )}
           </div>
         </div>
+
+        {selectedSim ? <PinPukFields value={pinPuk} onChange={setPinPuk} hasPin={selectedSim.hasPin} hasPuk={selectedSim.hasPuk} /> : null}
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-200/80 pt-4 dark:border-slate-800">
           <button

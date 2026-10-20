@@ -1,47 +1,55 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
 import {
+  AlertTriangle,
+  CardSim,
   Eye,
   EyeOff,
+  FileSpreadsheet,
+  KeyRound,
   Link2,
   Link2Off,
   Loader2,
+  Lock,
   Pencil,
   Plus,
   Router,
   Search,
-  Shield,
-  ShieldAlert,
-  CardSim,
-  Smartphone,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { Modal } from "../../components/ui/modal";
+import { Button, Dialog, HeroButton, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Pager, inputCls, timeAgo } from "../../components/ui/page";
 import { SimModal } from "./SimModal";
+import { SimImportDialog } from "./SimImportDialog";
+import { PinPukFields, pinPukError, type PinPuk } from "./PinPukFields";
+import { ATTENTION, SIM_STATUS, SIM_STATUSES, simStatusMeta, type SimStatus } from "./simMeta";
 
-type SimStatus = "ACTIVE" | "INACTIVE" | "ASSIGNED" | "UNASSIGNED" | "SUSPENDED";
+/**
+ * SIM inventory. Counts and filters come from the server for the whole inventory (not just the page on screen).
+ * Identifiers and PIN/PUK are masked; people with sims.view_sensitive can reveal them per cell (audited).
+ * A SIM without a PIN/PUK on file says so ("Not set") instead of showing stars.
+ */
 
 interface SimCardItem {
   id: number;
   iccid: string;
   imsi?: string | null;
   msisdn?: string | null;
-  maskedMsisdn?: string | null;
-  pin: string;
-  puk: string;
+  pin?: string | null;
+  puk?: string | null;
+  hasPin?: boolean | null;
+  hasPuk?: boolean | null;
   operator?: string | null;
   networkName?: string | null;
-  status: SimStatus;
+  status: string;
   slotNumber?: number | null;
   assignedGatewayId?: number | null;
   assignedGatewayName?: string | null;
   assignedAt?: string | null;
-  unassignedAt?: string | null;
-  activatedAt?: string | null;
+  notes?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -54,1014 +62,776 @@ interface GatewayPickerItem {
   effectiveStatus?: string | null;
 }
 
-type PagePayload<T> = {
-  content?: T[];
-  totalElements?: number;
-  totalPages?: number;
-  number?: number;
-  size?: number;
+type Summary = {
+  total: number;
+  byStatus: Record<string, number>;
+  inGateway: number;
+  spare: number;
+  withPin: number;
+  withoutPin: number;
+  withPuk: number;
+  withoutPuk: number;
+  operators: string[];
 };
+
+type Tri = "" | "yes" | "no";
+type Revealed = { pin: string; puk: string; iccid: string; imsi?: string | null; msisdn?: string | null };
 
 const normalizeList = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) return payload as T[];
   const obj = payload as Record<string, unknown> | null;
-  if (!obj) return [];
-  for (const key of ["data", "content", "items", "records"]) {
-    const value = obj[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
+  for (const key of ["content", "data", "items", "records"]) {
+    const v = obj?.[key];
+    if (Array.isArray(v)) return v as T[];
   }
   return [];
 };
 
-const normalizePage = <T,>(payload: unknown) => {
-  const obj = payload as PagePayload<T> | null;
-  const items = normalizeList<T>(payload);
-  return {
-    items,
-    totalElements: typeof obj?.totalElements === "number" ? obj.totalElements : items.length,
-    totalPages: typeof obj?.totalPages === "number" ? obj.totalPages : 1,
-    page: typeof obj?.number === "number" ? obj.number : 0,
-    size: typeof obj?.size === "number" ? obj.size : items.length || 25,
-  };
+const tail = (v?: string | null, keep = 4) => {
+  if (!v) return null;
+  const digits = v.replace(/\*/g, "");
+  return digits.slice(-keep);
 };
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+const maskedIccid = (v?: string | null) => (v ? `•••• •••• ${tail(v) ?? ""}` : "—");
+const maskedNumber = (v?: string | null) => (v ? `••• ${tail(v) ?? ""}` : "—");
+const groupDigits = (v: string) => v.replace(/(.{4})/g, "$1 ").trim();
+const errMsg = (e: unknown, fallback: string) => {
+  const ax = e as { response?: { data?: { message?: string } | string } };
+  const d = ax.response?.data;
+  return (typeof d === "string" && d) || (typeof d === "object" && d?.message) || fallback;
 };
-
-const looksAlreadyMasked = (value?: string | null) =>
-  typeof value === "string" && value.length > 0 && value.includes("*");
-
-const maskIccid = (iccid?: string | null) => {
-  if (looksAlreadyMasked(iccid)) return iccid as string;
-  if (!iccid) return "************0000";
-  if (iccid.length <= 4) return `************${iccid}`;
-  return `************${iccid.slice(-4)}`;
-};
-
-const maskImsi = (imsi?: string | null) => {
-  if (looksAlreadyMasked(imsi)) return imsi as string;
-  if (!imsi) return "********0000";
-  if (imsi.length <= 4) return `********${imsi}`;
-  return `********${imsi.slice(-4)}`;
-};
-
-const maskMsisdn = (msisdn?: string | null, fallback?: string | null) => {
-  const value = msisdn || fallback;
-  if (looksAlreadyMasked(value)) return value as string;
-  if (!value) return "****0000";
-  if (value.length <= 4) return `****${value}`;
-  return `****${value.slice(-4)}`;
-};
-
-const statusTone = (status: SimStatus) => {
-  switch (status) {
-    case "ACTIVE":
-    case "ASSIGNED":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300";
-    case "SUSPENDED":
-      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300";
-    case "INACTIVE":
-      return "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
-    default:
-      return "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
-  }
-};
-
-const statusLabel = (status: SimStatus) => {
-  switch (status) {
-    case "ACTIVE":
-      return "Active";
-    case "INACTIVE":
-      return "Inactive";
-    case "ASSIGNED":
-      return "Assigned";
-    case "UNASSIGNED":
-      return "Unassigned";
-    case "SUSPENDED":
-      return "Suspended";
-    default:
-      return status;
-  }
-};
-
-const STATUS_FILTERS: Array<{ value: SimStatus | "ALL"; label: string }> = [
-  { value: "ALL", label: "All" },
-  { value: "ASSIGNED", label: "Assigned" },
-  { value: "UNASSIGNED", label: "Unassigned" },
-  { value: "ACTIVE", label: "Active" },
-  { value: "INACTIVE", label: "Inactive" },
-  { value: "SUSPENDED", label: "Suspended" },
-];
-
-
-function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <th className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500 ${className}`}>
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 align-top text-xs text-slate-700 dark:text-slate-200 ${className}`}>{children}</td>;
-}
-
-function FilterButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
-        active
-          ? "border-blue-200 bg-blue-600 text-white"
-          : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
 
 export default function SimsIndex() {
   const { token, hasPermission } = useAuth();
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
-
-  const [items, setItems] = useState<SimCardItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<SimStatus | "ALL">("ALL");
-  const [selectedOperator, setSelectedOperator] = useState<string>("ALL");
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
-  const [totalElements, setTotalElements] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-
-  const [revealingSimId, setRevealingSimId] = useState<number | null>(null);
-  const [revealedMap, setRevealedMap] = useState<Map<number, { pin: string; puk: string; iccid: string; imsi?: string | null; msisdn?: string | null }>>(new Map());
-  const [visibleFieldsMap, setVisibleFieldsMap] = useState<Map<number, Set<string>>>(new Map());
-
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [unassignModalOpen, setUnassignModalOpen] = useState(false);
-  const [assignTargetSim, setAssignTargetSim] = useState<SimCardItem | null>(null);
-  const [unassignTargetSim, setUnassignTargetSim] = useState<SimCardItem | null>(null);
-  const [selectedGatewayId, setSelectedGatewayId] = useState<number | null>(null);
-  const [assignSlot, setAssignSlot] = useState<number>(1);
-  const [assignReason, setAssignReason] = useState("");
-  const [unassignReason, setUnassignReason] = useState("");
-  const [gatewayPickerLoading, setGatewayPickerLoading] = useState(false);
-  const [gatewayPickerItems, setGatewayPickerItems] = useState<GatewayPickerItem[]>([]);
-  const [gatewayPickerSearch, setGatewayPickerSearch] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const API = import.meta.env.VITE_API_BASE_URL || "";
+  const headers = useMemo<Record<string, string>>(() => (token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>)), [token]);
 
   const canViewSensitive = hasPermission("sims.view_sensitive");
   const canAssign = hasPermission("sims.assign");
   const canUnassign = hasPermission("sims.unassign");
-  const canCreateSim = hasPermission("sims.create");
-  const canEditSim = hasPermission("sims.edit");
+  const canCreate = hasPermission("sims.create");
+  const canEdit = hasPermission("sims.edit");
 
-  const [createSimModalOpen, setCreateSimModalOpen] = useState(false);
-  const [editSimModalOpen, setEditSimModalOpen] = useState(false);
-  const [simModalTarget, setSimModalTarget] = useState<SimCardItem | null>(null);
+  // ------------------------------------------------------------------ filters
+  const [status, setStatus] = useState<SimStatus | "">("");
+  const [assigned, setAssigned] = useState<Tri>("");
+  const [pin, setPin] = useState<Tri>("");
+  const [puk, setPuk] = useState<Tri>("");
+  const [operator, setOperator] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
-  const headers = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : undefined),
-    [token]
-  );
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+  useEffect(() => setPage(0), [status, assigned, pin, puk, operator, search, pageSize]);
 
-  const openCreateSimModal = () => {
-    setSimModalTarget(null);
-    setCreateSimModalOpen(true);
+  const activeExtra = [assigned, pin, puk, operator].filter(Boolean).length;
+  const anyFilter = Boolean(status || activeExtra || search);
+  const clearFilters = () => {
+    setStatus("");
+    setAssigned("");
+    setPin("");
+    setPuk("");
+    setOperator("");
+    setSearchInput("");
   };
 
-  const openEditSimModal = (item: SimCardItem) => {
-    setSimModalTarget(item);
-    setEditSimModalOpen(true);
-  };
+  // ------------------------------------------------------------------ data
+  const [items, setItems] = useState<SimCardItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
 
-  const closeSimModals = () => {
-    setCreateSimModalOpen(false);
-    setEditSimModalOpen(false);
-    setSimModalTarget(null);
-  };
-
-  const retireSim = async (id: number) => {
+  const fetchSummary = useCallback(async () => {
+    if (!token) return;
     try {
-      await axios.delete(`${API_BASE_URL}/api/v1/sim-cards/${id}`, { headers });
-      await fetchSims();
-    } catch (e) {
-      console.error(e);
-      setError("Failed to retire SIM.");
+      const r = await axios.get<Summary>(`${API}/api/v1/sim-cards/summary`, { headers });
+      setSummary(r.data);
+    } catch {
+      /* tiles fall back to dashes */
     }
-  };
+  }, [API, headers, token]);
 
   const fetchSims = useCallback(async () => {
     if (!token) return;
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const params: Record<string, unknown> = { page, size: pageSize };
-      const lifecycleFilter = ["ASSIGNED", "UNASSIGNED"].includes(statusFilter) ? "ALL" : statusFilter;
-      if (lifecycleFilter !== "ALL") params.status = lifecycleFilter;
-      if (selectedOperator !== "ALL") params.operator = selectedOperator;
-      if (search.trim()) params.search = search.trim();
-
-      const response = await axios.get(`${API_BASE_URL}/api/v1/sim-cards`, { headers, params });
-      const normalized = normalizePage<SimCardItem>(response.data);
-      setItems(normalized.items);
-      setTotalElements(normalized.totalElements);
-      setTotalPages(Math.max(normalized.totalPages, 1));
-    } catch (fetchError) {
-      console.error(fetchError);
-      setError("Failed to load SIM card inventory.");
+      const params: Record<string, unknown> = { page, size: pageSize, sort: "id,desc" };
+      if (status) params.status = status;
+      if (operator) params.operator = operator;
+      if (search) params.search = search;
+      if (assigned) params.assigned = assigned === "yes";
+      if (pin) params.hasPin = pin === "yes";
+      if (puk) params.hasPuk = puk === "yes";
+      const r = await axios.get<{ content?: SimCardItem[]; totalElements?: number }>(`${API}/api/v1/sim-cards`, { headers, params });
+      setItems(normalizeList<SimCardItem>(r.data));
+      setTotal(typeof r.data?.totalElements === "number" ? r.data.totalElements : 0);
+    } catch (e) {
+      setError(errMsg(e, "Could not load the SIM inventory."));
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers, token, page, pageSize, statusFilter, selectedOperator, search]);
+  }, [API, headers, token, page, pageSize, status, operator, search, assigned, pin, puk]);
 
-  const visibleItems = useMemo(() => {
-    if (statusFilter === "ASSIGNED") return items.filter((i) => Boolean(i.assignedGatewayId));
-    if (statusFilter === "UNASSIGNED") return items.filter((i) => !i.assignedGatewayId);
-    return items;
-  }, [items, statusFilter]);
+  useEffect(() => void fetchSims(), [fetchSims]);
+  useEffect(() => void fetchSummary(), [fetchSummary]);
+  const refreshAll = () => {
+    void fetchSims();
+    void fetchSummary();
+  };
 
-  const effectiveTotal = useMemo(() => {
-    if (statusFilter === "ASSIGNED" || statusFilter === "UNASSIGNED") return visibleItems.length;
-    return totalElements;
-  }, [statusFilter, visibleItems.length, totalElements]);
-
-  useEffect(() => {
-    if (token) {
-      void fetchSims();
+  // ------------------------------------------------------------------ reveal (audited, per SIM, cached)
+  const [revealed, setRevealed] = useState<Map<number, Revealed>>(new Map());
+  const [visible, setVisible] = useState<Set<string>>(new Set());
+  const [revealing, setRevealing] = useState<number | null>(null);
+  const isShown = (id: number, f: string) => visible.has(`${id}:${f}`);
+  const toggle = async (sim: SimCardItem, f: string) => {
+    const key = `${sim.id}:${f}`;
+    if (!revealed.has(sim.id)) {
+      if (!canViewSensitive) return;
+      setRevealing(sim.id);
+      try {
+        const r = await axios.post(`${API}/api/v1/sim-cards/${sim.id}/reveal-sensitive`, { reason: "SIM inventory table reveal" }, { headers });
+        const d = (r.data || {}) as Record<string, string>;
+        setRevealed((m) => new Map(m).set(sim.id, { pin: d.pin || "", puk: d.puk || "", iccid: d.iccid || sim.iccid, imsi: d.imsi ?? sim.imsi, msisdn: d.msisdn ?? sim.msisdn }));
+      } catch (e) {
+        setError(errMsg(e, "Could not reveal this SIM's details."));
+        setRevealing(null);
+        return;
+      }
+      setRevealing(null);
     }
-  }, [fetchSims, token]);
-
-  const totals = useMemo(() => {
-    const summary = {
-      total: totalElements,
-      assigned: 0,
-      unassigned: 0,
-      active: 0,
-      suspended: 0,
-      inactive: 0,
-    };
-    items.forEach((item) => {
-      if (item.status === "ASSIGNED" || item.assignedGatewayId) summary.assigned += 1;
-      if (!item.assignedGatewayId) summary.unassigned += 1;
-      if (item.status === "ACTIVE") summary.active += 1;
-      if (item.status === "SUSPENDED") summary.suspended += 1;
-      if (item.status === "INACTIVE") summary.inactive += 1;
+    setVisible((s) => {
+      const n = new Set(s);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
     });
-    return summary;
-  }, [items, totalElements]);
+  };
+  const hideAll = () => setVisible(new Set());
 
-  const operatorOptions = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((item) => {
-      if (item.operator) set.add(item.operator);
-    });
-    return [...set].sort();
-  }, [items]);
+  // ------------------------------------------------------------------ dialogs
+  const [importOpen, setImportOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<SimCardItem | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [retireTarget, setRetireTarget] = useState<SimCardItem | null>(null);
+  const [unassignTarget, setUnassignTarget] = useState<SimCardItem | null>(null);
+  const [unassignReason, setUnassignReason] = useState("");
+  const [assignTarget, setAssignTarget] = useState<SimCardItem | null>(null);
+  const [gateways, setGateways] = useState<GatewayPickerItem[]>([]);
+  const [gwLoading, setGwLoading] = useState(false);
+  const [gwSearch, setGwSearch] = useState("");
+  const [gatewayId, setGatewayId] = useState<number | null>(null);
+  const [slot, setSlot] = useState(1);
+  const [assignReason, setAssignReason] = useState("");
+  const [assignCodes, setAssignCodes] = useState<PinPuk>({ pin: "", puk: "" });
+  const [busy, setBusy] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
-  const openAssignModal = async (sim: SimCardItem) => {
-    setAssignTargetSim(sim);
-    setSelectedGatewayId(null);
-    setAssignSlot(sim.slotNumber || 1);
+  const openAssign = async (sim: SimCardItem) => {
+    setAssignTarget(sim);
+    setGatewayId(null);
+    setSlot(sim.slotNumber || 1);
     setAssignReason("");
-    setGatewayPickerItems([]);
-    setGatewayPickerSearch("");
-    setAssignModalOpen(true);
+    setAssignCodes({ pin: "", puk: "" });
+    setGwSearch("");
+    setDialogError(null);
+    if (gateways.length) return;
+    setGwLoading(true);
     try {
-      setGatewayPickerLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/api/v1/gateways`, {
-        headers,
-        params: { page: 0, size: 500 },
-      });
-      setGatewayPickerItems(normalizeList<GatewayPickerItem>(response.data));
-    } catch (gatewayError) {
-      console.error(gatewayError);
-      setGatewayPickerItems([]);
+      const r = await axios.get(`${API}/api/v1/gateways`, { headers, params: { page: 0, size: 500 } });
+      setGateways(normalizeList<GatewayPickerItem>(r.data));
+    } catch {
+      setGateways([]);
     } finally {
-      setGatewayPickerLoading(false);
+      setGwLoading(false);
     }
   };
-
-  const openUnassignModal = (sim: SimCardItem) => {
-    setUnassignTargetSim(sim);
-    setUnassignReason("");
-    setUnassignModalOpen(true);
-  };
-
-  const closeAssignModal = () => {
-    setAssignModalOpen(false);
-    setAssignTargetSim(null);
-    setSelectedGatewayId(null);
-    setAssignReason("");
-    setGatewayPickerItems([]);
-    setGatewayPickerSearch("");
-  };
-
-  const closeUnassignModal = () => {
-    setUnassignModalOpen(false);
-    setUnassignTargetSim(null);
-    setUnassignReason("");
-  };
+  const shownGateways = useMemo(() => {
+    const q = gwSearch.trim().toLowerCase();
+    const list = q ? gateways.filter((g) => [g.name, g.regionName, g.depotName].join(" ").toLowerCase().includes(q)) : gateways;
+    return list.slice(0, 60);
+  }, [gateways, gwSearch]);
 
   const submitAssign = async () => {
-    if (!assignTargetSim || !selectedGatewayId) return;
+    if (!assignTarget || !gatewayId || pinPukError(assignCodes)) return;
+    setBusy(true);
+    setDialogError(null);
     try {
-      setSubmitting(true);
       await axios.post(
-        `${API_BASE_URL}/api/v1/gateways/${selectedGatewayId}/sims/assign`,
-        {
-          simId: assignTargetSim.id,
-          slotNumber: assignSlot,
-          reason: assignReason || "Operator assigned SIM",
-        },
+        `${API}/api/v1/gateways/${gatewayId}/sims/assign`,
+        { simId: assignTarget.id, slotNumber: slot, reason: assignReason || "Assigned from SIM inventory", pin: assignCodes.pin || undefined, puk: assignCodes.puk || undefined },
         { headers }
       );
-      closeAssignModal();
-      await fetchSims();
-    } catch (assignError) {
-      console.error(assignError);
-      setError("Failed to assign SIM card.");
+      setAssignTarget(null);
+      refreshAll();
+    } catch (e) {
+      setDialogError(errMsg(e, "Could not assign this SIM."));
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   };
-
   const submitUnassign = async () => {
-    if (!unassignTargetSim) return;
+    if (!unassignTarget) return;
+    setBusy(true);
+    setDialogError(null);
     try {
-      setSubmitting(true);
-      await axios.post(
-        `${API_BASE_URL}/api/v1/sim-cards/${unassignTargetSim.id}/unassign`,
-        { reason: unassignReason || "Operator unassigned SIM" },
-        { headers }
-      );
-      closeUnassignModal();
-      await fetchSims();
-    } catch (unassignError) {
-      console.error(unassignError);
-      setError("Failed to unassign SIM card.");
+      await axios.post(`${API}/api/v1/sim-cards/${unassignTarget.id}/unassign`, { reason: unassignReason || "Removed from gateway" }, { headers });
+      setUnassignTarget(null);
+      refreshAll();
+    } catch (e) {
+      setDialogError(errMsg(e, "Could not remove this SIM from its gateway."));
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   };
-
-  const getRevealed = (simId: number) => revealedMap.get(simId) || null;
-
-  const isFieldVisible = (simId: number, field: string) => {
-    const fields = visibleFieldsMap.get(simId);
-    return fields?.has(field) ?? false;
-  };
-
-  const clearAllRevealed = () => {
-    setRevealedMap(new Map());
-    setVisibleFieldsMap(new Map());
-  };
-
-  const clearRevealedForSim = (simId: number | null | undefined) => {
-    if (!simId) {
-      clearAllRevealed();
-      return;
-    }
-    setRevealedMap((prev) => {
-      const next = new Map(prev);
-      next.delete(simId);
-      return next;
-    });
-    setVisibleFieldsMap((prev) => {
-      const next = new Map(prev);
-      next.delete(simId);
-      return next;
-    });
-  };
-
-  const toggleFieldVisible = (simId: number, field: string) => {
-    setVisibleFieldsMap((prev) => {
-      const next = new Map(prev);
-      const set = new Set(next.get(simId) ?? []);
-      if (set.has(field)) set.delete(field);
-      else set.add(field);
-      next.set(simId, set);
-      return next;
-    });
-  };
-
-  const inlineToggleReveal = async (sim: SimCardItem, field: string) => {
-    const alreadyRevealed = getRevealed(sim.id);
-    const currentlyVisible = isFieldVisible(sim.id, field);
-
-    if (alreadyRevealed) {
-      toggleFieldVisible(sim.id, field);
-      return;
-    }
-
-    if (currentlyVisible) {
-      toggleFieldVisible(sim.id, field);
-      return;
-    }
-
-    if (!canViewSensitive) return;
-
+  const submitRetire = async () => {
+    if (!retireTarget) return;
+    setBusy(true);
+    setDialogError(null);
     try {
-      setRevealingSimId(sim.id);
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/sim-cards/${sim.id}/reveal-sensitive`,
-        { reason: "inline table reveal (UI)" },
-        { headers }
-      );
-      const data = (response.data || {}) as Record<string, unknown>;
-      setRevealedMap((prev) => {
-        const next = new Map(prev);
-        next.set(sim.id, {
-          pin: (data.pin as string) || "",
-          puk: (data.puk as string) || "",
-          iccid: (data.iccid as string) || sim.iccid,
-          imsi: (data.imsi as string | undefined) ?? sim.imsi,
-          msisdn: (data.msisdn as string | undefined) ?? sim.msisdn,
-        });
-        return next;
-      });
-      toggleFieldVisible(sim.id, field);
-    } catch (revealError) {
-      console.error(revealError);
-      setError("Failed to reveal sensitive SIM data.");
+      await axios.delete(`${API}/api/v1/sim-cards/${retireTarget.id}`, { headers });
+      setRetireTarget(null);
+      refreshAll();
+    } catch (e) {
+      setDialogError(errMsg(e, "Could not retire this SIM."));
     } finally {
-      setRevealingSimId(null);
+      setBusy(false);
     }
   };
 
-  const FieldEyeToggle = ({ sim, field, titleShow, titleHide }: { sim: SimCardItem; field: string; titleShow: string; titleHide: string }) => {
-    if (!canViewSensitive) return null;
-    const revealed = getRevealed(sim.id);
-    const showing = revealed && isFieldVisible(sim.id, field);
-    return (
-      <button
-        type="button"
-        disabled={revealingSimId === sim.id}
-        onClick={() => void inlineToggleReveal(sim, field)}
-        className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-        title={showing ? titleHide : titleShow}
-      >
-        {revealingSimId === sim.id ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : showing ? (
-          <EyeOff className="h-3.5 w-3.5" />
-        ) : (
-          <Eye className="h-3.5 w-3.5" />
-        )}
-      </button>
-    );
-  };
-
-  const filteredGatewayPickerItems = useMemo(() => {
-    const query = gatewayPickerSearch.trim().toLowerCase();
-    if (!query) return gatewayPickerItems.slice(0, 50);
-    return gatewayPickerItems
-      .filter((item) =>
-        [item.name, item.regionName, item.depotName]
-          .join(" ")
-          .toLowerCase()
-          .includes(query)
-      )
-      .slice(0, 50);
-  }, [gatewayPickerItems, gatewayPickerSearch]);
-
-  const pageStart = visibleItems.length === 0 ? 0 : page * pageSize + 1;
-  const pageEnd = visibleItems.length === 0 ? 0 : page * pageSize + visibleItems.length;
+  // ------------------------------------------------------------------ derived
+  const s = summary;
+  const by = s?.byStatus ?? {};
+  const attention = ATTENTION.reduce((n, k) => n + (by[k] ?? 0), 0);
+  const pct = (n?: number) => (s && s.total ? Math.round(((n ?? 0) / s.total) * 100) : 0);
+  const fmt = (n?: number) => (s ? (n ?? 0).toLocaleString() : "—");
 
   return (
     <div className="space-y-4">
       <PageHero
         eyebrow="Assets · SIM cards"
-        title="SIM cards"
-        subtitle={`Gateway SIM inventory. PIN, PUK and ICCID are masked; ${canViewSensitive ? "use the eye icon on a field to reveal it." : "your role cannot reveal them."}`}
+        title="SIM inventory"
+        subtitle={`Every gateway SIM: where it is, its state and whether its PIN and PUK are on file. ${canViewSensitive ? "Numbers and codes are masked: tap the eye to reveal (logged)." : "Numbers and codes are masked for your role."}`}
         actions={
           <>
-            <HeroButton onClick={() => void fetchSims()}>Refresh</HeroButton>
-            {canCreateSim ? (
-              <HeroButton icon={<Plus className="h-4 w-4" />} onClick={openCreateSimModal}>
-                New SIM
-              </HeroButton>
+            <HeroButton onClick={refreshAll} busy={loading}>Refresh</HeroButton>
+            {canCreate ? (
+              <>
+                <HeroButton icon={<FileSpreadsheet className="h-4 w-4" />} onClick={() => setImportOpen(true)}>
+                  Upload Excel
+                </HeroButton>
+                <HeroButton icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+                  New SIM
+                </HeroButton>
+              </>
             ) : null}
           </>
         }
       >
         <HeroStats cols={6}>
-          <HeroStat icon={<CardSim className="h-3.5 w-3.5" />} label="SIM cards" value={totals.total.toLocaleString()} sub="in inventory" />
-          <HeroStat icon={<Link2 className="h-3.5 w-3.5 text-emerald-300" />} label="Assigned" value={items.filter((i) => i.assignedGatewayId).length.toLocaleString()} sub="in a gateway" tone="good" />
-          <HeroStat icon={<Link2Off className="h-3.5 w-3.5" />} label="Unassigned" value={items.filter((i) => !i.assignedGatewayId).length.toLocaleString()} sub="available" />
-          <HeroStat icon={<Shield className="h-3.5 w-3.5 text-emerald-300" />} label="Active" value={items.filter((i) => i.status === "ACTIVE" || i.status === "ASSIGNED").length.toLocaleString()} sub="operator active" />
-          <HeroStat icon={<ShieldAlert className="h-3.5 w-3.5 text-amber-300" />} label="Suspended" value={items.filter((i) => i.status === "SUSPENDED").length.toLocaleString()} sub="by operator or policy" tone={items.some((i) => i.status === "SUSPENDED") ? "warn" : undefined} />
-          <HeroStat icon={<Smartphone className="h-3.5 w-3.5" />} label="Inactive" value={items.filter((i) => i.status === "INACTIVE" || i.status === "UNASSIGNED").length.toLocaleString()} sub="pending or deactivated" />
+          <HeroStat icon={<CardSim className="h-3.5 w-3.5" />} label="SIM cards" value={fmt(s?.total)} sub={`${s?.operators.length ?? 0} operator${s?.operators.length === 1 ? "" : "s"}`} loading={!s} onClick={clearFilters} active={!anyFilter} />
+          <HeroStat icon={<Router className="h-3.5 w-3.5 text-emerald-300" />} label="In a gateway" value={fmt(s?.inGateway)} sub={`${pct(s?.inGateway)}% deployed`} tone="good" loading={!s} onClick={() => setAssigned(assigned === "yes" ? "" : "yes")} active={assigned === "yes"} />
+          <HeroStat icon={<Link2Off className="h-3.5 w-3.5 text-sky-300" />} label="Spare stock" value={fmt(s?.spare)} sub="ready to install" loading={!s} onClick={() => setAssigned(assigned === "no" ? "" : "no")} active={assigned === "no"} />
+          <HeroStat icon={<KeyRound className="h-3.5 w-3.5 text-emerald-300" />} label="PIN on file" value={fmt(s?.withPin)} sub={s ? `${s.withoutPin.toLocaleString()} without a PIN` : ""} tone={s && s.withoutPin ? "warn" : "good"} loading={!s} onClick={() => setPin(pin === "no" ? "" : "no")} active={pin === "no"} />
+          <HeroStat icon={<Lock className="h-3.5 w-3.5 text-emerald-300" />} label="PUK on file" value={fmt(s?.withPuk)} sub={s ? `${s.withoutPuk.toLocaleString()} without a PUK` : ""} tone={s && s.withoutPuk ? "warn" : "good"} loading={!s} onClick={() => setPuk(puk === "no" ? "" : "no")} active={puk === "no"} />
+          <HeroStat icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-300" />} label="Need attention" value={fmt(attention)} sub="suspended · lost · damaged · expired" tone={attention ? "bad" : undefined} loading={!s} onClick={() => setStatus(status === "SUSPENDED" ? "" : "SUSPENDED")} active={status === "SUSPENDED"} />
         </HeroStats>
       </PageHero>
 
+      {error ? (
+        <Notice tone="error" onClose={() => setError(null)}>
+          {error}
+        </Notice>
+      ) : null}
+
       <section className="ui-panel overflow-hidden">
-        <div className="border-b border-slate-200/80 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-            <div className="space-y-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                  SIM Table
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
-                  Sensitive fields masked — tap the per-cell eye to reveal
-                </h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {STATUS_FILTERS.map((filter) => (
-                  <FilterButton
-                    key={filter.value}
-                    active={statusFilter === filter.value}
-                    label={filter.label}
-                    onClick={() => {
-                      setStatusFilter(filter.value);
-                      setPage(0);
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex w-full flex-col gap-2 xl:max-w-[560px]">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex min-w-[180px] flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 sm:col-span-1">
-                  Operator
-                  <select
-                    value={selectedOperator}
-                    onChange={(event) => {
-                      setSelectedOperator(event.target.value);
-                      setPage(0);
-                    }}
-                    className="mt-0.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs normal-case font-medium text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  >
-                    <option value="ALL">All operators</option>
-                    {operatorOptions.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center justify-end gap-2 pt-4 text-[11px] font-normal text-slate-500 dark:text-slate-400 sm:pt-0 sm:normal-case sm:tracking-normal">
-                  <span className="hidden sm:inline">Rows</span>
-                  <select
-                    value={pageSize}
-                    onChange={(event) => {
-                      setPage(0);
-                      setPageSize(Number(event.target.value));
-                    }}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  >
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </label>
-              </div>
-              <div className="enterprise-chip flex items-center gap-3 px-3 py-2">
-                <Search className="h-3.5 w-3.5 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                    setPage(0);
-                  }}
-                  placeholder="Search ICCID last-4, MSISDN, operator, gateway name..."
-                  className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
-                />
-              </div>
-            </div>
+        {/* Status: every lifecycle state, with counts for the whole inventory */}
+        <div className="border-b border-slate-200/80 px-4 pb-3 pt-3.5 dark:border-slate-800">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">Status</p>
+            {anyFilter ? (
+              <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline">
+                <X className="h-3.5 w-3.5" /> Clear all filters
+              </button>
+            ) : null}
+          </div>
+          <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
+            <StatusChip on={!status} label="All" count={s?.total} onClick={() => setStatus("")} />
+            {SIM_STATUSES.map((k) => (
+              <StatusChip key={k} on={status === k} label={SIM_STATUS[k].label} dot={SIM_STATUS[k].dot} count={by[k]} title={SIM_STATUS[k].hint} onClick={() => setStatus(status === k ? "" : k)} />
+            ))}
           </div>
         </div>
 
-        {error ? (
-          <div className="px-4 py-3 text-sm text-red-600 dark:text-red-300">
-            {error}
-          </div>
-        ) : null}
+        {/* Search + location / credential filters */}
+        <div className="flex flex-col gap-2 border-b border-slate-200/80 bg-slate-50/60 px-4 py-3 md:flex-row md:flex-wrap md:items-center dark:border-slate-800 dark:bg-slate-900/40">
+          <label className="relative flex min-w-0 flex-1 items-center md:min-w-[260px]">
+            <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search ICCID, IMSI, number, operator or gateway…"
+              className="h-10 w-full rounded-full border border-slate-200 bg-white pl-9 pr-8 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            {searchInput ? (
+              <button type="button" onClick={() => setSearchInput("")} className="absolute right-3 text-slate-400 hover:text-slate-600" aria-label="Clear search">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </label>
+          <MobileFilters active={activeExtra}>
+            <Segmented label="Gateway" value={assigned} onChange={setAssigned} options={[["", "Any"], ["yes", "In a gateway"], ["no", "Spare"]]} />
+            <Segmented label="PIN" value={pin} onChange={setPin} options={[["", "Any"], ["yes", "On file"], ["no", "Not set"]]} />
+            <Segmented label="PUK" value={puk} onChange={setPuk} options={[["", "Any"], ["yes", "On file"], ["no", "Not set"]]} />
+            <select
+              value={operator}
+              onChange={(e) => setOperator(e.target.value)}
+              className="h-10 rounded-full border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            >
+              <option value="">All operators</option>
+              {(s?.operators ?? []).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </MobileFilters>
+        </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center gap-3 px-4 py-20 text-sm text-slate-500 dark:text-slate-300">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-            <span>Loading SIM card inventory...</span>
-          </div>
-        ) : visibleItems.length === 0 ? (
-          <div className="px-4 py-16 text-center text-sm text-slate-500 dark:text-slate-400">
-            No SIM cards found for the current filters.
-          </div>
-        ) : (
-          <div className="w-full col-span-full overflow-x-auto">
-            <table className="min-w-[1020px] w-full">
-              <thead className="bg-gradient-to-r from-blue-50/80 via-white to-red-50/70 dark:from-blue-500/10 dark:via-slate-900 dark:to-red-500/10">
-                <tr className="text-left">
-                  <Th>Status</Th>
-                  <Th>ICCID</Th>
-                  <Th>MSISDN</Th>
-                  <Th>Operator</Th>
-                  <Th>PIN</Th>
-                  <Th>PUK</Th>
-                  <Th>Gateway</Th>
-                  <Th className="text-right">Actions</Th>
+        <div className="flex items-center justify-between gap-2 px-4 py-2 text-xs text-slate-500">
+          <span>
+            {loading ? "Loading…" : `${total.toLocaleString()} SIM${total === 1 ? "" : "s"}${anyFilter ? " match" : " in the inventory"}`}
+          </span>
+          {visible.size ? (
+            <button type="button" onClick={hideAll} className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline">
+              <EyeOff className="h-3.5 w-3.5" /> Hide revealed values
+            </button>
+          ) : null}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-left text-[13px]">
+            <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
+              <tr>
+                <th className="px-4 py-2.5 font-semibold">SIM card</th>
+                <th className="px-4 py-2.5 font-semibold">Number</th>
+                <th className="px-4 py-2.5 font-semibold">Status</th>
+                <th className="px-4 py-2.5 font-semibold">PIN</th>
+                <th className="px-4 py-2.5 font-semibold">PUK</th>
+                <th className="px-4 py-2.5 font-semibold">Gateway</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {loading && !items.length ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={7} className="px-4 py-3">
+                      <span className="block h-8 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+                    </td>
+                  </tr>
+                ))
+              ) : !items.length ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-14 text-center">
+                    <CardSim className="mx-auto h-9 w-9 text-slate-300" />
+                    <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{anyFilter ? "No SIMs match these filters" : "No SIM cards yet"}</p>
+                    <p className="text-xs text-slate-500">{anyFilter ? "Try clearing a filter." : "Upload the operator's Excel sheet or add a SIM by hand."}</p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {visibleItems.map((item) => {
-                  const revealed = getRevealed(item.id);
-                  const isAssigned = Boolean(item.assignedGatewayId);
-                  const effectiveStatus: SimStatus = isAssigned
-                    ? "ASSIGNED"
-                    : (item.status === "ASSIGNED" ? "ACTIVE" : (item.status as SimStatus) ?? "ACTIVE");
+              ) : (
+                items.map((sim) => {
+                  const r = revealed.get(sim.id);
+                  const meta = simStatusMeta(sim.status);
+                  const retired = sim.status === "RETIRED";
+                  const inGateway = Boolean(sim.assignedGatewayId);
                   return (
-                    <tr
-                      key={item.id}
-                      className="border-t border-slate-200/80 text-xs transition hover:bg-gradient-to-r hover:from-blue-50/40 hover:to-red-50/30 dark:border-slate-800 dark:hover:from-blue-500/5 dark:hover:to-red-500/5"
-                    >
-                      <Td>
-                        <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${statusTone(effectiveStatus)}`}>
-                          {statusLabel(effectiveStatus)}
-                        </span>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-mono min-w-0 truncate text-slate-700 dark:text-slate-200">
-                            {revealed && isFieldVisible(item.id, "iccid") ? revealed.iccid : maskIccid(item.iccid)}
-                          </p>
-                          <FieldEyeToggle sim={item} field="iccid" titleShow="Reveal ICCID" titleHide="Hide ICCID" />
-                        </div>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-mono min-w-0 truncate text-slate-600 dark:text-slate-300">
-                            {revealed && isFieldVisible(item.id, "msisdn") ? (revealed.msisdn ?? maskMsisdn(item.msisdn, item.maskedMsisdn)) : maskMsisdn(item.msisdn, item.maskedMsisdn)}
-                          </p>
-                          <FieldEyeToggle sim={item} field="msisdn" titleShow="Reveal MSISDN" titleHide="Hide MSISDN" />
-                        </div>
-                      </Td>
-                      <Td>
-                        <p className="text-slate-700 dark:text-slate-200">{item.operator || item.networkName || "—"}</p>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-mono tracking-widest min-w-0 truncate text-slate-700 dark:text-slate-200">
-                            {revealed && isFieldVisible(item.id, "pin") ? revealed.pin : "****"}
-                          </p>
-                          <FieldEyeToggle sim={item} field="pin" titleShow="Reveal PIN" titleHide="Hide PIN" />
-                        </div>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-mono tracking-widest min-w-0 truncate text-slate-700 dark:text-slate-200">
-                            {revealed && isFieldVisible(item.id, "puk") ? revealed.puk : "****"}
-                          </p>
-                          <FieldEyeToggle sim={item} field="puk" titleShow="Reveal PUK" titleHide="Hide PUK" />
-                        </div>
-                      </Td>
-                      <Td>
-                        {item.assignedGatewayId ? (
-                          <div className="space-y-0.5">
-                            <p className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-                              <Router className="h-3.5 w-3.5 text-blue-500" />
-                              {item.assignedGatewayName || `Gateway #${item.assignedGatewayId}`}
+                    <tr key={sim.id} className={`transition hover:bg-blue-50/40 dark:hover:bg-slate-900 ${retired ? "opacity-60" : ""}`}>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-[#0a2a6b] text-white shadow-sm shadow-blue-600/20">
+                            <CardSim className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <Secret
+                              value={r && isShown(sim.id, "iccid") ? groupDigits(r.iccid) : maskedIccid(sim.iccid)}
+                              shown={isShown(sim.id, "iccid")}
+                              canReveal={canViewSensitive}
+                              busy={revealing === sim.id}
+                              onToggle={() => void toggle(sim, "iccid")}
+                              strong
+                            />
+                            <p className="truncate text-[11px] text-slate-500">
+                              {sim.operator || "No operator"}
+                              {sim.networkName ? ` · ${sim.networkName}` : ""}
                             </p>
-                            {typeof item.slotNumber === "number" ? (
-                              <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                Slot {item.slotNumber}
-                              </p>
-                            ) : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {sim.msisdn ? (
+                          <Secret
+                            value={r && isShown(sim.id, "msisdn") ? r.msisdn || "—" : maskedNumber(sim.msisdn)}
+                            shown={isShown(sim.id, "msisdn")}
+                            canReveal={canViewSensitive}
+                            busy={revealing === sim.id}
+                            onToggle={() => void toggle(sim, "msisdn")}
+                          />
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${meta.pill}`} title={meta.hint}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Code
+                          has={sim.hasPin}
+                          value={r && isShown(sim.id, "pin") ? r.pin : null}
+                          shown={isShown(sim.id, "pin")}
+                          canReveal={canViewSensitive}
+                          busy={revealing === sim.id}
+                          onToggle={() => void toggle(sim, "pin")}
+                          onAdd={canEdit && !retired ? () => setEditTarget(sim) : undefined}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Code
+                          has={sim.hasPuk}
+                          value={r && isShown(sim.id, "puk") ? r.puk : null}
+                          shown={isShown(sim.id, "puk")}
+                          canReveal={canViewSensitive}
+                          busy={revealing === sim.id}
+                          onToggle={() => void toggle(sim, "puk")}
+                          onAdd={canEdit && !retired ? () => setEditTarget(sim) : undefined}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {inGateway ? (
+                          <div className="min-w-0">
+                            <p className="flex items-center gap-1.5 truncate font-medium text-slate-800 dark:text-slate-100">
+                              <Router className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                              {sim.assignedGatewayName || `Gateway #${sim.assignedGatewayId}`}
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              Slot {sim.slotNumber ?? 1}
+                              {sim.assignedAt ? ` · ${timeAgo(sim.assignedAt)}` : ""}
+                            </p>
                           </div>
                         ) : (
-                          <p className="text-slate-400 dark:text-slate-500">Unassigned</p>
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-300" /> Spare
+                          </span>
                         )}
-                      </Td>
-                      <Td className="text-right">
-                        <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                          {canEditSim ? (
-                            <button
-                              type="button"
-                              onClick={() => openEditSimModal(item)}
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                            >
-                              <Pencil className="h-3 w-3" />
-                              Edit
-                            </button>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canEdit ? <RowBtn icon={<Pencil className="h-3.5 w-3.5" />} label="Edit" onClick={() => setEditTarget(sim)} /> : null}
+                          {inGateway ? (
+                            canUnassign ? (
+                              <RowBtn
+                                icon={<Link2Off className="h-3.5 w-3.5" />}
+                                label="Remove"
+                                tone="amber"
+                                onClick={() => {
+                                  setUnassignTarget(sim);
+                                  setUnassignReason("");
+                                  setDialogError(null);
+                                }}
+                              />
+                            ) : null
+                          ) : canAssign && !retired ? (
+                            <RowBtn icon={<Link2 className="h-3.5 w-3.5" />} label="Assign" tone="green" onClick={() => void openAssign(sim)} />
                           ) : null}
-                          {canAssign && !item.assignedGatewayId ? (
-                            <button
-                              type="button"
-                              onClick={() => void openAssignModal(item)}
-                              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-                            >
-                              <Link2 className="h-3 w-3" />
-                              Assign
-                            </button>
-                          ) : null}
-                          {canUnassign && item.assignedGatewayId ? (
-                            <button
-                              type="button"
-                              onClick={() => openUnassignModal(item)}
-                              className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
-                            >
-                              <Link2Off className="h-3 w-3" />
-                              Unassign
-                            </button>
-                          ) : null}
-                          {canEditSim && item.status !== "RETIRED" ? (
-                            <button
-                              type="button"
+                          {canEdit && !retired && !inGateway ? (
+                            <RowBtn
+                              icon={<Trash2 className="h-3.5 w-3.5" />}
+                              label="Retire"
+                              tone="red"
+                              iconOnly
                               onClick={() => {
-                                if (confirm(`Retire SIM ${maskIccid(item.iccid)}? This sets status to RETIRED and removes it from available inventory but keeps audit history.`)) {
-                                  void retireSim(item.id);
-                                }
+                                setRetireTarget(sim);
+                                setDialogError(null);
                               }}
-                              className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              Retire
-                            </button>
+                            />
                           ) : null}
                         </div>
-                      </Td>
+                      </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="border-t border-slate-200/80 px-4 py-3 dark:border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Showing {pageStart}-{pageEnd} of {effectiveTotal.toLocaleString()}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={page === 0 || loading}
-                onClick={() => setPage((current) => Math.max(current - 1, 0))}
-                className="enterprise-chip rounded-full px-3 py-2 text-xs font-medium text-slate-700 transition hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200"
-              >
-                Previous
-              </button>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Page {effectiveTotal === 0 ? 0 : page + 1} of {Math.max(totalPages, 1)}
-              </span>
-              <button
-                type="button"
-                disabled={loading || page + 1 >= totalPages}
-                onClick={() => setPage((current) => current + 1)}
-                className="rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+                })
+              )}
+            </tbody>
+          </table>
         </div>
+        <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={setPageSize} />
       </section>
 
-      <Modal
-        isOpen={assignModalOpen}
-        onClose={closeAssignModal}
-        className="max-w-3xl overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
-        backdropBlur
-      >
-        <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">
-                Assign SIM Card
-              </p>
-              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-50">
-                Link SIM to gateway slot
-              </h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {assignTargetSim ? (
-                  <>
-                    <span className="font-mono">{maskIccid(assignTargetSim.iccid)}</span>
-                    {assignTargetSim.operator ? ` · ${assignTargetSim.operator}` : ""}
-                  </>
-                ) : null}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={closeAssignModal}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div className="max-h-[68vh] space-y-4 overflow-y-auto px-5 py-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Slot Number</span>
-              <select
-                value={assignSlot}
-                onChange={(event) => setAssignSlot(Number(event.target.value))}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                <option value={1}>Slot 1</option>
-                <option value={2}>Slot 2</option>
-                <option value={3}>Slot 3</option>
-                <option value={4}>Slot 4</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Assignment Reason</span>
-              <input
-                value={assignReason}
-                onChange={(event) => setAssignReason(event.target.value)}
-                placeholder="e.g. Replacement SIM for GW-7"
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              />
-            </label>
-          </div>
+      {/* ------------------------------------------------------------ dialogs */}
+      <SimImportDialog open={importOpen} onClose={() => setImportOpen(false)} onDone={refreshAll} apiBase={API} headers={headers} />
 
-          <div className="space-y-2">
-            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between">
-              <label className="flex flex-1 flex-col gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Gateway</span>
-                <div className="enterprise-chip relative flex items-center gap-3 px-3 py-2">
-                  <Search className="h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    value={gatewayPickerSearch}
-                    onChange={(event) => setGatewayPickerSearch(event.target.value)}
-                    placeholder="Search gateway name, region, depot..."
-                    className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100"
-                  />
-                </div>
-              </label>
-            </div>
-            <div className="max-h-[340px] overflow-y-auto rounded-[22px] border border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/60">
-              {gatewayPickerLoading ? (
-                <div className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-slate-500">
-                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                  Loading gateway picker...
-                </div>
-              ) : filteredGatewayPickerItems.length === 0 ? (
-                <div className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-                  No gateways available for assignment.
-                </div>
+      <SimModal isOpen={createOpen} onClose={() => setCreateOpen(false)} isEdit={false} onSaved={refreshAll} headers={headers} apiBaseUrl={API} canViewSensitive={canViewSensitive} />
+      <SimModal
+        isOpen={Boolean(editTarget)}
+        onClose={() => setEditTarget(null)}
+        isEdit
+        existing={editTarget}
+        onSaved={() => {
+          if (editTarget) {
+            setRevealed((m) => {
+              const n = new Map(m);
+              n.delete(editTarget.id);
+              return n;
+            });
+          }
+          refreshAll();
+        }}
+        headers={headers}
+        apiBaseUrl={API}
+        canViewSensitive={canViewSensitive}
+      />
+
+      <Dialog
+        open={Boolean(assignTarget)}
+        onClose={() => !busy && setAssignTarget(null)}
+        width="max-w-2xl"
+        icon={<Link2 className="h-5 w-5" />}
+        title="Put this SIM in a gateway"
+        subtitle={assignTarget ? `${maskedIccid(assignTarget.iccid)} · ${assignTarget.operator || "No operator"}` : undefined}
+        footer={
+          <>
+            <Button onClick={() => setAssignTarget(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button variant="primary" icon={<Link2 className="h-3.5 w-3.5" />} busy={busy} disabled={!gatewayId || Boolean(pinPukError(assignCodes))} onClick={() => void submitAssign()}>
+              Assign SIM
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {dialogError ? <Notice tone="error">{dialogError}</Notice> : null}
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Gateway</p>
+            <label className="relative flex items-center">
+              <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
+              <input value={gwSearch} onChange={(e) => setGwSearch(e.target.value)} placeholder="Search gateway, region or depot…" className={`${inputCls} pl-9`} />
+            </label>
+            <div className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+              {gwLoading ? (
+                <p className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" /> Loading gateways…
+                </p>
+              ) : !shownGateways.length ? (
+                <p className="py-8 text-center text-sm text-slate-500">No gateways found.</p>
               ) : (
-                <div className="divide-y divide-slate-200/70 dark:divide-slate-800">
-                  {filteredGatewayPickerItems.map((gw) => (
-                    <button
-                      key={gw.id}
-                      type="button"
-                      onClick={() => setSelectedGatewayId(gw.id)}
-                      className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition ${
-                        selectedGatewayId === gw.id ? "bg-blue-50/80 dark:bg-blue-500/10" : "hover:bg-white dark:hover:bg-slate-900"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{gw.name}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                          {gw.regionName || "—"} · {gw.depotName || "—"}
-                        </p>
-                      </div>
-                      {gw.effectiveStatus ? (
-                        <span className="shrink-0 inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                          {gw.effectiveStatus.replace("_", " ")}
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {shownGateways.map((g) => (
+                    <li key={g.id}>
+                      <button
+                        type="button"
+                        onClick={() => setGatewayId(g.id)}
+                        className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition ${gatewayId === g.id ? "bg-blue-50 dark:bg-blue-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-900"}`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{g.name}</span>
+                          <span className="block truncate text-[11px] text-slate-500">
+                            {g.regionName || "—"} · {g.depotName || "—"}
+                          </span>
                         </span>
-                      ) : null}
-                    </button>
+                        {gatewayId === g.id ? (
+                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">Selected</span>
+                        ) : g.effectiveStatus ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{g.effectiveStatus.replace(/_/g, " ")}</span>
+                        ) : null}
+                      </button>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
             </div>
           </div>
-
-          <div className="flex items-center justify-end gap-2 border-t border-slate-200/80 pt-4 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={closeAssignModal}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void submitAssign()}
-              disabled={submitting || !selectedGatewayId}
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-              Confirm assign
-            </button>
+          <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Slot</span>
+              <select value={slot} onChange={(e) => setSlot(Number(e.target.value))} className={inputCls}>
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    Slot {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Reason (optional)</span>
+              <input value={assignReason} onChange={(e) => setAssignReason(e.target.value)} placeholder="e.g. New install, replacement SIM" className={inputCls} />
+            </label>
           </div>
+          <PinPukFields value={assignCodes} onChange={setAssignCodes} hasPin={assignTarget?.hasPin} hasPuk={assignTarget?.hasPuk} />
         </div>
-      </Modal>
+      </Dialog>
 
-      <Modal
-        isOpen={unassignModalOpen}
-        onClose={closeUnassignModal}
-        className="max-w-md overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
-        backdropBlur
+      <Dialog
+        open={Boolean(unassignTarget)}
+        onClose={() => !busy && setUnassignTarget(null)}
+        icon={<Link2Off className="h-5 w-5" />}
+        title="Remove SIM from its gateway"
+        subtitle={unassignTarget ? `${maskedIccid(unassignTarget.iccid)} in ${unassignTarget.assignedGatewayName || "its gateway"}` : undefined}
+        footer={
+          <>
+            <Button onClick={() => setUnassignTarget(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button variant="danger" icon={<Link2Off className="h-3.5 w-3.5" />} busy={busy} onClick={() => void submitUnassign()}>
+              Remove SIM
+            </Button>
+          </>
+        }
       >
-        <div className="border-b border-slate-200/80 bg-gradient-to-r from-red-50 via-white to-blue-50 px-5 py-4 dark:border-slate-800 dark:from-red-500/10 dark:via-slate-950 dark:to-blue-500/10">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-red-600 dark:text-red-300">
-                Unassign SIM Card
-              </p>
-              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-50">
-                Remove SIM from gateway
-              </h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {unassignTargetSim ? (
-                  <>
-                    <span className="font-mono">{maskIccid(unassignTargetSim.iccid)}</span>
-                    {unassignTargetSim.assignedGatewayName ? (
-                      <> · from {unassignTargetSim.assignedGatewayName}</>
-                    ) : null}
-                  </>
-                ) : null}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={closeUnassignModal}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div className="space-y-4 px-5 py-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Reason</span>
-            <textarea
-              value={unassignReason}
-              onChange={(event) => setUnassignReason(event.target.value)}
-              placeholder="e.g. SIM failure, gateway decommission, replacement"
-              rows={4}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
+        <div className="space-y-3">
+          {dialogError ? <Notice tone="error">{dialogError}</Notice> : null}
+          <p className="text-sm text-slate-600 dark:text-slate-300">The SIM goes back to spare stock and the gateway is left without a SIM in that slot. Its PIN and PUK stay on file.</p>
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Reason (optional)</span>
+            <input value={unassignReason} onChange={(e) => setUnassignReason(e.target.value)} placeholder="e.g. Gateway replaced, SIM faulty" className={inputCls} />
           </label>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={closeUnassignModal}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void submitUnassign()}
-              disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
-            >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2Off className="h-4 w-4" />}
-              Confirm unassign
-            </button>
-          </div>
         </div>
-      </Modal>
+      </Dialog>
 
-      <SimModal
-        isOpen={createSimModalOpen}
-        onClose={closeSimModals}
-        isEdit={false}
-        onSaved={() => {
-          clearAllRevealed();
-          void fetchSims();
-        }}
-        headers={headers!}
-        apiBaseUrl={API_BASE_URL}
-      />
-      {simModalTarget ? (
-        <SimModal
-          isOpen={editSimModalOpen}
-          onClose={closeSimModals}
-          isEdit={true}
-          existing={simModalTarget}
-          onSaved={() => {
-            clearRevealedForSim(simModalTarget.id);
-            void fetchSims();
-          }}
-          headers={headers!}
-          apiBaseUrl={API_BASE_URL}
-        />
-      ) : null}
+      <Dialog
+        open={Boolean(retireTarget)}
+        onClose={() => !busy && setRetireTarget(null)}
+        icon={<Trash2 className="h-5 w-5" />}
+        title="Retire this SIM?"
+        subtitle={retireTarget ? `${maskedIccid(retireTarget.iccid)} · ${retireTarget.operator || "No operator"}` : undefined}
+        footer={
+          <>
+            <Button onClick={() => setRetireTarget(null)} disabled={busy}>
+              Keep it
+            </Button>
+            <Button variant="danger" icon={<Trash2 className="h-3.5 w-3.5" />} busy={busy} onClick={() => void submitRetire()}>
+              Retire SIM
+            </Button>
+          </>
+        }
+      >
+        {dialogError ? <Notice tone="error">{dialogError}</Notice> : null}
+        <p className="text-sm text-slate-600 dark:text-slate-300">It stays in the records with status Retired and can no longer be assigned. You can change the status back later from Edit.</p>
+      </Dialog>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------- pieces
+
+function StatusChip({ on, label, count, dot, title, onClick }: { on: boolean; label: string; count?: number; dot?: string; title?: string; onClick: () => void }) {
+  const empty = count === 0;
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
+        on
+          ? "bg-blue-600 text-white ring-blue-600 shadow-sm shadow-blue-600/20"
+          : `bg-white ring-slate-200 hover:ring-blue-300 dark:bg-slate-900 dark:ring-slate-700 ${empty ? "text-slate-400" : "text-slate-700 dark:text-slate-200"}`
+      }`}
+    >
+      {dot ? <span className={`h-2 w-2 rounded-full ${on ? "bg-white" : dot} ${empty && !on ? "opacity-40" : ""}`} /> : null}
+      {label}
+      {count !== undefined ? <span className={`rounded-full px-1.5 text-[10px] font-bold ${on ? "bg-white/20" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>{count.toLocaleString()}</span> : null}
+    </button>
+  );
+}
+
+function Segmented<T extends string>({ label, value, onChange, options }: { label: string; value: T; onChange: (v: T) => void; options: Array<[T, string]> }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-16 shrink-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 md:w-auto">{label}</span>
+      <div className="inline-flex flex-1 rounded-full bg-white p-0.5 ring-1 ring-slate-200 md:flex-none dark:bg-slate-900 dark:ring-slate-700">
+        {options.map(([v, l]) => (
+          <button
+            key={v || "any"}
+            type="button"
+            onClick={() => onChange(v)}
+            className={`flex-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition md:flex-none ${
+              value === v ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-blue-700 dark:text-slate-300"
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Secret({ value, shown, canReveal, busy, onToggle, strong }: { value: string; shown: boolean; canReveal: boolean; busy: boolean; onToggle: () => void; strong?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`whitespace-nowrap font-mono tracking-wide ${strong ? "text-[13px] font-semibold text-slate-900 dark:text-slate-50" : "text-xs text-slate-700 dark:text-slate-200"}`}>{value}</span>
+      {canReveal ? (
+        <button type="button" onClick={onToggle} disabled={busy} className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800" aria-label={shown ? "Hide" : "Reveal"}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : shown ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+/** PIN / PUK cell: masked with a reveal eye when on file, a clear "Not set" badge when it is not. */
+function Code({ has, value, shown, canReveal, busy, onToggle, onAdd }: { has?: boolean | null; value: string | null; shown: boolean; canReveal: boolean; busy: boolean; onToggle: () => void; onAdd?: () => void }) {
+  if (!has) {
+    const badge = (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+        <KeyRound className="h-3 w-3" /> Not set
+      </span>
+    );
+    return onAdd ? (
+      <button type="button" onClick={onAdd} className="group inline-flex items-center gap-1" title="Add it">
+        {badge}
+        <Plus className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-blue-600" />
+      </button>
+    ) : (
+      badge
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
+        <ShieldCheck className="h-3 w-3" />
+        {shown && value ? value : "••••"}
+      </span>
+      {canReveal ? (
+        <button type="button" onClick={onToggle} disabled={busy} className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800" aria-label={shown ? "Hide" : "Reveal"}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : shown ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+function RowBtn({ icon, label, onClick, tone = "blue", iconOnly }: { icon: ReactNode; label: string; onClick: () => void; tone?: "blue" | "green" | "amber" | "red"; iconOnly?: boolean }) {
+  const t = {
+    blue: "text-slate-700 ring-slate-200 hover:text-blue-700 hover:ring-blue-300 dark:text-slate-200 dark:ring-slate-700",
+    green: "text-emerald-700 ring-emerald-200 hover:bg-emerald-50 dark:text-emerald-300 dark:ring-emerald-500/30",
+    amber: "text-amber-700 ring-amber-200 hover:bg-amber-50 dark:text-amber-300 dark:ring-amber-500/30",
+    red: "text-red-600 ring-red-200 hover:bg-red-50 dark:text-red-300 dark:ring-red-500/30",
+  }[tone];
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label} className={`inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1.5 text-[11px] font-semibold ring-1 transition dark:bg-slate-900 ${t}`}>
+      {icon}
+      {iconOnly ? null : label}
+    </button>
   );
 }

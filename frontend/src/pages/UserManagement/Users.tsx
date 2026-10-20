@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { HeroStat, HeroStats, PageHero } from "../../components/ui/page";
+import { HeroStat, HeroStats, MobileFilters, PageHero } from "../../components/ui/page";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 import { ActionMenu } from "../../components/ui/dropdown/ActionMenu";
@@ -667,6 +667,7 @@ export default function Users() {
                 />
               </label>
 
+              <MobileFilters active={[roleFilter, userTypeFilter, statusFilter].filter((v) => v !== "ALL").length}>
               <div className="enterprise-chip flex items-center gap-3 px-3 py-2.5">
                 <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Role</span>
                 <select
@@ -711,6 +712,7 @@ export default function Users() {
                   <option value="INACTIVE">Inactive</option>
                 </select>
               </div>
+              </MobileFilters>
             </div>
 
           {selectedIds.length > 0 ? (
