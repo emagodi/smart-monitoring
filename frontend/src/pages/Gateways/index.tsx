@@ -3,17 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { HeroButton, HeroStat, HeroStats, MobileFilters, PageHero } from "../../components/ui/page";
 import {
-  Activity,
   AlertTriangle,
   CloudOff,
   Eye,
-  FileWarning,
-  Link2,
-  Link2Off,
   Loader2,
-  MapPinned,
   MapPinOff,
-  Pencil,
   RefreshCw,
   Router,
   Search,
@@ -30,6 +24,7 @@ import { useSearchParams } from "react-router-dom";
 import { Modal } from "../../components/ui/modal";
 import { EditGatewayModal } from "./EditGatewayModal";
 import { AssignSimModal } from "./AssignSimModal";
+import { GatewayDetailSheet } from "./GatewayDetailSheet";
 
 type GatewayStatus = "ONLINE" | "OFFLINE" | "DEGRADED" | "NEVER_SEEN" | "UNKNOWN";
 
@@ -223,13 +218,6 @@ const STATUS_FILTERS: Array<{ value: GatewayStatus | "ALL"; label: string }> = [
   { value: "UNKNOWN", label: "Unknown" },
 ];
 
-const DETAIL_TABS: Array<{ value: string; label: string }> = [
-  { value: "overview", label: "Overview" },
-  { value: "status", label: "Status History" },
-  { value: "sim", label: "SIM Assignments" },
-  { value: "sync", label: "Sync Log" },
-  { value: "audit", label: "Audit" },
-];
 
 
 function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -312,7 +300,6 @@ export default function GatewaysIndex() {
 
   const [selectedGateway, setSelectedGateway] = useState<GatewayItem | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [detailTab, setDetailTab] = useState<string>("overview");
   const [detailMode, setDetailMode] = useState<"view" | "edit">("view");
   const [statusHistory, setStatusHistory] = useState<GatewayStatusHistoryItem[]>([]);
   const [simAssignments, setSimAssignments] = useState<GatewaySimAssignment[]>([]);
@@ -551,7 +538,6 @@ export default function GatewaysIndex() {
   const openDetailModal = async (gateway: GatewayItem, startInEdit = false) => {
     setSelectedGateway(gateway);
     setDetailModalOpen(true);
-    setDetailTab("overview");
     setDetailMode(startInEdit ? "edit" : "view");
     setStatusHistory([]);
     setSimAssignments([]);
@@ -567,6 +553,20 @@ export default function GatewaysIndex() {
       console.error(detailError);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  /** Refresh the detail lists in place (no loading spinner), e.g. after a SIM change. */
+  const reloadDetailLists = async (gatewayId: number) => {
+    try {
+      const [historyResp, simResp] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/v1/gateways/${gatewayId}/status-history`, { headers }),
+        axios.get(`${API_BASE_URL}/api/v1/gateways/${gatewayId}/sims`, { headers }),
+      ]);
+      setStatusHistory(normalizeList<GatewayStatusHistoryItem>(historyResp.data));
+      setSimAssignments(normalizeList<GatewaySimAssignment>(simResp.data));
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -601,7 +601,6 @@ export default function GatewaysIndex() {
     setSelectedGateway(null);
     setStatusHistory([]);
     setSimAssignments([]);
-    setDetailTab("overview");
     setDetailMode("view");
   };
 
@@ -1089,321 +1088,90 @@ export default function GatewaysIndex() {
         </div>
       </section>
 
-      <Modal
-        isOpen={detailModalOpen}
+      {detailMode === "edit" ? (
+        <Modal
+          isOpen={detailModalOpen && Boolean(selectedGateway)}
+          onClose={closeDetailModal}
+          className="max-w-4xl overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
+          backdropBlur
+        >
+          {selectedGateway ? (
+            <EditGatewayModal
+              isOpen={true}
+              onClose={closeDetailModal}
+              gateway={selectedGateway}
+              onSaved={async () => {
+                void fetchSummary();
+                void fetchGateways();
+                setDetailMode("view");
+                await refreshSelectedGateway();
+              }}
+              token={token!}
+              apiBaseUrl={API_BASE_URL}
+              headers={headers!}
+              depotOptions={depotOptions}
+              regionOptions={regionOptions}
+              networkOptions={networkOptions}
+              operatorOptions={operatorOptions}
+              embed
+              canSave={canEdit}
+              onCancel={() => setDetailMode("view")}
+            />
+          ) : null}
+        </Modal>
+      ) : null}
+
+      <GatewayDetailSheet
+        open={detailModalOpen && detailMode === "view"}
+        gateway={selectedGateway}
+        history={statusHistory}
+        sims={simAssignments}
+        loading={detailLoading}
+        canEdit={canEdit}
+        canSync={canSync}
+        syncing={selectedGateway ? syncingId === selectedGateway.id : false}
         onClose={closeDetailModal}
-        className={`${detailMode === "edit" ? "max-w-4xl" : "max-w-5xl"} overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950`}
-        backdropBlur
-      >
-        {!selectedGateway ? null : detailMode === "edit" ? (
-          <EditGatewayModal
-            isOpen={true}
-            onClose={closeDetailModal}
-            gateway={selectedGateway}
-            onSaved={async () => {
-              void fetchSummary();
-              void fetchGateways();
-              setDetailMode("view");
-              await refreshSelectedGateway();
-            }}
-            token={token!}
-            apiBaseUrl={API_BASE_URL}
-            headers={headers!}
-            depotOptions={depotOptions}
-            regionOptions={regionOptions}
-            networkOptions={networkOptions}
-            operatorOptions={operatorOptions}
-            embed
-            canSave={canEdit}
-            onCancel={() => setDetailMode("view")}
-          />
-        ) : (
-          <div className="flex max-h-[82vh] flex-col">
-              <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-                    Gateway Detail
-                  </p>
-                  <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
-                    {selectedGateway.name || "Unnamed Gateway"}
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {selectedGateway.gatewayEui || selectedGateway.mac || selectedGateway.loriotGatewayId || "No identifiers"}
-                  </p>
-                </div>
-                <div className="mt-3 flex justify-center">
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(selectedGateway.effectiveStatus)}`}>
-                    {selectedGateway.effectiveStatus.replace("_", " ")}
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="enterprise-chip inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-slate-600 dark:text-slate-300">
-                    <MapPinned className="h-3.5 w-3.5 text-blue-500" />
-                    {selectedGateway.regionName || "No region"} · {selectedGateway.depotName || "No depot"}
-                  </span>
-                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                    <button
-                      type="button"
-                      onClick={() => setDetailMode(detailMode === "view" ? "edit" : "view")}
-                      title={detailMode === "view" ? "Viewing — click Eye to edit this gateway" : "Editing — click Eye to go back to view"}
-                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
-                        detailMode === "view"
-                          ? "bg-blue-600 text-white shadow"
-                          : "text-slate-500 hover:text-blue-600 dark:text-slate-400"
-                      }`}
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDetailMode("edit")}
-                      title="Edit this gateway"
-                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
-                        detailMode === "edit"
-                          ? "bg-blue-600 text-white shadow"
-                          : "text-slate-500 hover:text-blue-600 dark:text-slate-400"
-                      } ${!canEdit ? "opacity-60" : ""}`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-            <div className="border-b border-slate-200/80 px-5 py-2 dark:border-slate-800">
-              <div className="flex flex-wrap gap-1">
-                {DETAIL_TABS.map((tab) => (
-                  <button
-                    key={tab.value}
-                    type="button"
-                    onClick={() => setDetailTab(tab.value)}
-                    className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
-                      detailTab === tab.value
-                        ? "bg-blue-600 text-white"
-                        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4 overflow-y-auto px-5 py-4">
-              {detailLoading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
-                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                  Loading detail...
-                </div>
-              ) : detailTab === "overview" ? (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <OverviewTile label="LORIOT ID" value={selectedGateway.loriotGatewayId || "—"} />
-                  <OverviewTile label="Gateway EUI" value={selectedGateway.gatewayEui || "—"} mono />
-                  <OverviewTile label="MAC Address" value={selectedGateway.mac || "—"} mono />
-                  <OverviewTile label="Model" value={selectedGateway.model || "—"} />
-                  <OverviewTile label="Firmware" value={selectedGateway.fwVersion || "—"} />
-                  <OverviewTile label="Network" value={selectedGateway.networkName || "—"} />
-                  <OverviewTile label="Operator" value={selectedGateway.operator || "—"} />
-                  <OverviewTile label="Region" value={selectedGateway.regionName || "—"} />
-                  <OverviewTile
-                    label="Location Source"
-                    value={
-                      selectedGateway.locationSource === "LORIOT_API"
-                        ? "Automatic (LORIOT API)"
-                        : selectedGateway.locationSource === "MANUAL"
-                          ? "Manual — saved via Edit form"
-                          : selectedGateway.locationSource || "—"
-                    }
-                  />
-                  <OverviewTile
-                    label="Latitude"
-                    value={typeof selectedGateway.lat === "number" ? String(selectedGateway.lat) : "—"}
-                    mono
-                  />
-                  <OverviewTile
-                    label="Longitude"
-                    value={typeof selectedGateway.lng === "number" ? String(selectedGateway.lng) : "—"}
-                    mono
-                  />
-                  <OverviewTile label="Address" value={selectedGateway.address || "—"} full />
-                  <OverviewTile label="Last Traffic" value={formatDateTime(selectedGateway.lastTrafficSeenAt)} />
-                  <OverviewTile label="Last LORIOT" value={formatDateTime(selectedGateway.lastLoriotSeenAt)} />
-                  <OverviewTile label="Created" value={formatDateTime(selectedGateway.createdAt)} />
-                </div>
-              ) : detailTab === "status" ? (
-                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    <Activity className="h-4 w-4 text-blue-500" />
-                    Status transition history
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {statusHistory.length === 0 ? (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No status transitions recorded yet.</p>
-                    ) : (
-                      statusHistory.map((entry) => (
-                        <div key={entry.id} className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${entry.previousStatus ? statusTone(entry.previousStatus) : "border-slate-200 bg-slate-50 text-slate-500"}`}>
-                                {entry.previousStatus ? entry.previousStatus.replace("_", " ") : "NEW"}
-                              </span>
-                              <span className="text-slate-400">→</span>
-                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusTone(entry.newStatus)}`}>
-                                {entry.newStatus.replace("_", " ")}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{formatDateTime(entry.observedAt)}</p>
-                          </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                            <span>Source: {entry.source || "System"}</span>
-                            {entry.reason ? <span>· Reason: {entry.reason}</span> : null}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ) : detailTab === "sim" ? (
-                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      <CardSim className="h-4 w-4 text-blue-500" />
-                      SIM card assignments
-                    </div>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAssignSimTargetGatewayId(selectedGateway!.id);
-                          setAssignSimModalOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
-                      >
-                        <Link2 className="h-3.5 w-3.5" />
-                        Assign SIM
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {simAssignments.length === 0 ? (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No SIM assignments on record.</p>
-                    ) : (
-                      simAssignments.map((assignment) => (
-                        <div key={assignment.id} className="rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex flex-col gap-0.5">
-                              <div className="font-mono text-xs text-slate-700 dark:text-slate-200">
-                                {assignment.simIccid || assignment.iccid || `SIM #${assignment.simId}`}
-                              </div>
-                              {assignment.simMsisdn ? (
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                                  MSISDN · {assignment.simMsisdn}
-                                </p>
-                              ) : null}
-                              {assignment.reason ? (
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  Reason: {assignment.reason}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                                assignment.active
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-slate-200 bg-slate-100 text-slate-600"
-                              }`}>
-                                {assignment.status || (assignment.active ? "ACTIVE" : "UNASSIGNED")} · Slot {assignment.slotNumber}
-                              </span>
-                              {assignment.active && canEdit ? (
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const ok = window.confirm("Unassign this SIM card?");
-                                    if (!ok) return;
-                                    try {
-                                      await axios.post(
-                                        `${API_BASE_URL}/api/v1/gateways/${selectedGateway!.id}/sims/unassign?assignmentId=${assignment.id}`,
-                                        { reason: "Manual unassign from gateway details" },
-                                        { headers }
-                                      );
-                                      if (selectedGateway) {
-                                        void openDetailModal(selectedGateway);
-                                      }
-                                      await Promise.all([fetchSummary(), fetchGateways()]);
-                                    } catch (err) {
-                                      console.error(err);
-                                    }
-                                  }}
-                                  className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700"
-                                >
-                                  <Link2Off className="h-3 w-3" />
-                                  Unassign
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="mt-2 grid gap-1 text-[11px] text-slate-500 dark:text-slate-400 sm:grid-cols-2">
-                            <p>Assigned: {formatDateTime(assignment.assignedAt)} {assignment.assignedBy ? `by ${assignment.assignedBy}` : ""}</p>
-                            <p>Unassigned: {formatDateTime(assignment.unassignedAt)} {assignment.unassignedBy ? `by ${assignment.unassignedBy}` : ""}</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ) : detailTab === "sync" ? (
-                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    <Server className="h-4 w-4 text-blue-500" />
-                    LORIOT synchronization log
-                  </div>
-                  <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                    Per-gateway sync run history will appear here when available from the backend sync engine.
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    <FileWarning className="h-4 w-4 text-blue-500" />
-                    Audit trail
-                  </div>
-                  <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                    Create/edit/sync/assign audit records will surface here when the backend audit table is wired.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
+        onEdit={() => setDetailMode("edit")}
+        onSync={async () => {
+          if (!selectedGateway) return;
+          await triggerSync(selectedGateway.id);
+          await refreshSelectedGateway();
+          await reloadDetailLists(selectedGateway.id);
+        }}
+        onAssignSim={() => {
+          if (!selectedGateway) return;
+          setAssignSimTargetGatewayId(selectedGateway.id);
+          setAssignSimModalOpen(true);
+        }}
+        onUnassign={async (assignment) => {
+          if (!selectedGateway) return;
+          await axios.post(
+            `${API_BASE_URL}/api/v1/gateways/${selectedGateway.id}/sims/unassign?assignmentId=${assignment.id}`,
+            { reason: "Removed from gateway details" },
+            { headers }
+          );
+          await reloadDetailLists(selectedGateway.id);
+          await Promise.all([fetchSummary(), fetchGateways()]);
+        }}
+      />
 
       {assignSimTargetGatewayId !== null ? (
         <AssignSimModal
           isOpen={assignSimModalOpen}
           onClose={closeAssignSimModal}
           gatewayId={assignSimTargetGatewayId}
+          gatewayName={selectedGateway?.id === assignSimTargetGatewayId ? selectedGateway?.name : items.find((g) => g.id === assignSimTargetGatewayId)?.name}
           onSaved={() => {
             void fetchSummary();
             void fetchGateways();
-            if (selectedGateway?.id === assignSimTargetGatewayId) {
-              void openDetailModal(selectedGateway);
+            if (selectedGateway && selectedGateway.id === assignSimTargetGatewayId) {
+              void reloadDetailLists(selectedGateway.id);
             }
           }}
           headers={headers!}
           apiBaseUrl={API_BASE_URL}
         />
       ) : null}
-    </div>
-  );
-}
-
-function OverviewTile({ label, value, mono, full }: { label: string; value: string; mono?: boolean; full?: boolean }) {
-  return (
-    <div className={`rounded-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900 ${full ? "sm:col-span-2 xl:col-span-4" : ""}`}>
-      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
-      <p className={`mt-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 ${mono ? "font-mono break-all" : ""}`}>
-        {value}
-      </p>
     </div>
   );
 }
