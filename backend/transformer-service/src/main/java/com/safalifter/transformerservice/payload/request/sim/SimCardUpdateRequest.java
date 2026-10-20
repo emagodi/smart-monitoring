@@ -22,6 +22,8 @@ public class SimCardUpdateRequest {
     private String opc;
     private String cardSerialNumber;
     private SimCardStatus status;
+    private com.safalifter.transformerservice.enums.SimNetworkState networkState;
+    private com.safalifter.transformerservice.enums.SimCondition condition;
     private BigDecimal dataPlanGb;
     private BigDecimal allowanceGb;
     private LocalDate activationDate;

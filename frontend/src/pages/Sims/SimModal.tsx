@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { AlertCircle, CalendarDays, CardSim, ChevronDown, Eye, EyeOff, Fingerprint, Hash, KeyRound, Loader2, Lock, Network, NotebookPen, Phone, Plus, Radio, Save, ShieldCheck, Signal, X } from "lucide-react";
-import { SIM_STATUS, SIM_STATUSES, simStatusMeta } from "./simMeta";
+import { CONDITION, CONDITIONS, NETWORK, NETWORK_STATES, conditionMeta, networkMeta, placementMeta } from "./simMeta";
 
 /**
  * Create / edit a SIM card. Opens as a bottom sheet on phones. PIN and PUK are encrypted on the server; when editing,
@@ -22,6 +22,8 @@ interface SimCardItem {
   operator?: string | null;
   networkName?: string | null;
   status?: string | null;
+  networkState?: string | null;
+  condition?: string | null;
   assignedGatewayName?: string | null;
   cardSerialNumber?: string | null;
   apn?: string | null;
@@ -45,6 +47,8 @@ type Form = {
   pin2: string;
   puk2: string;
   status: string;
+  networkState: string;
+  condition: string;
   activationDate: string;
   expiryDate: string;
   dataPlanGb: string;
@@ -65,6 +69,8 @@ const EMPTY: Form = {
   pin2: "",
   puk2: "",
   status: "AVAILABLE",
+  networkState: "ACTIVE",
+  condition: "OK",
   activationDate: "",
   expiryDate: "",
   dataPlanGb: "",
@@ -145,6 +151,8 @@ export function SimModal({
       apn: existing.apn ?? "",
       cardSerialNumber: existing.cardSerialNumber ?? "",
       status: existing.status ?? "AVAILABLE",
+      networkState: existing.networkState ?? "ACTIVE",
+      condition: existing.condition ?? "OK",
       activationDate: existing.activationDate ? String(existing.activationDate).slice(0, 10) : "",
       expiryDate: existing.expiryDate ? String(existing.expiryDate).slice(0, 10) : "",
       dataPlanGb: existing.dataPlanGb != null ? String(existing.dataPlanGb) : "",
@@ -211,7 +219,9 @@ export function SimModal({
       operator: clean(f.operator),
       networkName: clean(f.networkName),
       apn: clean(f.apn),
-      status: clean(f.status),
+      status: f.status === "RETIRED" ? "RETIRED" : "AVAILABLE",
+      networkState: f.networkState,
+      condition: f.condition,
       activationDate: clean(f.activationDate),
       expiryDate: clean(f.expiryDate),
       dataPlanGb: f.dataPlanGb ? Number(f.dataPlanGb) : null,
@@ -234,7 +244,10 @@ export function SimModal({
     }
   };
 
-  const meta = simStatusMeta(f.status);
+  const pl = placementMeta(f.status);
+  const net = networkMeta(f.networkState);
+  const cond = conditionMeta(f.condition);
+  const inGateway = f.status === "ASSIGNED" || Boolean(existing?.assignedGatewayName);
   const pinOnFile = Boolean(existing?.hasPin);
   const pukOnFile = Boolean(existing?.hasPuk);
   const codePlaceholder = (onFile: boolean, hint: string) => (onFile && !revealedCodes ? "On file — type to replace" : hint);
@@ -258,8 +271,16 @@ export function SimModal({
               </h3>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <HeaderChip>
-                  <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} /> {meta.label}
+                  <span className={`h-1.5 w-1.5 rounded-full ${pl.dot}`} /> {pl.label}
                 </HeaderChip>
+                <HeaderChip>
+                  <span className={`h-1.5 w-1.5 rounded-full ${net.dot}`} /> {net.label}
+                </HeaderChip>
+                {f.condition !== "OK" ? (
+                  <HeaderChip tone="warn">
+                    <span className={`h-1.5 w-1.5 rounded-full ${cond.dot}`} /> {cond.label}
+                  </HeaderChip>
+                ) : null}
                 {f.operator ? (
                   <HeaderChip>
                     <Signal className="h-3 w-3" /> {f.operator}
@@ -363,28 +384,42 @@ export function SimModal({
           </Card>
 
           <Card icon={<CalendarDays className="h-4 w-4" />} title="Lifecycle & plan">
-            <p className="mb-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Status</p>
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-              {SIM_STATUSES.map((k) => {
-                const on = f.status === k;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => set("status", k)}
-                    title={SIM_STATUS[k].hint}
-                    className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs ring-1 transition ${
-                      on ? "bg-blue-600 font-semibold text-white ring-blue-600 shadow-sm shadow-blue-600/25" : "bg-white text-slate-700 ring-slate-200 hover:ring-blue-300 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
-                    }`}
-                  >
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${on ? "bg-white" : SIM_STATUS[k].dot}`} />
-                    <span className="min-w-0">
-                      <span className="block truncate">{SIM_STATUS[k].label}</span>
-                      <span className={`block truncate text-[10px] font-normal ${on ? "text-blue-100" : "text-slate-400"}`}>{SIM_STATUS[k].hint}</span>
+            <p className="mb-2 text-[11px] text-slate-500">Three separate things: where the SIM is, its line with the operator, and the card itself. Combine them freely — e.g. in a gateway, active, good.</p>
+            <ChoiceGroup
+              label="Network state"
+              value={f.networkState}
+              onChange={(v) => set("networkState", v)}
+              options={(NETWORK_STATES as readonly string[]).map((k) => ({ k, ...NETWORK[k as keyof typeof NETWORK] }))}
+            />
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <ChoiceGroup
+                label="Condition"
+                value={f.condition}
+                onChange={(v) => set("condition", v)}
+                cols="grid-cols-3"
+                options={(CONDITIONS as readonly string[]).map((k) => ({ k, ...CONDITION[k as keyof typeof CONDITION] }))}
+              />
+              <div>
+                <p className="mb-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Placement</p>
+                {inGateway ? (
+                  <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/30">
+                    <Radio className="h-4 w-4 shrink-0" />
+                    <span>
+                      In a gateway{existing?.assignedGatewayName ? `: ${existing.assignedGatewayName}` : ""}. Remove it from the gateway to put it back in stock or retire it.
                     </span>
-                  </button>
-                );
-              })}
+                  </div>
+                ) : (
+                  <ChoiceGroup
+                    value={f.status === "RETIRED" ? "RETIRED" : "AVAILABLE"}
+                    onChange={(v) => set("status", v)}
+                    cols="grid-cols-2"
+                    options={[
+                      { k: "AVAILABLE", label: "In stock", hint: "Spare, can be assigned", dot: "bg-blue-500" },
+                      { k: "RETIRED", label: "Retired", hint: "Out of the inventory", dot: "bg-slate-400" },
+                    ]}
+                  />
+                )}
+              </div>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="Activation date" icon={<CalendarDays className="h-4 w-4" />}>
@@ -455,6 +490,49 @@ function Card({ icon, title, hint, tone, children }: { icon: ReactNode; title: s
       </div>
       {children}
     </section>
+  );
+}
+
+function ChoiceGroup({
+  label,
+  value,
+  onChange,
+  options,
+  cols = "grid-cols-2 sm:grid-cols-5",
+}: {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ k: string; label: string; hint: string; dot: string }>;
+  cols?: string;
+}) {
+  return (
+    <div>
+      {label ? <p className="mb-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">{label}</p> : null}
+      <div className={`grid gap-1.5 ${cols}`}>
+        {options.map((o) => {
+          const on = value === o.k;
+          return (
+            <button
+              key={o.k}
+              type="button"
+              onClick={() => onChange(o.k)}
+              title={o.hint}
+              aria-pressed={on}
+              className={`flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs ring-1 transition ${
+                on ? "bg-gradient-to-br from-blue-600 to-[#0b4fc4] font-semibold text-white ring-blue-600 shadow-sm shadow-blue-600/25" : "bg-white text-slate-700 ring-slate-200 hover:ring-blue-300 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
+              }`}
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${on ? "bg-white" : o.dot}`} />
+              <span className="min-w-0">
+                <span className="block truncate">{o.label}</span>
+                <span className={`block truncate text-[10px] font-normal ${on ? "text-blue-100" : "text-slate-400"}`}>{o.hint}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

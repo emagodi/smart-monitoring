@@ -78,6 +78,15 @@ public class SimCard {
     @Column(name = "status", length = 32)
     private SimCardStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "network_state", length = 32)
+    private com.safalifter.transformerservice.enums.SimNetworkState networkState;
+
+    /** "condition" is a reserved word in MySQL, hence sim_condition. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sim_condition", length = 32)
+    private com.safalifter.transformerservice.enums.SimCondition condition;
+
     @Column(name = "data_plan_gb", precision = 10, scale = 2)
     private BigDecimal dataPlanGb;
 

@@ -4,6 +4,8 @@ import com.safalifter.transformerservice.config.AccessScopeService;
 import com.safalifter.transformerservice.entities.GatewaySimAssignment;
 import com.safalifter.transformerservice.entities.SimCard;
 import com.safalifter.transformerservice.enums.SimCardStatus;
+import com.safalifter.transformerservice.enums.SimCondition;
+import com.safalifter.transformerservice.enums.SimNetworkState;
 import com.safalifter.transformerservice.payload.request.sim.*;
 import com.safalifter.transformerservice.payload.response.sim.*;
 import com.safalifter.transformerservice.repository.GatewayRepository;
@@ -38,6 +40,8 @@ public class SimCardService {
         forbidSupplier();
         return simCardRepository.findWithFilters(
                 filter.getStatus(),
+                filter.getNetworkState(),
+                filter.getCondition(),
                 filter.getOperator(),
                 filter.getHasPin(),
                 filter.getHasPuk(),
@@ -47,32 +51,100 @@ public class SimCardService {
         ).map(this::toMaskedResponse);
     }
 
-    /** Whole-inventory counts for the SIM page tiles and filter chips (not just the page on screen). */
+    /**
+     * Counts for the SIM page. "facets" are the counts for each filter group (placement, network state, condition,
+     * PIN, PUK) with every OTHER active filter applied, so the chips show how many you would get by clicking them
+     * (e.g. Assigned + Active). The other numbers are whole-inventory totals for the tiles.
+     */
     @Transactional(readOnly = true)
-    public java.util.Map<String, Object> summary() {
+    public java.util.Map<String, Object> summary(SimCardListFilterRequest f) {
         forbidSupplier();
-        java.util.Map<String, Long> byStatus = new java.util.LinkedHashMap<>();
-        for (SimCardStatus st : SimCardStatus.values()) byStatus.put(st.name(), 0L);
-        long total = 0;
-        for (Object[] row : simCardRepository.countByStatus()) {
-            long n = row[1] == null ? 0 : ((Number) row[1]).longValue();
-            total += n;
-            if (row[0] != null) byStatus.put(String.valueOf(row[0]), n);
+        SimCardListFilterRequest filter = f == null ? new SimCardListFilterRequest() : f;
+        java.util.Set<Long> inGatewayIds = new java.util.HashSet<>(simCardRepository.simIdsInGateway());
+        List<SimCard> all = simCardRepository.findAll();
+        String term = filter.getSearch() == null ? "" : filter.getSearch().trim().toLowerCase(java.util.Locale.ROOT);
+        String op = filter.getOperator() == null ? "" : filter.getOperator().trim().toLowerCase(java.util.Locale.ROOT);
+
+        java.util.Map<String, Long> placement = zeros("AVAILABLE", "ASSIGNED", "RETIRED");
+        java.util.Map<String, Long> network = zeros(java.util.Arrays.stream(SimNetworkState.values()).map(Enum::name).toArray(String[]::new));
+        java.util.Map<String, Long> condition = zeros(java.util.Arrays.stream(SimCondition.values()).map(Enum::name).toArray(String[]::new));
+        java.util.Map<String, Long> pin = zeros("yes", "no");
+        java.util.Map<String, Long> puk = zeros("yes", "no");
+        long total = 0, inGateway = 0, spare = 0, retired = 0, activeNet = 0, withPin = 0, withPuk = 0, attention = 0;
+        java.util.TreeSet<String> operators = new java.util.TreeSet<>();
+
+        for (SimCard s : all) {
+            String pl = placementOf(s, inGatewayIds);
+            SimNetworkState ns = s.getNetworkState() != null ? s.getNetworkState() : SimNetworkState.ACTIVE;
+            SimCondition cd = s.getCondition() != null ? s.getCondition() : SimCondition.OK;
+            boolean hp = s.getEncryptedPin() != null && !s.getEncryptedPin().isBlank();
+            boolean hk = s.getEncryptedPuk() != null && !s.getEncryptedPuk().isBlank();
+            if (s.getOperator() != null && !s.getOperator().isBlank()) operators.add(s.getOperator());
+
+            total++;
+            if ("ASSIGNED".equals(pl)) inGateway++;
+            else if ("RETIRED".equals(pl)) retired++;
+            else spare++;
+            if (!"RETIRED".equals(pl)) {
+                if (ns == SimNetworkState.ACTIVE) activeNet++;
+                if (cd != SimCondition.OK || ns == SimNetworkState.SUSPENDED || ns == SimNetworkState.EXPIRED) attention++;
+            }
+            if (hp) withPin++;
+            if (hk) withPuk++;
+
+            // Shared filters (search / operator) apply to every facet.
+            if (!op.isEmpty() && (s.getOperator() == null || !s.getOperator().toLowerCase(java.util.Locale.ROOT).contains(op))) continue;
+            if (!term.isEmpty() && !matches(s, term)) continue;
+            boolean okPl = filter.getStatus() == null || filter.getStatus().name().equals(pl);
+            boolean okNs = filter.getNetworkState() == null || filter.getNetworkState() == ns;
+            boolean okCd = filter.getCondition() == null || filter.getCondition() == cd;
+            boolean okPin = filter.getHasPin() == null || filter.getHasPin() == hp;
+            boolean okPuk = filter.getHasPuk() == null || filter.getHasPuk() == hk;
+            if (okNs && okCd && okPin && okPuk) placement.merge(pl, 1L, Long::sum);
+            if (okPl && okCd && okPin && okPuk) network.merge(ns.name(), 1L, Long::sum);
+            if (okPl && okNs && okPin && okPuk) condition.merge(cd.name(), 1L, Long::sum);
+            if (okPl && okNs && okCd && okPuk) pin.merge(hp ? "yes" : "no", 1L, Long::sum);
+            if (okPl && okNs && okCd && okPin) puk.merge(hk ? "yes" : "no", 1L, Long::sum);
         }
-        long inGateway = simCardRepository.countInGateway();
-        long withPin = simCardRepository.countWithPin();
-        long withPuk = simCardRepository.countWithPuk();
+
+        java.util.Map<String, Object> facets = new java.util.LinkedHashMap<>();
+        facets.put("placement", placement);
+        facets.put("networkState", network);
+        facets.put("condition", condition);
+        facets.put("pin", pin);
+        facets.put("puk", puk);
         java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
         out.put("total", total);
-        out.put("byStatus", byStatus);
         out.put("inGateway", inGateway);
-        out.put("spare", Math.max(0, total - inGateway));
+        out.put("spare", spare);
+        out.put("retired", retired);
+        out.put("activeOnNetwork", activeNet);
         out.put("withPin", withPin);
         out.put("withoutPin", Math.max(0, total - withPin));
         out.put("withPuk", withPuk);
         out.put("withoutPuk", Math.max(0, total - withPuk));
-        out.put("operators", simCardRepository.distinctOperators());
+        out.put("attention", attention);
+        out.put("facets", facets);
+        out.put("operators", new java.util.ArrayList<>(operators));
         return out;
+    }
+
+    private static java.util.Map<String, Long> zeros(String... keys) {
+        java.util.Map<String, Long> m = new java.util.LinkedHashMap<>();
+        for (String k : keys) m.put(k, 0L);
+        return m;
+    }
+
+    private static String placementOf(SimCard s, java.util.Set<Long> inGatewayIds) {
+        if (s.getStatus() == SimCardStatus.RETIRED) return "RETIRED";
+        return inGatewayIds.contains(s.getId()) ? "ASSIGNED" : "AVAILABLE";
+    }
+
+    private static boolean matches(SimCard s, String term) {
+        for (String v : new String[]{s.getMsisdn(), s.getIccid(), s.getNormalizedIccid(), s.getImsi(), s.getNormalizedImsi(), s.getOperator()}) {
+            if (v != null && v.toLowerCase(java.util.Locale.ROOT).contains(term)) return true;
+        }
+        return false;
     }
 
     @Transactional(readOnly = true)
@@ -116,7 +188,10 @@ public class SimCardService {
         sim.setKi(trimToNull(request.getKi()));
         sim.setOpc(trimToNull(request.getOpc()));
         sim.setCardSerialNumber(trimToNull(request.getCardSerialNumber()));
-        sim.setStatus(request.getStatus() != null ? request.getStatus() : SimCardStatus.AVAILABLE);
+        // Placement starts as spare stock (or retired); "in a gateway" only comes from an assignment.
+        sim.setStatus(request.getStatus() == SimCardStatus.RETIRED ? SimCardStatus.RETIRED : SimCardStatus.AVAILABLE);
+        sim.setNetworkState(request.getNetworkState() != null ? request.getNetworkState() : SimNetworkState.ACTIVE);
+        sim.setCondition(request.getCondition() != null ? request.getCondition() : SimCondition.OK);
         sim.setDataPlanGb(request.getDataPlanGb());
         sim.setAllowanceGb(request.getAllowanceGb());
         sim.setActivationDate(request.getActivationDate());
@@ -185,13 +260,21 @@ public class SimCardService {
         if (trimToNull(request.getOpc()) != null && !looksLikeMask(request.getOpc())) {
             sim.setOpc(trimToNull(request.getOpc()));
         }
+        // Placement: only "retired" / "back in stock" can be chosen here; "in a gateway" follows the assignment.
         if (request.getStatus() != null) {
-            SimCardStatus prev = sim.getStatus();
-            if (request.getStatus() != prev) {
-                log.info("SIM id={} status change: {} -> {} by={}", id, prev, request.getStatus(), accessScopeService.getCurrentUserEmail());
+            boolean inGateway = assignmentRepository.findActiveBySimId(sim.getId()).isPresent();
+            SimCardStatus next = request.getStatus() == SimCardStatus.RETIRED ? SimCardStatus.RETIRED
+                    : inGateway ? SimCardStatus.ASSIGNED : SimCardStatus.AVAILABLE;
+            if (next == SimCardStatus.RETIRED && inGateway) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Remove the SIM from its gateway before retiring it");
             }
-            sim.setStatus(request.getStatus());
+            if (next != sim.getStatus()) {
+                log.info("SIM id={} placement {} -> {} by={}", id, sim.getStatus(), next, accessScopeService.getCurrentUserEmail());
+                sim.setStatus(next);
+            }
         }
+        if (request.getNetworkState() != null) sim.setNetworkState(request.getNetworkState());
+        if (request.getCondition() != null) sim.setCondition(request.getCondition());
         sim.setDataPlanGb(request.getDataPlanGb());
         sim.setAllowanceGb(request.getAllowanceGb());
         sim.setActivationDate(request.getActivationDate());
@@ -255,6 +338,9 @@ public class SimCardService {
         forbidSupplierCrud();
         SimCard sim = simCardRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SIM Card not found"));
+        if (assignmentRepository.findActiveBySimId(id).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Remove the SIM from its gateway before retiring it");
+        }
         sim.setStatus(SimCardStatus.RETIRED);
         sim.setUpdatedBy(accessScopeService.getCurrentUserEmail());
         simCardRepository.save(sim);
@@ -275,6 +361,12 @@ public class SimCardService {
         }
         SimCard sim = simCardRepository.findById(request.getSimId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SIM Card not found"));
+        if (sim.getStatus() == SimCardStatus.RETIRED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This SIM is retired. Bring it back into stock (Edit) before assigning it.");
+        }
+        if (sim.getCondition() == SimCondition.LOST || sim.getCondition() == SimCondition.DAMAGED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This SIM is marked " + sim.getCondition().name().toLowerCase() + " and cannot go into a gateway.");
+        }
         Long activeSimCount = assignmentRepository.countActiveBySimId(request.getSimId());
         if (activeSimCount != null && activeSimCount > 0) {
             GatewaySimAssignment active = assignmentRepository.findActiveBySimId(request.getSimId()).orElse(null);
@@ -407,6 +499,8 @@ public class SimCardService {
                 .opc(maskTail(sim.getOpc()))
                 .cardSerialNumber(maskTail(sim.getCardSerialNumber()))
                 .status(sim.getStatus() != null ? sim.getStatus().name() : null)
+                .networkState((sim.getNetworkState() != null ? sim.getNetworkState() : SimNetworkState.ACTIVE).name())
+                .condition((sim.getCondition() != null ? sim.getCondition() : SimCondition.OK).name())
                 .assignedGatewayId(active != null ? active.getGatewayId() : null)
                 .assignedGatewayName(assignedGatewayName)
                 .slotNumber(active != null ? active.getSlotNumber() : null)
@@ -520,7 +614,7 @@ public class SimCardService {
             String msisdn = normalizeMsisdn(clean(row.getMsisdn()));
             String operator = firstNonNull(trimToNull(clean(row.getOperator())), defaultOperator);
             String network = trimToNull(clean(row.getNetworkName()));
-            SimCardStatus state = importStatus(clean(row.getState()));
+            SimNetworkState state = importNetworkState(clean(row.getState()));
 
             SimCard sim = simCardRepository.findByNormalizedIccid(iccid).orElse(null);
             if (sim == null) {
@@ -532,7 +626,9 @@ public class SimCardService {
                 sim.setMsisdn(msisdn);
                 sim.setOperator(operator);
                 sim.setNetworkName(network);
-                sim.setStatus(state);
+                sim.setStatus(SimCardStatus.AVAILABLE);
+                sim.setNetworkState(state);
+                sim.setCondition(SimCondition.OK);
                 String type = trimToNull(clean(row.getSimType()));
                 sim.setNotes(firstNonNull(trimToNull(clean(row.getNotes())), type == null ? null : "Type: " + type));
                 sim.setCreatedBy(actor);
@@ -545,9 +641,7 @@ public class SimCardService {
             if (msisdn != null && !msisdn.equals(sim.getMsisdn())) { sim.setMsisdn(msisdn); changed = true; }
             if (operator != null && !operator.equals(sim.getOperator())) { sim.setOperator(operator); changed = true; }
             if (network != null && !network.equals(sim.getNetworkName())) { sim.setNetworkName(network); changed = true; }
-            boolean inUse = sim.getStatus() == SimCardStatus.ASSIGNED
-                    || (assignmentRepository.countActiveBySimId(sim.getId()) != null && assignmentRepository.countActiveBySimId(sim.getId()) > 0);
-            if (!inUse && state != SimCardStatus.AVAILABLE && state != sim.getStatus()) { sim.setStatus(state); changed = true; }
+            if (clean(row.getState()) != null && state != sim.getNetworkState()) { sim.setNetworkState(state); changed = true; }
             if (changed) {
                 sim.setUpdatedBy(actor);
                 simCardRepository.save(sim);
@@ -578,17 +672,16 @@ public class SimCardService {
         return d;
     }
 
-    /** Operator "Active" means live on the network: in our inventory that is spare stock, ready to assign. */
-    private static SimCardStatus importStatus(String state) {
-        if (state == null) return SimCardStatus.AVAILABLE;
+    /** The operator's line state from the spreadsheet ("Active", "Suspended", ...). */
+    private static SimNetworkState importNetworkState(String state) {
+        if (state == null) return SimNetworkState.ACTIVE;
         String v = state.trim().toUpperCase(java.util.Locale.ROOT);
-        if (v.startsWith("ACTIV") || v.equals("AVAILABLE") || v.equals("NEW") || v.equals("IDLE")) return SimCardStatus.AVAILABLE;
-        if (v.startsWith("SUSPEND") || v.startsWith("BARR") || v.startsWith("BLOCK")) return SimCardStatus.SUSPENDED;
-        if (v.startsWith("LOST") || v.startsWith("STOLEN")) return SimCardStatus.LOST;
-        if (v.startsWith("DAMAG")) return SimCardStatus.DAMAGED;
-        if (v.startsWith("EXPIR")) return SimCardStatus.EXPIRED;
-        if (v.startsWith("TERMIN") || v.startsWith("DEACT") || v.startsWith("DECOMM") || v.startsWith("CANCEL")) return SimCardStatus.DECOMMISSIONED;
-        return SimCardStatus.AVAILABLE;
+        if (v.startsWith("INACTIV") || v.equals("IDLE") || v.equals("NEW") || v.startsWith("NOT ACTIV")) return SimNetworkState.INACTIVE;
+        if (v.startsWith("ACTIV") || v.equals("AVAILABLE") || v.equals("LIVE")) return SimNetworkState.ACTIVE;
+        if (v.startsWith("SUSPEND") || v.startsWith("BARR") || v.startsWith("BLOCK")) return SimNetworkState.SUSPENDED;
+        if (v.startsWith("EXPIR")) return SimNetworkState.EXPIRED;
+        if (v.startsWith("TERMIN") || v.startsWith("DEACT") || v.startsWith("DECOMM") || v.startsWith("CANCEL")) return SimNetworkState.DEACTIVATED;
+        return SimNetworkState.ACTIVE;
     }
 
     private static String firstNonNull(String a, String b) {

@@ -17,6 +17,7 @@ import {
   Router,
   Search,
   ShieldCheck,
+  Signal,
   Trash2,
   X,
 } from "lucide-react";
@@ -26,7 +27,7 @@ import { SimModal } from "./SimModal";
 import { SimImportDialog } from "./SimImportDialog";
 import { pinPukError } from "./PinPukFields";
 import { AssignSimSheet, type AssignPayload } from "./AssignSimSheet";
-import { ATTENTION, SIM_STATUS, SIM_STATUSES, simStatusMeta, type SimStatus } from "./simMeta";
+import { CONDITION, CONDITIONS, NETWORK, NETWORK_STATES, PLACEMENT, PLACEMENTS, conditionMeta, networkMeta, placementMeta, type Condition, type NetworkState, type Placement } from "./simMeta";
 
 /**
  * SIM inventory. Counts and filters come from the server for the whole inventory (not just the page on screen).
@@ -46,6 +47,8 @@ interface SimCardItem {
   operator?: string | null;
   networkName?: string | null;
   status: string;
+  networkState?: string | null;
+  condition?: string | null;
   slotNumber?: number | null;
   assignedGatewayId?: number | null;
   assignedGatewayName?: string | null;
@@ -65,9 +68,13 @@ interface GatewayPickerItem {
 
 type Summary = {
   total: number;
-  byStatus: Record<string, number>;
   inGateway: number;
   spare: number;
+  retired: number;
+  activeOnNetwork: number;
+  attention: number;
+  /** Count per option of each filter group, with the other active filters applied. */
+  facets: { placement: Record<string, number>; networkState: Record<string, number>; condition: Record<string, number>; pin: Record<string, number>; puk: Record<string, number> };
   withPin: number;
   withoutPin: number;
   withPuk: number;
@@ -114,8 +121,9 @@ export default function SimsIndex() {
   const canEdit = hasPermission("sims.edit");
 
   // ------------------------------------------------------------------ filters
-  const [status, setStatus] = useState<SimStatus | "">("");
-  const [assigned, setAssigned] = useState<Tri>("");
+  const [placement, setPlacement] = useState<Placement | "">("");
+  const [network, setNetwork] = useState<NetworkState | "">("");
+  const [condition, setCondition] = useState<Condition | "">("");
   const [pin, setPin] = useState<Tri>("");
   const [puk, setPuk] = useState<Tri>("");
   const [operator, setOperator] = useState("");
@@ -128,13 +136,14 @@ export default function SimsIndex() {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
-  useEffect(() => setPage(0), [status, assigned, pin, puk, operator, search, pageSize]);
+  useEffect(() => setPage(0), [placement, network, condition, pin, puk, operator, search, pageSize]);
 
-  const activeExtra = [assigned, pin, puk, operator].filter(Boolean).length;
-  const anyFilter = Boolean(status || activeExtra || search);
+  const activeExtra = [pin, puk, operator].filter(Boolean).length;
+  const anyFilter = Boolean(placement || network || condition || activeExtra || search);
   const clearFilters = () => {
-    setStatus("");
-    setAssigned("");
+    setPlacement("");
+    setNetwork("");
+    setCondition("");
     setPin("");
     setPuk("");
     setOperator("");
@@ -148,28 +157,34 @@ export default function SimsIndex() {
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
 
+  const filterParams = useMemo(() => {
+    const p: Record<string, unknown> = {};
+    if (placement) p.status = placement;
+    if (network) p.networkState = network;
+    if (condition) p.condition = condition;
+    if (operator) p.operator = operator;
+    if (search) p.search = search;
+    if (pin) p.hasPin = pin === "yes";
+    if (puk) p.hasPuk = puk === "yes";
+    return p;
+  }, [placement, network, condition, operator, search, pin, puk]);
+
   const fetchSummary = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await axios.get<Summary>(`${API}/api/v1/sim-cards/summary`, { headers });
+      const r = await axios.get<Summary>(`${API}/api/v1/sim-cards/summary`, { headers, params: filterParams });
       setSummary(r.data);
     } catch {
       /* tiles fall back to dashes */
     }
-  }, [API, headers, token]);
+  }, [API, headers, token, filterParams]);
 
   const fetchSims = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, unknown> = { page, size: pageSize, sort: "id,desc" };
-      if (status) params.status = status;
-      if (operator) params.operator = operator;
-      if (search) params.search = search;
-      if (assigned) params.assigned = assigned === "yes";
-      if (pin) params.hasPin = pin === "yes";
-      if (puk) params.hasPuk = puk === "yes";
+      const params: Record<string, unknown> = { page, size: pageSize, sort: "id,desc", ...filterParams };
       const r = await axios.get<{ content?: SimCardItem[]; totalElements?: number }>(`${API}/api/v1/sim-cards`, { headers, params });
       setItems(normalizeList<SimCardItem>(r.data));
       setTotal(typeof r.data?.totalElements === "number" ? r.data.totalElements : 0);
@@ -178,7 +193,7 @@ export default function SimsIndex() {
     } finally {
       setLoading(false);
     }
-  }, [API, headers, token, page, pageSize, status, operator, search, assigned, pin, puk]);
+  }, [API, headers, token, page, pageSize, filterParams]);
 
   useEffect(() => void fetchSims(), [fetchSims]);
   useEffect(() => void fetchSummary(), [fetchSummary]);
@@ -293,8 +308,7 @@ export default function SimsIndex() {
 
   // ------------------------------------------------------------------ derived
   const s = summary;
-  const by = s?.byStatus ?? {};
-  const attention = ATTENTION.reduce((n, k) => n + (by[k] ?? 0), 0);
+  const fc = s?.facets;
   const pct = (n?: number) => (s && s.total ? Math.round(((n ?? 0) / s.total) * 100) : 0);
   const fmt = (n?: number) => (s ? (n ?? 0).toLocaleString() : "—");
 
@@ -320,13 +334,14 @@ export default function SimsIndex() {
           </>
         }
       >
-        <HeroStats cols={6}>
+        <HeroStats cols={7}>
           <HeroStat icon={<CardSim className="h-3.5 w-3.5" />} label="SIM cards" value={fmt(s?.total)} sub={`${s?.operators.length ?? 0} operator${s?.operators.length === 1 ? "" : "s"}`} loading={!s} onClick={clearFilters} active={!anyFilter} />
-          <HeroStat icon={<Router className="h-3.5 w-3.5 text-emerald-300" />} label="In a gateway" value={fmt(s?.inGateway)} sub={`${pct(s?.inGateway)}% deployed`} tone="good" loading={!s} onClick={() => setAssigned(assigned === "yes" ? "" : "yes")} active={assigned === "yes"} />
-          <HeroStat icon={<Link2Off className="h-3.5 w-3.5 text-sky-300" />} label="Spare stock" value={fmt(s?.spare)} sub="ready to install" loading={!s} onClick={() => setAssigned(assigned === "no" ? "" : "no")} active={assigned === "no"} />
+          <HeroStat icon={<Router className="h-3.5 w-3.5 text-emerald-300" />} label="In a gateway" value={fmt(s?.inGateway)} sub={`${pct(s?.inGateway)}% deployed`} tone="good" loading={!s} onClick={() => setPlacement(placement === "ASSIGNED" ? "" : "ASSIGNED")} active={placement === "ASSIGNED"} />
+          <HeroStat icon={<Link2Off className="h-3.5 w-3.5 text-sky-300" />} label="Spare stock" value={fmt(s?.spare)} sub="available to install" loading={!s} onClick={() => setPlacement(placement === "AVAILABLE" ? "" : "AVAILABLE")} active={placement === "AVAILABLE"} />
+          <HeroStat icon={<Signal className="h-3.5 w-3.5 text-teal-300" />} label="Active on network" value={fmt(s?.activeOnNetwork)} sub="live with the operator" tone="good" loading={!s} onClick={() => setNetwork(network === "ACTIVE" ? "" : "ACTIVE")} active={network === "ACTIVE"} />
           <HeroStat icon={<KeyRound className="h-3.5 w-3.5 text-emerald-300" />} label="PIN on file" value={fmt(s?.withPin)} sub={s ? `${s.withoutPin.toLocaleString()} without a PIN` : ""} tone={s && s.withoutPin ? "warn" : "good"} loading={!s} onClick={() => setPin(pin === "no" ? "" : "no")} active={pin === "no"} />
           <HeroStat icon={<Lock className="h-3.5 w-3.5 text-emerald-300" />} label="PUK on file" value={fmt(s?.withPuk)} sub={s ? `${s.withoutPuk.toLocaleString()} without a PUK` : ""} tone={s && s.withoutPuk ? "warn" : "good"} loading={!s} onClick={() => setPuk(puk === "no" ? "" : "no")} active={puk === "no"} />
-          <HeroStat icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-300" />} label="Need attention" value={fmt(attention)} sub="suspended · lost · damaged · expired" tone={attention ? "bad" : undefined} loading={!s} onClick={() => setStatus(status === "SUSPENDED" ? "" : "SUSPENDED")} active={status === "SUSPENDED"} />
+          <HeroStat icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-300" />} label="Need attention" value={fmt(s?.attention)} sub="lost · damaged · suspended · expired" tone={s?.attention ? "bad" : undefined} loading={!s} />
         </HeroStats>
       </PageHero>
 
@@ -337,9 +352,9 @@ export default function SimsIndex() {
       ) : null}
 
       <section className="ui-panel overflow-hidden">
-        {/* Status: every lifecycle state, with counts for the whole inventory */}
-        <div className="border-b border-slate-200/80 px-4 pb-3 pt-3.5 dark:border-slate-800">
-          <div className="mb-2 flex items-center justify-between gap-2">
+        {/* Three independent status groups. Pick one in each (or All) to combine, e.g. Assigned + Active + Good. */}
+        <div className="space-y-2.5 border-b border-slate-200/80 px-4 pb-3 pt-3.5 dark:border-slate-800">
+          <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">Status</p>
             {anyFilter ? (
               <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline">
@@ -347,12 +362,33 @@ export default function SimsIndex() {
               </button>
             ) : null}
           </div>
-          <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
-            <StatusChip on={!status} label="All" count={s?.total} onClick={() => setStatus("")} />
-            {SIM_STATUSES.map((k) => (
-              <StatusChip key={k} on={status === k} label={SIM_STATUS[k].label} dot={SIM_STATUS[k].dot} count={by[k]} title={SIM_STATUS[k].hint} onClick={() => setStatus(status === k ? "" : k)} />
-            ))}
-          </div>
+          <FacetRow
+            icon={<Router className="h-3.5 w-3.5" />}
+            label="Placement"
+            value={placement}
+            onChange={(v) => setPlacement(v as Placement | "")}
+            keys={PLACEMENTS as unknown as string[]}
+            meta={PLACEMENT}
+            counts={fc?.placement}
+          />
+          <FacetRow
+            icon={<Signal className="h-3.5 w-3.5" />}
+            label="Network"
+            value={network}
+            onChange={(v) => setNetwork(v as NetworkState | "")}
+            keys={NETWORK_STATES as unknown as string[]}
+            meta={NETWORK}
+            counts={fc?.networkState}
+          />
+          <FacetRow
+            icon={<ShieldCheck className="h-3.5 w-3.5" />}
+            label="Condition"
+            value={condition}
+            onChange={(v) => setCondition(v as Condition | "")}
+            keys={CONDITIONS as unknown as string[]}
+            meta={CONDITION}
+            counts={fc?.condition}
+          />
         </div>
 
         {/* Search + location / credential filters */}
@@ -372,9 +408,8 @@ export default function SimsIndex() {
             ) : null}
           </label>
           <MobileFilters active={activeExtra}>
-            <Segmented label="Gateway" value={assigned} onChange={setAssigned} options={[["", "Any"], ["yes", "In a gateway"], ["no", "Spare"]]} />
-            <Segmented label="PIN" value={pin} onChange={setPin} options={[["", "Any"], ["yes", "On file"], ["no", "Not set"]]} />
-            <Segmented label="PUK" value={puk} onChange={setPuk} options={[["", "Any"], ["yes", "On file"], ["no", "Not set"]]} />
+            <Segmented label="PIN" value={pin} onChange={setPin} options={[["", "Any"], ["yes", `On file${fc ? ` · ${fc.pin.yes}` : ""}`], ["no", `Not set${fc ? ` · ${fc.pin.no}` : ""}`]]} />
+            <Segmented label="PUK" value={puk} onChange={setPuk} options={[["", "Any"], ["yes", `On file${fc ? ` · ${fc.puk.yes}` : ""}`], ["no", `Not set${fc ? ` · ${fc.puk.no}` : ""}`]]} />
             <select
               value={operator}
               onChange={(e) => setOperator(e.target.value)}
@@ -411,7 +446,7 @@ export default function SimsIndex() {
                 <th className="px-4 py-2.5 font-semibold">PIN</th>
                 <th className="px-4 py-2.5 font-semibold">PUK</th>
                 <th className="px-4 py-2.5 font-semibold">Gateway</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+                <th className="w-[1%] whitespace-nowrap px-4 py-2.5 text-center font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -434,7 +469,7 @@ export default function SimsIndex() {
               ) : (
                 items.map((sim) => {
                   const r = revealed.get(sim.id);
-                  const meta = simStatusMeta(sim.status);
+                  const damagedOrLost = (sim.condition || "OK") !== "OK";
                   const retired = sim.status === "RETIRED";
                   const inGateway = Boolean(sim.assignedGatewayId);
                   return (
@@ -474,10 +509,11 @@ export default function SimsIndex() {
                         )}
                       </td>
                       <td className="px-4 py-2.5">
-                        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${meta.pill}`} title={meta.hint}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-                          {meta.label}
-                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          <StatePill meta={placementMeta(sim.status)} />
+                          <StatePill meta={networkMeta(sim.networkState)} />
+                          {(sim.condition || "OK") !== "OK" ? <StatePill meta={conditionMeta(sim.condition)} strong /> : null}
+                        </div>
                       </td>
                       <td className="px-4 py-2.5">
                         <Code
@@ -520,8 +556,9 @@ export default function SimsIndex() {
                         )}
                       </td>
                       <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {canEdit ? <RowBtn icon={<Pencil className="h-3.5 w-3.5" />} label="Edit" onClick={() => setEditTarget(sim)} /> : null}
+                        {/* Fixed slots (Edit | Assign/Remove | Retire) so the buttons line up from row to row. */}
+                        <div className="mx-auto grid w-max grid-cols-[66px_96px_34px] items-center gap-1.5">
+                          {canEdit ? <RowBtn icon={<Pencil className="h-3.5 w-3.5" />} label="Edit" onClick={() => setEditTarget(sim)} /> : <span />}
                           {inGateway ? (
                             canUnassign ? (
                               <RowBtn
@@ -534,10 +571,14 @@ export default function SimsIndex() {
                                   setDialogError(null);
                                 }}
                               />
-                            ) : null
-                          ) : canAssign && !retired ? (
+                            ) : (
+                              <span />
+                            )
+                          ) : canAssign && !retired && !damagedOrLost ? (
                             <RowBtn icon={<Link2 className="h-3.5 w-3.5" />} label="Assign" tone="green" onClick={() => void openAssign(sim)} />
-                          ) : null}
+                          ) : (
+                            <span className="text-center text-[10px] text-slate-400">{retired ? "Retired" : damagedOrLost ? "Can't assign" : ""}</span>
+                          )}
                           {canEdit && !retired && !inGateway ? (
                             <RowBtn
                               icon={<Trash2 className="h-3.5 w-3.5" />}
@@ -549,7 +590,9 @@ export default function SimsIndex() {
                                 setDialogError(null);
                               }}
                             />
-                          ) : null}
+                          ) : (
+                            <span />
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -642,13 +685,56 @@ export default function SimsIndex() {
         }
       >
         {dialogError ? <Notice tone="error">{dialogError}</Notice> : null}
-        <p className="text-sm text-slate-600 dark:text-slate-300">It stays in the records with status Retired and can no longer be assigned. You can change the status back later from Edit.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">It stays in the records as Retired and can no longer be assigned. You can bring it back into stock later from Edit.</p>
       </Dialog>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------- pieces
+
+function StatePill({ meta, strong }: { meta: { label: string; hint: string; pill: string; dot: string }; strong?: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ring-1 ${strong ? "font-bold" : "font-semibold"} ${meta.pill}`} title={meta.hint}>
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
+    </span>
+  );
+}
+
+function FacetRow({
+  icon,
+  label,
+  value,
+  onChange,
+  keys,
+  meta,
+  counts,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  keys: string[];
+  meta: Record<string, { label: string; hint: string; dot: string }>;
+  counts?: Record<string, number>;
+}) {
+  const all = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined;
+  return (
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+      <span className="flex w-28 shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-blue-50 to-red-50 text-blue-600 ring-1 ring-blue-100 dark:from-blue-500/10 dark:to-red-500/10 dark:text-blue-300 dark:ring-blue-500/20">{icon}</span>
+        {label}
+      </span>
+      <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
+        <StatusChip on={!value} label="All" count={all} onClick={() => onChange("")} />
+        {keys.map((k) => (
+          <StatusChip key={k} on={value === k} label={meta[k].label} dot={meta[k].dot} count={counts?.[k]} title={meta[k].hint} onClick={() => onChange(value === k ? "" : k)} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function StatusChip({ on, label, count, dot, title, onClick }: { on: boolean; label: string; count?: number; dot?: string; title?: string; onClick: () => void }) {
   const empty = count === 0;
@@ -745,7 +831,7 @@ function RowBtn({ icon, label, onClick, tone = "blue", iconOnly }: { icon: React
     red: "text-red-600 ring-red-200 hover:bg-red-50 dark:text-red-300 dark:ring-red-500/30",
   }[tone];
   return (
-    <button type="button" onClick={onClick} title={label} aria-label={label} className={`inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1.5 text-[11px] font-semibold ring-1 transition dark:bg-slate-900 ${t}`}>
+    <button type="button" onClick={onClick} title={label} aria-label={label} className={`inline-flex w-full items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1.5 text-[11px] font-semibold ring-1 transition dark:bg-slate-900 ${t}`}>
       {icon}
       {iconOnly ? null : label}
     </button>

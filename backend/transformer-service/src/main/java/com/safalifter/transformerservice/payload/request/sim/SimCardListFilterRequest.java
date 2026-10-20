@@ -8,6 +8,8 @@ public class SimCardListFilterRequest {
     private SimCardStatus status;
     private String operator;
     private String search;
+    private com.safalifter.transformerservice.enums.SimNetworkState networkState;
+    private com.safalifter.transformerservice.enums.SimCondition condition;
     /** null = any, true = PIN on file, false = no PIN. */
     private Boolean hasPin;
     private Boolean hasPuk;

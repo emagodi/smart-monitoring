@@ -19,12 +19,15 @@ public interface SimCardRepository extends JpaRepository<SimCard, Long> {
 
     Optional<SimCard> findByMsisdn(String msisdn);
 
-    @Query("SELECT s FROM SimCard s WHERE s.status = 'AVAILABLE' AND s.id NOT IN " +
+    @Query("SELECT s FROM SimCard s WHERE s.status = 'AVAILABLE' " +
+            "AND (s.condition IS NULL OR s.condition = com.safalifter.transformerservice.enums.SimCondition.OK) AND s.id NOT IN " +
             "(SELECT a.simId FROM GatewaySimAssignment a WHERE a.active = true)")
     Page<SimCard> findAvailable(Pageable pageable);
 
     @Query("SELECT s FROM SimCard s WHERE " +
             "(:status IS NULL OR s.status = :status) AND " +
+            "(:networkState IS NULL OR s.networkState = :networkState) AND " +
+            "(:condition IS NULL OR s.condition = :condition) AND " +
             "(:operator IS NULL OR :operator = '' OR LOWER(s.operator) LIKE LOWER(CONCAT('%', :operator, '%'))) AND " +
             "(:hasPin IS NULL OR (:hasPin = true AND s.encryptedPin IS NOT NULL AND s.encryptedPin <> '') " +
             "   OR (:hasPin = false AND (s.encryptedPin IS NULL OR s.encryptedPin = ''))) AND " +
@@ -44,6 +47,8 @@ public interface SimCardRepository extends JpaRepository<SimCard, Long> {
             "         AND LOWER(g.name) LIKE LOWER(CONCAT('%', :search, '%'))))")
     Page<SimCard> findWithFilters(
             @Param("status") SimCardStatus status,
+            @Param("networkState") com.safalifter.transformerservice.enums.SimNetworkState networkState,
+            @Param("condition") com.safalifter.transformerservice.enums.SimCondition condition,
             @Param("operator") String operator,
             @Param("hasPin") Boolean hasPin,
             @Param("hasPuk") Boolean hasPuk,
@@ -62,6 +67,9 @@ public interface SimCardRepository extends JpaRepository<SimCard, Long> {
 
     @Query("SELECT COUNT(s) FROM SimCard s WHERE s.encryptedPuk IS NOT NULL AND s.encryptedPuk <> ''")
     long countWithPuk();
+
+    @Query("SELECT DISTINCT a.simId FROM GatewaySimAssignment a WHERE a.active = true")
+    List<Long> simIdsInGateway();
 
     @Query("SELECT COUNT(DISTINCT a.simId) FROM GatewaySimAssignment a WHERE a.active = true")
     long countInGateway();
