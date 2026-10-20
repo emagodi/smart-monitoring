@@ -1095,3 +1095,103 @@ span.flatpickr-weekday,
   0% { background-position: 100% 50%; }
   100% { background-position: 0 50%; }
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Phones: every data table turns into a stack of cards. Each cell shows its column heading on the
+ * left (data-label, filled in by lib/mobileTables.ts) and its value on the right, so nothing is
+ * hidden behind a sideways scroll. Opt out with <table data-keep-table>.
+ * ------------------------------------------------------------------------------------------- */
+@media (max-width: 639.98px) {
+  table:not([data-keep-table]) {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  table:not([data-keep-table]) > thead {
+    display: none;
+  }
+  table:not([data-keep-table]) > tbody,
+  table:not([data-keep-table]) > tfoot {
+    display: block;
+    width: 100%;
+  }
+  table:not([data-keep-table]) > tbody > tr {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgb(226 232 240 / 0.9);
+  }
+  .dark table:not([data-keep-table]) > tbody > tr {
+    border-bottom-color: rgb(30 41 59);
+  }
+  table:not([data-keep-table]) > tbody > tr > td:not(.hidden) {
+    display: block;
+    position: relative;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 22px;
+    padding: 3px 0 3px 38% !important;
+    border: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+    word-break: break-word;
+  }
+  table:not([data-keep-table]) > tbody > tr > td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: 5px;
+    width: 35%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgb(148 163 184);
+  }
+  /* Cells without a heading (row actions, checkboxes, empty states) use the full width. */
+  table:not([data-keep-table]) > tbody > tr > td[data-label=""],
+  table:not([data-keep-table]) > tbody > tr > td:not([data-label]) {
+    padding-left: 0 !important;
+  }
+  table:not([data-keep-table]) > tbody > tr > td[data-label=""]::before,
+  table:not([data-keep-table]) > tbody > tr > td:not([data-label])::before {
+    display: none;
+  }
+  table:not([data-keep-table]) > tbody > tr > td[data-actions]:not(.hidden) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 8px !important;
+  }
+  table:not([data-keep-table]) > tbody > tr > td[data-actions] > * {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+  /* The first column is the row's title: give it the full width. */
+  table:not([data-keep-table]) > tbody > tr > td:first-child:not([data-label=""]) {
+    padding-left: 0 !important;
+    padding-bottom: 6px !important;
+  }
+  table:not([data-keep-table]) > tbody > tr > td:first-child::before {
+    display: none;
+  }
+  table:not([data-keep-table]) > tbody > tr > td[colspan] {
+    padding-left: 0 !important;
+    text-align: center !important;
+  }
+  table:not([data-keep-table]) > tbody > tr > td[colspan]::before {
+    display: none;
+  }
+  /* Inner wrappers that force one line or a fixed width would push the card sideways. */
+  table:not([data-keep-table]) td .truncate {
+    white-space: normal;
+  }
+  table:not([data-keep-table]) td [class*="max-w-"] {
+    max-width: 100%;
+  }
+}

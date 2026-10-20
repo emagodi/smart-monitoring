@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
+import { HeroButton, HeroStat, HeroStats, MobileFilters, PageHero } from "../../components/ui/page";
 import {
   Activity,
   AlertTriangle,
@@ -682,8 +682,8 @@ export default function GatewaysIndex() {
         <div className="border-b border-slate-200/80 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
           <div className="flex flex-col gap-3">
             {/* One horizontal line of filters (scrolls sideways on small screens) */}
-            <div className="flex items-center gap-3 overflow-x-auto pb-1">
-              <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Filters</span>
+            <div className="no-scrollbar flex items-center gap-3 overflow-x-auto pb-1">
+              <span className="hidden shrink-0 text-[11px] sm:inline font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Filters</span>
               <div className="flex shrink-0 flex-nowrap gap-2">
                 {STATUS_FILTERS.map((filter) => (
                   <FilterButton
@@ -788,7 +788,9 @@ export default function GatewaysIndex() {
               </label>
             </div>
           </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-3">
+          <MobileFilters active={[selectedRegion, selectedDepot, selectedNetwork, selectedModel, selectedOperator].filter((v) => v !== "ALL").length + (lastSeenFrom ? 1 : 0) + (lastSeenTo ? 1 : 0)}>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             {isDepot ? null : (
             <>
             <label className="flex flex-col gap-1">
@@ -909,6 +911,8 @@ export default function GatewaysIndex() {
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </label>
+          </div>
+          </MobileFilters>
           </div>
         </div>
 

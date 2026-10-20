@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
-import { Eye, EyeOff, Loader2, Pencil, Plus, Save, X } from "lucide-react";
-import { Modal } from "../../components/ui/modal";
+import { AlertCircle, CalendarDays, CardSim, ChevronDown, Eye, EyeOff, Fingerprint, Hash, KeyRound, Loader2, Lock, Network, NotebookPen, Phone, Plus, Radio, Save, ShieldCheck, Signal, X } from "lucide-react";
+import { SIM_STATUS, SIM_STATUSES, simStatusMeta } from "./simMeta";
+
+/**
+ * Create / edit a SIM card. Opens as a bottom sheet on phones. PIN and PUK are encrypted on the server; when editing,
+ * people allowed to see them get the current values filled in, everyone else sees whether one is on file and can type
+ * a new one (blank = keep).
+ */
 
 interface SimCardItem {
   id: number;
@@ -10,104 +17,84 @@ interface SimCardItem {
   msisdn?: string | null;
   pin?: string | null;
   puk?: string | null;
+  hasPin?: boolean | null;
+  hasPuk?: boolean | null;
   operator?: string | null;
   networkName?: string | null;
   status?: string | null;
-  slotNumber?: number | null;
-  assignedGatewayId?: number | null;
   assignedGatewayName?: string | null;
-  assignedAt?: string | null;
-  unassignedAt?: string | null;
-  activatedAt?: string | null;
   cardSerialNumber?: string | null;
   apn?: string | null;
-  pin2?: string | null;
-  puk2?: string | null;
   activationDate?: string | null;
   expiryDate?: string | null;
   dataPlanGb?: number | null;
   allowanceGb?: number | null;
   notes?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
 }
 
-const maskIccid = (iccid: string) => {
-  if (!iccid) return "************0000";
-  if (iccid.length <= 4) return `************${iccid}`;
-  return `************${iccid.slice(-4)}`;
+type Form = {
+  iccid: string;
+  imsi: string;
+  msisdn: string;
+  operator: string;
+  networkName: string;
+  apn: string;
+  cardSerialNumber: string;
+  pin: string;
+  puk: string;
+  pin2: string;
+  puk2: string;
+  status: string;
+  activationDate: string;
+  expiryDate: string;
+  dataPlanGb: string;
+  allowanceGb: string;
+  notes: string;
 };
 
-const trim = (s: string | null | undefined): string | null => {
-  if (typeof s === "string") {
-    const t = s.trim();
-    return t.length > 0 ? t : null;
-  }
-  return null;
+const EMPTY: Form = {
+  iccid: "",
+  imsi: "",
+  msisdn: "",
+  operator: "",
+  networkName: "",
+  apn: "",
+  cardSerialNumber: "",
+  pin: "",
+  puk: "",
+  pin2: "",
+  puk2: "",
+  status: "AVAILABLE",
+  activationDate: "",
+  expiryDate: "",
+  dataPlanGb: "",
+  allowanceGb: "",
+  notes: "",
 };
 
-const looksLikeMask = (s: string | null | undefined) => {
-  const t = (s ?? "").trim();
-  if (!t) return true;
-  if (t === "****") return true;
-  if (t.startsWith("*") && (t.includes("************") || t.includes("********"))) return true;
-  if (/^\*+$/.test(t)) return true;
-  return false;
-};
+const OPERATORS = ["Econet Zimbabwe", "NetOne", "Telecel Zimbabwe", "Powertel", "Liquid"];
 
-const passwordWrapper = "flex flex-col gap-1.5";
-const labelClass = "text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400";
-const inputBase =
-  "rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
-const inputClass = inputBase + " w-full";
-const inputPasswordInner =
-  "rounded-l-2xl border border-r-0 border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 w-full";
-const revealBtn =
-  "inline-flex h-full items-center justify-center rounded-r-2xl border border-l-0 border-slate-200 bg-white px-3 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100";
-
-const PasswordInput = ({
-  label,
-  value,
-  onChange,
-  placeholder,
-  maskedDisplay,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  maskedDisplay?: string;
-}) => {
-  const [show, setShow] = useState(false);
-  const displayValue = show ? value : (maskedDisplay ?? "****");
-  return (
-    <label className={passwordWrapper}>
-      <span className={labelClass}>{label}</span>
-      <div className="flex">
-        <input
-          type="text"
-          value={displayValue}
-          placeholder={placeholder ?? ""}
-          readOnly={!show}
-          onChange={(e) => {
-            if (!show) return;
-            onChange(e.target.value);
-          }}
-          className={inputPasswordInner + (show ? "" : " cursor-default select-none")}
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          onClick={() => setShow((s) => !s)}
-          className={revealBtn}
-          title={show ? "Hide" : "Show"}
-        >
-          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </label>
-  );
+const isMask = (s?: string | null) => !s || /^\*+$/.test(s.trim()) || s.includes("****");
+const clean = (s: string) => {
+  const t = s.trim();
+  return t ? t : null;
 };
+const tail4 = (s?: string | null) => (s ? s.replace(/\*/g, "").slice(-4) : "");
+
+function validate(f: Form, isEdit: boolean) {
+  const e: Partial<Record<keyof Form, string>> = {};
+  const iccid = f.iccid.replace(/\s/g, "");
+  if (!isEdit && !iccid) e.iccid = "ICCID is required — it is printed on the SIM card.";
+  else if (iccid && !isMask(iccid) && !/^[0-9A-Fa-f]{10,22}$/.test(iccid)) e.iccid = "ICCID should be 10–22 digits.";
+  if (f.imsi && !isMask(f.imsi) && !/^\d{6,16}$/.test(f.imsi.trim())) e.imsi = "IMSI should be up to 15 digits.";
+  if (f.msisdn && !isMask(f.msisdn) && !/^\+?\d{7,15}$/.test(f.msisdn.replace(/\s/g, ""))) e.msisdn = "Use digits only, e.g. 263771234567.";
+  if (f.pin && !/^\d{4,8}$/.test(f.pin)) e.pin = "PIN is 4 to 8 digits.";
+  if (f.puk && !/^\d{8}$/.test(f.puk)) e.puk = "PUK is 8 digits.";
+  if (f.pin2 && !/^\d{4,8}$/.test(f.pin2)) e.pin2 = "PIN2 is 4 to 8 digits.";
+  if (f.puk2 && !/^\d{8}$/.test(f.puk2)) e.puk2 = "PUK2 is 8 digits.";
+  if (f.activationDate && f.expiryDate && f.expiryDate < f.activationDate) e.expiryDate = "Expiry is before activation.";
+  return e;
+}
 
 export function SimModal({
   isOpen,
@@ -117,6 +104,7 @@ export function SimModal({
   onSaved,
   headers,
   apiBaseUrl,
+  canViewSensitive = false,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -125,372 +113,400 @@ export function SimModal({
   onSaved: () => void;
   headers: Record<string, string>;
   apiBaseUrl: string;
+  canViewSensitive?: boolean;
 }) {
+  const [f, setF] = useState<Form>(EMPTY);
+  const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingReveal, setLoadingReveal] = useState(false);
-
-  const [iccid, setIccid] = useState("");
-  const [imsi, setImsi] = useState("");
-  const [msisdn, setMsisdn] = useState("");
-  const [cardSerialNumber, setCardSerialNumber] = useState("");
-  const [operator, setOperator] = useState("");
-  const [networkName, setNetworkName] = useState("");
-  const [apn, setApn] = useState("");
-
-  const [pin, setPin] = useState("");
-  const [puk, setPuk] = useState("");
-  const [pin2, setPin2] = useState("");
-  const [puk2, setPuk2] = useState("");
-
-  const [status, setStatus] = useState("");
-  const [activationDate, setActivationDate] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [dataPlanGb, setDataPlanGb] = useState("");
-  const [allowanceGb, setAllowanceGb] = useState("");
-  const [notes, setNotes] = useState("");
+  const [revealedCodes, setRevealedCodes] = useState(false);
+  const [moreCodes, setMoreCodes] = useState(false);
+  const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
+    setTouched(false);
     setSubmitting(false);
-    if (isEdit && existing) {
-      setIccid(existing.iccid ? String(existing.iccid) : "");
-      setImsi(existing.imsi ?? "");
-      setMsisdn(existing.msisdn ?? "");
-      setCardSerialNumber(existing.cardSerialNumber ?? "");
-      setOperator(existing.operator ?? "");
-      setNetworkName(existing.networkName ?? "");
-      setApn(existing.apn ?? "");
-      setPin(existing.pin ?? "");
-      setPuk(existing.puk ?? "");
-      setPin2(existing.pin2 ?? "");
-      setPuk2(existing.puk2 ?? "");
-      setStatus(existing.status ?? "");
-      setActivationDate(existing.activationDate ? String(existing.activationDate).slice(0, 10) : "");
-      setExpiryDate(existing.expiryDate ? String(existing.expiryDate).slice(0, 10) : "");
-      setDataPlanGb(typeof existing.dataPlanGb === "number" ? String(existing.dataPlanGb) : "");
-      setAllowanceGb(typeof existing.allowanceGb === "number" ? String(existing.allowanceGb) : "");
-      setNotes(existing.notes ?? "");
-
-      setLoadingReveal(true);
-      (async () => {
-        try {
-          const resp = await axios.post(
-            `${apiBaseUrl}/api/v1/sim-cards/${existing.id}/reveal-sensitive`,
-            { reason: "edit-modal auto-reveal (DB load)" },
-            { headers }
-          );
-          const d = (resp.data || {}) as Record<string, unknown>;
-          if (typeof d.iccid === "string" && d.iccid.length > 0) setIccid(d.iccid);
-          if (typeof d.imsi === "string" && d.imsi.length > 0) setImsi(d.imsi);
-          if (typeof d.msisdn === "string" && d.msisdn.length > 0) setMsisdn(d.msisdn);
-          if (typeof d.pin === "string" && d.pin.length > 0) setPin(d.pin);
-          if (typeof d.puk === "string" && d.puk.length > 0) setPuk(d.puk);
-          if (typeof d.pin2 === "string" && d.pin2.length > 0) setPin2(d.pin2);
-          if (typeof d.puk2 === "string" && d.puk2.length > 0) setPuk2(d.puk2);
-        } catch (e) {
-          console.warn("reveal for edit failed, using masked values from list", e);
-        } finally {
-          setLoadingReveal(false);
-        }
-      })();
-    } else {
-      setLoadingReveal(false);
-      setIccid("");
-      setImsi("");
-      setMsisdn("");
-      setCardSerialNumber("");
-      setOperator("");
-      setNetworkName("");
-      setApn("");
-      setPin("");
-      setPuk("");
-      setPin2("");
-      setPuk2("");
-      setStatus("AVAILABLE");
-      setActivationDate("");
-      setExpiryDate("");
-      setDataPlanGb("");
-      setAllowanceGb("");
-      setNotes("");
+    setRevealedCodes(false);
+    setMoreCodes(false);
+    if (!isEdit || !existing) {
+      setF(EMPTY);
+      return;
     }
-  }, [isOpen, existing, isEdit, apiBaseUrl, headers]);
-
-  const header = useMemo(() => {
-    if (!isEdit) return { title: "Register a new SIM card", subtitle: "Capture ICCID/MSISDN/PIN/PUK + all other identifiers printed on the SIM plastic. Sensitive values are AES-GCM encrypted at rest." };
-    const sub = existing?.iccid ? maskIccid(String(existing.iccid)) : existing?.id ? `SIM #${existing.id}` : "Edit SIM Card";
-    return {
-      title: sub,
-      subtitle: "Update metadata or rotate PIN/PUK credentials. Fields showing masked placeholders are left unchanged unless you type new values.",
+    setF({
+      ...EMPTY,
+      iccid: existing.iccid ?? "",
+      imsi: existing.imsi ?? "",
+      msisdn: existing.msisdn ?? "",
+      operator: existing.operator ?? "",
+      networkName: existing.networkName ?? "",
+      apn: existing.apn ?? "",
+      cardSerialNumber: existing.cardSerialNumber ?? "",
+      status: existing.status ?? "AVAILABLE",
+      activationDate: existing.activationDate ? String(existing.activationDate).slice(0, 10) : "",
+      expiryDate: existing.expiryDate ? String(existing.expiryDate).slice(0, 10) : "",
+      dataPlanGb: existing.dataPlanGb != null ? String(existing.dataPlanGb) : "",
+      allowanceGb: existing.allowanceGb != null ? String(existing.allowanceGb) : "",
+      notes: existing.notes ?? "",
+    });
+    if (!canViewSensitive) return;
+    // Fill in the real identifiers and codes (the list only has masked ones). The server logs this reveal.
+    setLoadingReveal(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await axios.post(`${apiBaseUrl}/api/v1/sim-cards/${existing.id}/reveal-sensitive`, { reason: "Edit SIM card" }, { headers });
+        if (cancelled) return;
+        const d = (r.data || {}) as Record<string, string | undefined>;
+        setF((p) => ({
+          ...p,
+          iccid: d.iccid || p.iccid,
+          imsi: d.imsi || p.imsi,
+          msisdn: d.msisdn || p.msisdn,
+          pin: d.pin && !isMask(d.pin) ? d.pin : "",
+          puk: d.puk && !isMask(d.puk) ? d.puk : "",
+          pin2: d.pin2 && !isMask(d.pin2) ? d.pin2 : "",
+          puk2: d.puk2 && !isMask(d.puk2) ? d.puk2 : "",
+        }));
+        setRevealedCodes(true);
+      } catch {
+        /* keep masked values; blank code fields mean "keep" */
+      } finally {
+        if (!cancelled) setLoadingReveal(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-  }, [isEdit, existing]);
+  }, [isOpen, existing, isEdit, apiBaseUrl, headers, canViewSensitive]);
 
-  const handleSubmit = async () => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !submitting && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, submitting, onClose]);
+
+  if (!isOpen) return null;
+
+  const errors = touched ? validate(f, isEdit) : {};
+  const errorList = Object.values(errors).filter(Boolean) as string[];
+
+  const submit = async () => {
+    setTouched(true);
+    const v = validate(f, isEdit);
+    if (Object.keys(v).length) {
+      setTimeout(() => document.querySelector("[data-sim-error]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const body: Record<string, unknown> = {
+      iccid: isMask(f.iccid) ? null : clean(f.iccid.replace(/\s/g, "")),
+      imsi: isMask(f.imsi) ? null : clean(f.imsi),
+      msisdn: isMask(f.msisdn) ? null : clean(f.msisdn.replace(/\s/g, "")),
+      cardSerialNumber: isMask(f.cardSerialNumber) ? null : clean(f.cardSerialNumber),
+      operator: clean(f.operator),
+      networkName: clean(f.networkName),
+      apn: clean(f.apn),
+      status: clean(f.status),
+      activationDate: clean(f.activationDate),
+      expiryDate: clean(f.expiryDate),
+      dataPlanGb: f.dataPlanGb ? Number(f.dataPlanGb) : null,
+      allowanceGb: f.allowanceGb ? Number(f.allowanceGb) : null,
+      notes: clean(f.notes),
+    };
+    for (const k of ["pin", "puk", "pin2", "puk2"] as const) if (f[k]) body[k] = f[k];
     try {
-      setSubmitting(true);
-      setError(null);
-
-      const body: Record<string, unknown> = {
-        iccid: isEdit ? (looksLikeMask(iccid) ? null : trim(iccid)) : trim(iccid),
-        imsi: isEdit ? (looksLikeMask(imsi) ? null : trim(imsi)) : trim(imsi),
-        msisdn: isEdit ? (looksLikeMask(msisdn) ? null : trim(msisdn)) : trim(msisdn),
-        cardSerialNumber: isEdit ? (looksLikeMask(cardSerialNumber) ? null : trim(cardSerialNumber)) : trim(cardSerialNumber),
-        operator: trim(operator),
-        networkName: trim(networkName),
-        apn: trim(apn),
-        status: trim(status),
-        activationDate: trim(activationDate),
-        expiryDate: trim(expiryDate),
-        dataPlanGb: dataPlanGb ? parseFloat(dataPlanGb) : null,
-        allowanceGb: allowanceGb ? parseFloat(allowanceGb) : null,
-        notes: trim(notes),
-      };
-
-      if (isEdit) {
-        if (!looksLikeMask(pin) && trim(pin) != null) body.pin = trim(pin);
-        if (!looksLikeMask(puk) && trim(puk) != null) body.puk = trim(puk);
-        if (!looksLikeMask(pin2) && trim(pin2) != null) body.pin2 = trim(pin2);
-        if (!looksLikeMask(puk2) && trim(puk2) != null) body.puk2 = trim(puk2);
-      } else {
-        body.pin = trim(pin);
-        body.puk = trim(puk);
-        body.pin2 = trim(pin2);
-        body.puk2 = trim(puk2);
-      }
-
-      if (isEdit && existing) {
-        await axios.put(`${apiBaseUrl}/api/v1/sim-cards/${existing.id}`, body, { headers });
-      } else {
-        await axios.post(`${apiBaseUrl}/api/v1/sim-cards`, body, { headers });
-      }
-
+      if (isEdit && existing) await axios.put(`${apiBaseUrl}/api/v1/sim-cards/${existing.id}`, body, { headers });
+      else await axios.post(`${apiBaseUrl}/api/v1/sim-cards`, body, { headers });
       onSaved();
       onClose();
-    } catch (submitError: any) {
-      console.error(submitError);
-      const fallback = isEdit ? "Failed to save SIM changes." : "Failed to create SIM card.";
-      let detail: string | null = null;
-      try {
-        const resp = submitError?.response;
-        const data = resp?.data;
-        if (data) {
-          if (typeof data === "string" && data.length > 0) detail = data;
-          else if (typeof data === "object") {
-            for (const k of ["message", "error", "detail", "title", "reason"]) {
-              const v = (data as Record<string, unknown>)[k];
-              if (typeof v === "string" && v.length > 0) {
-                detail = v;
-                break;
-              }
-            }
-            if (!detail) {
-              const keys = ["errors", "validation", "fieldErrors"];
-              for (const k of keys) {
-                const v = (data as Record<string, unknown>)[k];
-                if (v && typeof v === "object") {
-                  const firstMsg = Object.values(v as Record<string, unknown>).flat()[0];
-                  if (typeof firstMsg === "string") {
-                    detail = firstMsg;
-                    break;
-                  }
-                }
-              }
-            }
-          }
-        }
-        if (!detail && resp?.statusText && typeof resp.statusText === "string" && resp.statusText.length > 0) {
-          detail = `HTTP ${resp.status} ${resp.statusText}`;
-        }
-      } catch {
-        detail = null;
-      }
-      setError(detail ? `${fallback} ${detail}` : fallback);
+    } catch (e) {
+      const ax = e as { response?: { data?: { message?: string } | string; status?: number } };
+      const d = ax.response?.data;
+      const msg = (typeof d === "string" && d) || (typeof d === "object" && d?.message) || (ax.response?.status === 409 ? "A SIM with this ICCID already exists." : null);
+      setError(`${isEdit ? "Could not save the changes." : "Could not add the SIM."}${msg ? ` ${msg}` : ""}`);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const meta = simStatusMeta(f.status);
+  const pinOnFile = Boolean(existing?.hasPin);
+  const pukOnFile = Boolean(existing?.hasPuk);
+  const codePlaceholder = (onFile: boolean, hint: string) => (onFile && !revealedCodes ? "On file — type to replace" : hint);
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      className="max-w-4xl overflow-hidden rounded-[28px] bg-white p-0 shadow-2xl dark:bg-slate-950"
-      backdropBlur
-    >
-      <div className="border-b border-slate-200/80 bg-gradient-to-r from-blue-50 via-white to-red-50 px-5 py-4 dark:border-slate-800 dark:from-blue-500/10 dark:via-slate-950 dark:to-red-500/10">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
-              {isEdit ? "Edit SIM Card" : "New SIM Card"}
-            </p>
-            <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-50">
-              {header.title}
-            </h3>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {header.subtitle}
-              {loadingReveal ? (
-                <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-300">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Loading actual values from database...
-                </span>
-              ) : null}
-            </p>
+    <div className="fixed inset-0 z-[100000] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => !submitting && onClose()} />
+      <div className="relative flex max-h-[94dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-[26px] dark:bg-slate-950">
+        {/* Header */}
+        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-slate-950 via-[#0a2a6b] to-[#0b4fc4] px-5 pb-4 pt-4 text-white">
+          <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-red-500/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-16 left-10 h-40 w-40 rounded-full bg-sky-400/20 blur-3xl" />
+          <div className="relative flex items-start gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+              <CardSim className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-200/80">{isEdit ? "Edit SIM card" : "New SIM card"}</p>
+              <h3 className="truncate font-mono text-lg font-semibold tracking-wide">
+                {isEdit ? (revealedCodes && f.iccid ? f.iccid.replace(/(.{4})/g, "$1 ").trim() : `•••• •••• ${tail4(existing?.iccid)}`) : "Register a SIM"}
+              </h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <HeaderChip>
+                  <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} /> {meta.label}
+                </HeaderChip>
+                {f.operator ? (
+                  <HeaderChip>
+                    <Signal className="h-3 w-3" /> {f.operator}
+                  </HeaderChip>
+                ) : null}
+                {isEdit ? (
+                  <>
+                    <HeaderChip tone={pinOnFile ? "good" : "warn"}>
+                      <KeyRound className="h-3 w-3" /> PIN {pinOnFile ? "on file" : "not set"}
+                    </HeaderChip>
+                    <HeaderChip tone={pukOnFile ? "good" : "warn"}>
+                      <Lock className="h-3 w-3" /> PUK {pukOnFile ? "on file" : "not set"}
+                    </HeaderChip>
+                  </>
+                ) : null}
+                {existing?.assignedGatewayName ? (
+                  <HeaderChip>
+                    <Radio className="h-3 w-3" /> {existing.assignedGatewayName}
+                  </HeaderChip>
+                ) : null}
+                {loadingReveal ? (
+                  <HeaderChip>
+                    <Loader2 className="h-3 w-3 animate-spin" /> loading saved values
+                  </HeaderChip>
+                ) : null}
+              </div>
+            </div>
+            <button type="button" onClick={onClose} disabled={submitting} className="rounded-full bg-white/10 p-2 text-blue-100 ring-1 ring-white/15 transition hover:bg-white/20" aria-label="Close">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+        </div>
+
+        {/* Body */}
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 px-4 py-4 sm:px-5 dark:bg-slate-900/40">
+          {error ? (
+            <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+            </div>
+          ) : null}
+          {errorList.length ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <AlertCircle className="h-4 w-4" /> Please fix {errorList.length === 1 ? "this" : `these ${errorList.length}`} before saving
+              </p>
+              <ul className="ml-6 mt-1 list-disc space-y-0.5">
+                {errorList.map((m) => (
+                  <li key={m}>{m}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <Card icon={<Fingerprint className="h-4 w-4" />} title="Identity" hint="As printed on the SIM card and in the operator's records">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="ICCID" required={!isEdit} icon={<Hash className="h-4 w-4" />} error={errors.iccid}>
+                <input value={f.iccid} onChange={(e) => set("iccid", e.target.value)} inputMode="numeric" placeholder="8926 3041 9576 2012 077" className={inp(errors.iccid, true)} />
+              </Field>
+              <Field label="IMSI" icon={<Fingerprint className="h-4 w-4" />} error={errors.imsi}>
+                <input value={f.imsi} onChange={(e) => set("imsi", e.target.value)} inputMode="numeric" placeholder="648041576201207" className={inp(errors.imsi, true)} />
+              </Field>
+              <Field label="Phone number (MSISDN)" icon={<Phone className="h-4 w-4" />} error={errors.msisdn} hint="International form, e.g. 263782271685">
+                <input value={f.msisdn} onChange={(e) => set("msisdn", e.target.value)} inputMode="tel" placeholder="263771234567" className={inp(errors.msisdn, true)} />
+              </Field>
+              <Field label="Operator" icon={<Signal className="h-4 w-4" />}>
+                <input value={f.operator} onChange={(e) => set("operator", e.target.value)} list="sim-operators" placeholder="Econet Zimbabwe" className={inp()} />
+                <datalist id="sim-operators">
+                  {OPERATORS.map((o) => (
+                    <option key={o} value={o} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Network / HLR" icon={<Network className="h-4 w-4" />}>
+                <input value={f.networkName} onChange={(e) => set("networkName", e.target.value)} placeholder="Zim HLR" className={inp()} />
+              </Field>
+              <Field label="APN" icon={<Radio className="h-4 w-4" />}>
+                <input value={f.apn} onChange={(e) => set("apn", e.target.value)} placeholder="internet.econet.co.zw" className={inp()} />
+              </Field>
+            </div>
+          </Card>
+
+          <Card
+            icon={<ShieldCheck className="h-4 w-4" />}
+            title="PIN & PUK"
+            hint="Encrypted on the server. Leave a box blank to keep what is on file."
+            tone="secure"
           >
-            <X className="h-4 w-4" />
-          </button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CodeField label="PIN" value={f.pin} onChange={(v) => set("pin", v)} onFile={isEdit ? pinOnFile : undefined} placeholder={codePlaceholder(pinOnFile, "4–8 digits")} error={errors.pin} />
+              <CodeField label="PUK" value={f.puk} onChange={(v) => set("puk", v)} onFile={isEdit ? pukOnFile : undefined} placeholder={codePlaceholder(pukOnFile, "8 digits")} error={errors.puk} />
+            </div>
+            <button type="button" onClick={() => setMoreCodes(!moreCodes)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline">
+              <ChevronDown className={`h-3.5 w-3.5 transition ${moreCodes ? "rotate-180" : ""}`} /> PIN2 / PUK2 (rarely needed)
+            </button>
+            {moreCodes ? (
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <CodeField label="PIN2" value={f.pin2} onChange={(v) => set("pin2", v)} placeholder="4–8 digits" error={errors.pin2} />
+                <CodeField label="PUK2" value={f.puk2} onChange={(v) => set("puk2", v)} placeholder="8 digits" error={errors.puk2} />
+              </div>
+            ) : null}
+          </Card>
+
+          <Card icon={<CalendarDays className="h-4 w-4" />} title="Lifecycle & plan">
+            <p className="mb-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Status</p>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {SIM_STATUSES.map((k) => {
+                const on = f.status === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => set("status", k)}
+                    title={SIM_STATUS[k].hint}
+                    className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs ring-1 transition ${
+                      on ? "bg-blue-600 font-semibold text-white ring-blue-600 shadow-sm shadow-blue-600/25" : "bg-white text-slate-700 ring-slate-200 hover:ring-blue-300 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
+                    }`}
+                  >
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${on ? "bg-white" : SIM_STATUS[k].dot}`} />
+                    <span className="min-w-0">
+                      <span className="block truncate">{SIM_STATUS[k].label}</span>
+                      <span className={`block truncate text-[10px] font-normal ${on ? "text-blue-100" : "text-slate-400"}`}>{SIM_STATUS[k].hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="Activation date" icon={<CalendarDays className="h-4 w-4" />}>
+                <input type="date" value={f.activationDate} onChange={(e) => set("activationDate", e.target.value)} className={inp()} />
+              </Field>
+              <Field label="Expiry date" icon={<CalendarDays className="h-4 w-4" />} error={errors.expiryDate}>
+                <input type="date" value={f.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} className={inp(errors.expiryDate)} />
+              </Field>
+              <Field label="Data plan (GB)" icon={<Signal className="h-4 w-4" />}>
+                <input type="number" step="0.01" min="0" value={f.dataPlanGb} onChange={(e) => set("dataPlanGb", e.target.value)} placeholder="e.g. 5" className={inp()} />
+              </Field>
+              <Field label="Card serial no." icon={<Hash className="h-4 w-4" />}>
+                <input value={f.cardSerialNumber} onChange={(e) => set("cardSerialNumber", e.target.value)} placeholder="optional" className={inp()} />
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Field label="Notes" icon={<NotebookPen className="h-4 w-4" />}>
+                <textarea rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Plan details, replacement history…" className={`${inp()} h-auto py-2`} />
+              </Field>
+            </div>
+          </Card>
+        </div>
+
+        {/* Footer */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 dark:border-slate-800 dark:bg-slate-950">
+          <p className="hidden text-[11px] text-slate-500 sm:block">{isEdit ? "Changes are logged with your name." : <><span className="text-red-500">*</span> required</>}</p>
+          <div className="flex flex-1 justify-end gap-2">
+            <button type="button" onClick={onClose} disabled={submitting} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-300 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={submitting || loadingReveal}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-[#0b4fc4] px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:brightness-110 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEdit ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {submitting ? "Saving…" : isEdit ? "Save changes" : "Add SIM"}
+            </button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-        {error ? (
-          <div className="rounded-2xl border border-red-100 bg-red-50 p-3 text-xs text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-            {error}
-          </div>
+// ---------------------------------------------------------------------- pieces
+
+const inp = (err?: string, mono?: boolean) =>
+  `h-10 w-full rounded-xl border bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 dark:bg-slate-900 dark:text-slate-100 ${mono ? "font-mono tracking-wide" : ""} ${
+    err ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-slate-200 focus:border-blue-400 focus:ring-blue-100 dark:border-slate-700 dark:focus:ring-blue-500/20"
+  }`;
+
+function HeaderChip({ children, tone }: { children: ReactNode; tone?: "good" | "warn" }) {
+  const t = tone === "good" ? "bg-emerald-400/15 text-emerald-100 ring-emerald-300/30" : tone === "warn" ? "bg-amber-400/15 text-amber-100 ring-amber-300/30" : "bg-white/10 text-blue-50 ring-white/15";
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${t}`}>{children}</span>;
+}
+
+function Card({ icon, title, hint, tone, children }: { icon: ReactNode; title: string; hint?: string; tone?: "secure"; children: ReactNode }) {
+  return (
+    <section className={`rounded-2xl border bg-white p-3.5 shadow-sm dark:bg-slate-950 ${tone === "secure" ? "border-blue-200 dark:border-blue-500/30" : "border-slate-200 dark:border-slate-800"}`}>
+      <div className="mb-3 flex items-start gap-2.5">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone === "secure" ? "bg-gradient-to-br from-blue-600 to-red-500 text-white" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"}`}>{icon}</span>
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-50">{title}</h4>
+          {hint ? <p className="text-[11px] text-slate-500">{hint}</p> : null}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, icon, required, error, hint, children }: { label: string; icon?: ReactNode; required?: boolean; error?: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="block" data-sim-error={error ? "" : undefined}>
+      <span className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+        {label}
+        {required ? <span className="ml-0.5 text-red-500">*</span> : null}
+      </span>
+      <span className="relative block">
+        {icon ? <span className={`pointer-events-none absolute left-3 top-3 ${error ? "text-red-400" : "text-slate-400"}`}>{icon}</span> : null}
+        {children}
+      </span>
+      {error ? <span className="mt-1 block text-[11px] font-medium text-red-600">{error}</span> : hint ? <span className="mt-1 block text-[11px] text-slate-500">{hint}</span> : null}
+    </label>
+  );
+}
+
+function CodeField({ label, value, onChange, onFile, placeholder, error }: { label: string; value: string; onChange: (v: string) => void; onFile?: boolean; placeholder: string; error?: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <label className="block" data-sim-error={error ? "" : undefined}>
+      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+        {label}
+        {onFile === true ? (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
+            <ShieldCheck className="h-2.5 w-2.5" /> on file
+          </span>
+        ) : onFile === false ? (
+          <span className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+            <KeyRound className="h-2.5 w-2.5" /> not set yet
+          </span>
         ) : null}
-
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Core Identifiers
-          </p>
-          <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>ICCID</span>
-              <input
-                type="text"
-                value={iccid}
-                onChange={(e) => setIccid(e.target.value)}
-                placeholder="8944110061234567890"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>IMSI</span>
-              <input
-                type="text"
-                value={imsi}
-                onChange={(e) => setImsi(e.target.value)}
-                placeholder="654010012345678"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>MSISDN / Phone Number</span>
-              <input
-                type="text"
-                value={msisdn}
-                onChange={(e) => setMsisdn(e.target.value)}
-                placeholder="263771234567"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Operator</span>
-              <input
-                type="text"
-                value={operator}
-                onChange={(e) => setOperator(e.target.value)}
-                placeholder="Econet, NetOne, Powertel, Liquid"
-                className={inputClass}
-              />
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-red-500">
-            Security Credentials (encrypted)
-          </p>
-          <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <PasswordInput label="PIN" value={pin} onChange={setPin} placeholder="4-8 digits" />
-            <PasswordInput label="PUK" value={puk} onChange={setPuk} placeholder="8 digits" />
-          </div>
-        </div>
-
-        <div>
-          <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Lifecycle &amp; Billing
-          </p>
-          <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Status</span>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
-                <option value="">— Select status —</option>
-                <option value="AVAILABLE">Available</option>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="SUSPENDED">Suspended</option>
-                <option value="ASSIGNED">Assigned</option>
-                <option value="RETIRED">Retired</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Activation Date</span>
-              <input type="date" value={activationDate} onChange={(e) => setActivationDate(e.target.value)} className={inputClass} />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Expiry Date</span>
-              <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={inputClass} />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Data Plan (GB)</span>
-              <input
-                type="number"
-                step="0.01"
-                value={dataPlanGb}
-                onChange={(e) => setDataPlanGb(e.target.value)}
-                placeholder="25.00"
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 md:col-span-2">
-              <span className={labelClass}>Notes</span>
-              <textarea
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Provisioning notes, plan details, replacement history..."
-                className={inputClass}
-              />
-            </label>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t border-slate-200/80 pt-4 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={submitting || loadingReveal}
-            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
-          >
-            {submitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : isEdit ? (
-              <Save className="h-4 w-4" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-            {submitting
-              ? isEdit
-                ? "Saving..."
-                : "Creating..."
-              : isEdit
-              ? "Save changes"
-              : "Create SIM card"}
-          </button>
-        </div>
-      </div>
-    </Modal>
+      </span>
+      <span className={`flex h-10 items-center rounded-xl border bg-white pr-1 transition focus-within:ring-2 dark:bg-slate-900 ${error ? "border-red-300 focus-within:ring-red-100" : "border-slate-200 focus-within:border-blue-400 focus-within:ring-blue-100 dark:border-slate-700"}`}>
+        <KeyRound className={`ml-3 h-4 w-4 shrink-0 ${error ? "text-red-400" : "text-slate-400"}`} />
+        <input
+          type={show ? "text" : "password"}
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={8}
+          value={value}
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+          placeholder={placeholder}
+          className="h-full min-w-0 flex-1 bg-transparent px-2 font-mono text-sm tracking-[0.3em] text-slate-900 outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-slate-400 dark:text-slate-100"
+        />
+        <button type="button" onClick={() => setShow(!show)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label={show ? `Hide ${label}` : `Show ${label}`}>
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </span>
+      {error ? <span className="mt-1 block text-[11px] font-medium text-red-600">{error}</span> : null}
+    </label>
   );
 }

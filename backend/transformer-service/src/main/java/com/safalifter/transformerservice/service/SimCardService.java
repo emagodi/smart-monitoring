@@ -39,9 +39,40 @@ public class SimCardService {
         return simCardRepository.findWithFilters(
                 filter.getStatus(),
                 filter.getOperator(),
+                filter.getHasPin(),
+                filter.getHasPuk(),
+                filter.getAssigned(),
                 filter.getSearch(),
                 pageable
         ).map(this::toMaskedResponse);
+    }
+
+    /** Whole-inventory counts for the SIM page tiles and filter chips (not just the page on screen). */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> summary() {
+        forbidSupplier();
+        java.util.Map<String, Long> byStatus = new java.util.LinkedHashMap<>();
+        for (SimCardStatus st : SimCardStatus.values()) byStatus.put(st.name(), 0L);
+        long total = 0;
+        for (Object[] row : simCardRepository.countByStatus()) {
+            long n = row[1] == null ? 0 : ((Number) row[1]).longValue();
+            total += n;
+            if (row[0] != null) byStatus.put(String.valueOf(row[0]), n);
+        }
+        long inGateway = simCardRepository.countInGateway();
+        long withPin = simCardRepository.countWithPin();
+        long withPuk = simCardRepository.countWithPuk();
+        java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("total", total);
+        out.put("byStatus", byStatus);
+        out.put("inGateway", inGateway);
+        out.put("spare", Math.max(0, total - inGateway));
+        out.put("withPin", withPin);
+        out.put("withoutPin", Math.max(0, total - withPin));
+        out.put("withPuk", withPuk);
+        out.put("withoutPuk", Math.max(0, total - withPuk));
+        out.put("operators", simCardRepository.distinctOperators());
+        return out;
     }
 
     @Transactional(readOnly = true)
@@ -105,12 +136,12 @@ public class SimCardService {
         if (trimToNull(request.getIccid()) != null && !looksLikeMask(request.getIccid())) {
             String v = trimToNull(request.getIccid());
             sim.setIccid(v);
-            sim.setNormalizedIccid(v);
+            sim.setNormalizedIccid(GatewayStatusService.normalizeIccid(v));
         }
         if (trimToNull(request.getImsi()) != null && !looksLikeMask(request.getImsi())) {
             String v = trimToNull(request.getImsi());
             sim.setImsi(v);
-            sim.setNormalizedImsi(v);
+            sim.setNormalizedImsi(GatewayStatusService.normalizeImsi(v));
         }
         if (trimToNull(request.getMsisdn()) != null && !looksLikeMask(request.getMsisdn())) {
             String v = trimToNull(request.getMsisdn());
@@ -275,6 +306,14 @@ public class SimCardService {
                 .notes(trimToNull(request.getNotes()))
                 .build();
         GatewaySimAssignment saved = assignmentRepository.save(newAssign);
+        String pin = trimToNull(request.getPin());
+        String puk = trimToNull(request.getPuk());
+        if ((pin != null && !looksLikeMask(pin)) || (puk != null && !looksLikeMask(puk))) {
+            encryptionService.requireEncryptionKeyForWrite();
+            if (pin != null && !looksLikeMask(pin)) sim.setEncryptedPin(encryptionService.encrypt(pin));
+            if (puk != null && !looksLikeMask(puk)) sim.setEncryptedPuk(encryptionService.encrypt(puk));
+            log.info("SIM id={} PIN/PUK captured at assignment by={}", sim.getId(), actor);
+        }
         sim.setStatus(SimCardStatus.ASSIGNED);
         sim.setUpdatedBy(actor);
         simCardRepository.save(sim);
@@ -362,6 +401,8 @@ public class SimCardService {
                 .puk("****")
                 .pin2("****")
                 .puk2("****")
+                .hasPin(sim.getEncryptedPin() != null && !sim.getEncryptedPin().isBlank())
+                .hasPuk(sim.getEncryptedPuk() != null && !sim.getEncryptedPuk().isBlank())
                 .ki(maskTail(sim.getKi()))
                 .opc(maskTail(sim.getOpc()))
                 .cardSerialNumber(maskTail(sim.getCardSerialNumber()))
@@ -440,6 +481,118 @@ public class SimCardService {
         String t = s.trim();
         if (t.length() <= 4) return "*".repeat(t.length());
         return "*".repeat(t.length() - 4) + t.substring(t.length() - 4);
+    }
+
+    // ------------------------------------------------------------------ bulk import
+
+    /**
+     * Load SIMs from an operator spreadsheet. Matches on ICCID: new ICCIDs are created as AVAILABLE stock, known ones
+     * get their IMSI / number / operator filled in. Never touches PIN/PUK, and never changes the status of a SIM that
+     * is already in use.
+     */
+    @Transactional
+    public SimImportResponse importSims(SimImportRequest request) {
+        forbidSupplierCrud();
+        List<SimImportRequest.Row> rows = request == null || request.getRows() == null ? List.of() : request.getRows();
+        if (rows.size() > 5000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At most 5000 SIMs per upload");
+        }
+        String actor = accessScopeService.getCurrentUserEmail();
+        String defaultOperator = trimToNull(request == null ? null : request.getDefaultOperator());
+        SimImportResponse out = SimImportResponse.builder().received(rows.size()).build();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        int index = 0;
+        for (SimImportRequest.Row row : rows) {
+            index++;
+            Integer rowNo = row.getRowNumber() != null ? row.getRowNumber() : index;
+            String iccid = GatewayStatusService.normalizeIccid(clean(row.getIccid()));
+            if (iccid == null || iccid.length() < 10) {
+                out.setSkipped(out.getSkipped() + 1);
+                out.getIssues().add(new SimImportResponse.RowIssue(rowNo, last4(iccid), "Missing or invalid ICCID"));
+                continue;
+            }
+            if (!seen.add(iccid)) {
+                out.setSkipped(out.getSkipped() + 1);
+                out.getIssues().add(new SimImportResponse.RowIssue(rowNo, last4(iccid), "Same ICCID appears earlier in the file"));
+                continue;
+            }
+            String imsi = GatewayStatusService.normalizeImsi(clean(row.getImsi()));
+            String msisdn = normalizeMsisdn(clean(row.getMsisdn()));
+            String operator = firstNonNull(trimToNull(clean(row.getOperator())), defaultOperator);
+            String network = trimToNull(clean(row.getNetworkName()));
+            SimCardStatus state = importStatus(clean(row.getState()));
+
+            SimCard sim = simCardRepository.findByNormalizedIccid(iccid).orElse(null);
+            if (sim == null) {
+                sim = new SimCard();
+                sim.setIccid(iccid);
+                sim.setNormalizedIccid(iccid);
+                sim.setImsi(imsi);
+                sim.setNormalizedImsi(imsi);
+                sim.setMsisdn(msisdn);
+                sim.setOperator(operator);
+                sim.setNetworkName(network);
+                sim.setStatus(state);
+                String type = trimToNull(clean(row.getSimType()));
+                sim.setNotes(firstNonNull(trimToNull(clean(row.getNotes())), type == null ? null : "Type: " + type));
+                sim.setCreatedBy(actor);
+                simCardRepository.save(sim);
+                out.setCreated(out.getCreated() + 1);
+                continue;
+            }
+            boolean changed = false;
+            if (imsi != null && !imsi.equals(sim.getNormalizedImsi())) { sim.setImsi(imsi); sim.setNormalizedImsi(imsi); changed = true; }
+            if (msisdn != null && !msisdn.equals(sim.getMsisdn())) { sim.setMsisdn(msisdn); changed = true; }
+            if (operator != null && !operator.equals(sim.getOperator())) { sim.setOperator(operator); changed = true; }
+            if (network != null && !network.equals(sim.getNetworkName())) { sim.setNetworkName(network); changed = true; }
+            boolean inUse = sim.getStatus() == SimCardStatus.ASSIGNED
+                    || (assignmentRepository.countActiveBySimId(sim.getId()) != null && assignmentRepository.countActiveBySimId(sim.getId()) > 0);
+            if (!inUse && state != SimCardStatus.AVAILABLE && state != sim.getStatus()) { sim.setStatus(state); changed = true; }
+            if (changed) {
+                sim.setUpdatedBy(actor);
+                simCardRepository.save(sim);
+                out.setUpdated(out.getUpdated() + 1);
+            } else {
+                out.setUnchanged(out.getUnchanged() + 1);
+            }
+        }
+        log.info("SIM import by={} received={} created={} updated={} unchanged={} skipped={}",
+                actor, out.getReceived(), out.getCreated(), out.getUpdated(), out.getUnchanged(), out.getSkipped());
+        return out;
+    }
+
+    /** Spreadsheet cells often carry tabs / non-breaking spaces from the operator portal export. */
+    private static String clean(String s) {
+        if (s == null) return null;
+        String t = s.replace('\u00A0', ' ').replace("\t", " ").trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /** Local Zimbabwe numbers (7XXXXXXXX or 07XXXXXXXX) are stored in international form 2637XXXXXXXX. */
+    static String normalizeMsisdn(String raw) {
+        if (raw == null) return null;
+        String d = raw.replaceAll("[^0-9]", "");
+        if (d.isEmpty()) return null;
+        if (d.length() == 9 && d.startsWith("7")) return "263" + d;
+        if (d.length() == 10 && d.startsWith("07")) return "263" + d.substring(1);
+        return d;
+    }
+
+    /** Operator "Active" means live on the network: in our inventory that is spare stock, ready to assign. */
+    private static SimCardStatus importStatus(String state) {
+        if (state == null) return SimCardStatus.AVAILABLE;
+        String v = state.trim().toUpperCase(java.util.Locale.ROOT);
+        if (v.startsWith("ACTIV") || v.equals("AVAILABLE") || v.equals("NEW") || v.equals("IDLE")) return SimCardStatus.AVAILABLE;
+        if (v.startsWith("SUSPEND") || v.startsWith("BARR") || v.startsWith("BLOCK")) return SimCardStatus.SUSPENDED;
+        if (v.startsWith("LOST") || v.startsWith("STOLEN")) return SimCardStatus.LOST;
+        if (v.startsWith("DAMAG")) return SimCardStatus.DAMAGED;
+        if (v.startsWith("EXPIR")) return SimCardStatus.EXPIRED;
+        if (v.startsWith("TERMIN") || v.startsWith("DEACT") || v.startsWith("DECOMM") || v.startsWith("CANCEL")) return SimCardStatus.DECOMMISSIONED;
+        return SimCardStatus.AVAILABLE;
+    }
+
+    private static String firstNonNull(String a, String b) {
+        return a != null ? a : b;
     }
 
     private void requirePermission(String authority) {

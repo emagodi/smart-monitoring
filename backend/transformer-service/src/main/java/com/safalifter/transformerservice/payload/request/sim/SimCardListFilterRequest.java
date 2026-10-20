@@ -8,4 +8,9 @@ public class SimCardListFilterRequest {
     private SimCardStatus status;
     private String operator;
     private String search;
+    /** null = any, true = PIN on file, false = no PIN. */
+    private Boolean hasPin;
+    private Boolean hasPuk;
+    /** null = any, true = currently in a gateway, false = spare. */
+    private Boolean assigned;
 }
