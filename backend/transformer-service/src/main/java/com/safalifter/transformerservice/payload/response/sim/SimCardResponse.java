@@ -31,6 +31,8 @@ public class SimCardResponse {
     private String opc;
     private String cardSerialNumber;
     private String status;
+    private String networkState;
+    private String condition;
     private Long assignedGatewayId;
     private String assignedGatewayName;
     private Integer slotNumber;

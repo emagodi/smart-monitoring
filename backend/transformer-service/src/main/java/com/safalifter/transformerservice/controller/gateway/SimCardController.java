@@ -33,6 +33,8 @@ public class SimCardController {
     @PreAuthorize("hasAuthority('sims.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
     public ResponseEntity<Page<SimCardResponse>> list(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String networkState,
+            @RequestParam(required = false) String condition,
             @RequestParam(required = false) String operator,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean hasPin,
@@ -40,26 +42,46 @@ public class SimCardController {
             @RequestParam(required = false) Boolean assigned,
             @PageableDefault(size = 25, sort = "id", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        SimCardListFilterRequest filter = buildFilter(status, networkState, condition, operator, search, hasPin, hasPuk, assigned);
+        return ResponseEntity.ok(simCardService.findPage(filter, pageable));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "Inventory counts: tiles plus per-filter-group counts (with the other filters applied)")
+    @PreAuthorize("hasAuthority('sims.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
+    public ResponseEntity<java.util.Map<String, Object>> summary(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String networkState,
+            @RequestParam(required = false) String condition,
+            @RequestParam(required = false) String operator,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean hasPin,
+            @RequestParam(required = false) Boolean hasPuk
+    ) {
+        return ResponseEntity.ok(simCardService.summary(buildFilter(status, networkState, condition, operator, search, hasPin, hasPuk, null)));
+    }
+
+    private static SimCardListFilterRequest buildFilter(String status, String networkState, String condition, String operator, String search,
+                                                        Boolean hasPin, Boolean hasPuk, Boolean assigned) {
         SimCardListFilterRequest filter = new SimCardListFilterRequest();
-        if (status != null && !status.isBlank()) {
-            try {
-                filter.setStatus(SimCardStatus.valueOf(status.trim().toUpperCase()));
-            } catch (Exception ignored) {
-            }
-        }
+        filter.setStatus(parse(SimCardStatus.class, status));
+        filter.setNetworkState(parse(com.safalifter.transformerservice.enums.SimNetworkState.class, networkState));
+        filter.setCondition(parse(com.safalifter.transformerservice.enums.SimCondition.class, condition));
         filter.setOperator(operator);
         filter.setSearch(search);
         filter.setHasPin(hasPin);
         filter.setHasPuk(hasPuk);
         filter.setAssigned(assigned);
-        return ResponseEntity.ok(simCardService.findPage(filter, pageable));
+        return filter;
     }
 
-    @GetMapping("/summary")
-    @Operation(summary = "Inventory counts: by status, in a gateway vs spare, PIN/PUK on file, operators")
-    @PreAuthorize("hasAuthority('sims.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
-    public ResponseEntity<java.util.Map<String, Object>> summary() {
-        return ResponseEntity.ok(simCardService.summary());
+    private static <E extends Enum<E>> E parse(Class<E> type, String v) {
+        if (v == null || v.isBlank()) return null;
+        try {
+            return Enum.valueOf(type, v.trim().toUpperCase());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @GetMapping("/{id}")

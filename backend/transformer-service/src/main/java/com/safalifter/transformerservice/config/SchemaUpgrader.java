@@ -228,6 +228,35 @@ public class SchemaUpgrader implements ApplicationRunner {
                         """);
                 return c;
             });
+            changes += step("sim cards: placement / network state / condition", () -> {
+                if (!tableExists("sim_cards")) return 0;
+                int c = 0;
+                c += enumToVarchar("sim_cards", "status", true);
+                c += addColumn("sim_cards", "network_state", "VARCHAR(32) NULL");
+                c += addColumn("sim_cards", "sim_condition", "VARCHAR(32) NULL");
+                c += addIndex("sim_cards", "idx_sim_cards_network_state", "network_state");
+                c += addIndex("sim_cards", "idx_sim_cards_condition", "sim_condition");
+                // One status used to mean three things. Move the old values into their own columns...
+                c += jdbc.update("""
+                        UPDATE sim_cards SET network_state = CASE status
+                                WHEN 'SUSPENDED' THEN 'SUSPENDED' WHEN 'EXPIRED' THEN 'EXPIRED'
+                                WHEN 'DECOMMISSIONED' THEN 'DEACTIVATED' WHEN 'RETIRED' THEN 'INACTIVE' ELSE 'ACTIVE' END
+                         WHERE network_state IS NULL""");
+                c += jdbc.update("""
+                        UPDATE sim_cards SET sim_condition = CASE status WHEN 'LOST' THEN 'LOST' WHEN 'DAMAGED' THEN 'DAMAGED' ELSE 'OK' END
+                         WHERE sim_condition IS NULL""");
+                // ...and keep status as placement only, in line with the active gateway assignments (every start).
+                if (tableExists("gateway_sim_assignments")) {
+                    c += jdbc.update("""
+                            UPDATE sim_cards s SET s.status = CASE
+                                    WHEN EXISTS (SELECT 1 FROM gateway_sim_assignments a WHERE a.sim_id = s.id AND a.active = 1) THEN 'ASSIGNED'
+                                    WHEN s.status = 'RETIRED' THEN 'RETIRED' ELSE 'AVAILABLE' END
+                             WHERE s.status IS NULL OR s.status <> CASE
+                                    WHEN EXISTS (SELECT 1 FROM gateway_sim_assignments a WHERE a.sim_id = s.id AND a.active = 1) THEN 'ASSIGNED'
+                                    WHEN s.status = 'RETIRED' THEN 'RETIRED' ELSE 'AVAILABLE' END""");
+                }
+                return c;
+            });
             log.info("Schema auto-upgrade finished: {} change(s) applied", changes);
         } catch (Exception e) {
             // Never block startup; the failing step is already logged.
