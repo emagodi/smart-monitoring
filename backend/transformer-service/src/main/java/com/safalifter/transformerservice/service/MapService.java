@@ -35,7 +35,7 @@ public class MapService {
     private final AccessScopeService accessScopeService;
     private final NamedParameterJdbcTemplate jdbc;
 
-    private final TtlCache<Map<String, Object>> statsCache = new TtlCache<>(20_000, 512);
+    private final TtlCache<Map<String, Object>> statsCache = TtlCache.shared(20_000, 512, "map-stats", new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
 
     public Map<String, Object> stats() {
         return statsCache.get(accessScopeService.scopeKey(), this::computeStats);

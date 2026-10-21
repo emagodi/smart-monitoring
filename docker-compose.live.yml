@@ -1,4 +1,19 @@
 services:
+  redis:
+    # Shared cache for transformer-service (registry lists, dashboards, user permissions).
+    # Memory only (no disk), capped at 256 MB with least-recently-used eviction; not exposed outside Docker.
+    # If it is stopped, the app keeps working on its in-memory caches.
+    image: redis:7.2-alpine
+    container_name: tms-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--tcp-keepalive", "60"]
+    mem_limit: 320m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   config-server:
     build: ./backend/config-server
     container_name: config-server
@@ -76,6 +91,8 @@ services:
       LORIOT_USER_API_AUTH_PATTERN: ${LORIOT_USER_API_AUTH_PATTERN:-Bearer {}}
       LORIOT_NOTIFICATION_SECRET: ${LORIOT_NOTIFICATION_SECRET}
       LORIOT_REST_AUTHORIZATION: ${LORIOT_REST_AUTHORIZATION}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       LORIOT_GATEWAY_SYNC_INTERVAL_MS: ${LORIOT_GATEWAY_SYNC_INTERVAL_MS:-120000}
       LORIOT_DOWNLINK_PORT: ${LORIOT_DOWNLINK_PORT:-2}
       LORIOT_DOWNLINK_CONFIRMED: ${LORIOT_DOWNLINK_CONFIRMED:-false}
@@ -95,6 +112,7 @@ services:
     volumes:
       - "./uploads:/app/uploads"
     depends_on:
+      - redis
       - eureka-server
       - config-server
 

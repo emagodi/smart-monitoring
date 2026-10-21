@@ -335,7 +335,7 @@ export default function SimsIndex() {
         }
       >
         <HeroStats cols={7}>
-          <HeroStat icon={<CardSim className="h-3.5 w-3.5" />} label="SIM cards" value={fmt(s?.total)} sub={`${s?.operators.length ?? 0} operator${s?.operators.length === 1 ? "" : "s"}`} loading={!s} onClick={clearFilters} active={!anyFilter} />
+          <HeroStat icon={<CardSim className="h-3.5 w-3.5" />} label="SIM cards" value={fmt(s?.total)} sub={`${s?.operators?.length ?? 0} operator${s?.operators?.length === 1 ? "" : "s"}`} loading={!s} onClick={clearFilters} active={!anyFilter} />
           <HeroStat icon={<Router className="h-3.5 w-3.5 text-emerald-300" />} label="In a gateway" value={fmt(s?.inGateway)} sub={`${pct(s?.inGateway)}% deployed`} tone="good" loading={!s} onClick={() => setPlacement(placement === "ASSIGNED" ? "" : "ASSIGNED")} active={placement === "ASSIGNED"} />
           <HeroStat icon={<Link2Off className="h-3.5 w-3.5 text-sky-300" />} label="Spare stock" value={fmt(s?.spare)} sub="available to install" loading={!s} onClick={() => setPlacement(placement === "AVAILABLE" ? "" : "AVAILABLE")} active={placement === "AVAILABLE"} />
           <HeroStat icon={<Signal className="h-3.5 w-3.5 text-teal-300" />} label="Active on network" value={fmt(s?.activeOnNetwork)} sub="live with the operator" tone="good" loading={!s} onClick={() => setNetwork(network === "ACTIVE" ? "" : "ACTIVE")} active={network === "ACTIVE"} />
@@ -408,8 +408,8 @@ export default function SimsIndex() {
             ) : null}
           </label>
           <MobileFilters active={activeExtra}>
-            <Segmented label="PIN" value={pin} onChange={setPin} options={[["", "Any"], ["yes", `On file${fc ? ` · ${fc.pin.yes}` : ""}`], ["no", `Not set${fc ? ` · ${fc.pin.no}` : ""}`]]} />
-            <Segmented label="PUK" value={puk} onChange={setPuk} options={[["", "Any"], ["yes", `On file${fc ? ` · ${fc.puk.yes}` : ""}`], ["no", `Not set${fc ? ` · ${fc.puk.no}` : ""}`]]} />
+            <Segmented label="PIN" value={pin} onChange={setPin} options={[["", "Any"], ["yes", `On file${fc?.pin ? ` · ${fc.pin.yes}` : ""}`], ["no", `Not set${fc?.pin ? ` · ${fc.pin.no}` : ""}`]]} />
+            <Segmented label="PUK" value={puk} onChange={setPuk} options={[["", "Any"], ["yes", `On file${fc?.puk ? ` · ${fc.puk.yes}` : ""}`], ["no", `Not set${fc?.puk ? ` · ${fc.puk.no}` : ""}`]]} />
             <select
               value={operator}
               onChange={(e) => setOperator(e.target.value)}

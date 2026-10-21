@@ -53,7 +53,7 @@ public class RegistryService {
     private final AlertStateService alertStateService;
 
     /** Registry rows per scope, kept 20 s: dashboards, map, insights and the registry share one query. */
-    private final TtlCache<List<RegistryRow>> rowsCache = new TtlCache<>(20_000, 512);
+    private final TtlCache<List<RegistryRow>> rowsCache = TtlCache.shared(20_000, 512, "registry-rows", new com.fasterxml.jackson.core.type.TypeReference<List<RegistryRow>>() {});
 
     @Data
     public static class RegistryRow {
@@ -126,7 +126,7 @@ public class RegistryService {
     });
 
     /** Controllers waiting for a transformer (count only), cached briefly per scope. */
-    private final TtlCache<Long> unmatchedCountCache = new TtlCache<>(20_000, 512);
+    private final TtlCache<Long> unmatchedCountCache = TtlCache.shared(20_000, 512, "unmatched-count", new com.fasterxml.jackson.core.type.TypeReference<Long>() {});
 
     public long unmatchedCount() {
         if (accessScopeService.isDepotScoped()) return 0;
