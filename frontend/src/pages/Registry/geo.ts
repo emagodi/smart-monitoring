@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { cachedGet, invalidateCache } from "../../lib/cache";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -63,14 +63,17 @@ export function useGeography(token: string | null) {
   }, [depots, districts, regions]);
 
   /** Re-read the hierarchy after a region / district / depot was created, renamed or removed. */
-  const refresh = () => {
+  const refresh = useCallback(() => {
     invalidateCache("/api/v1/regions");
     invalidateCache("/api/v1/districts");
     invalidateCache("/api/v1/depots");
     setVersion((v) => v + 1);
-  };
+  }, []);
 
-  return { regions, districts, depots, loaded, refresh, ...lookup };
+  // One stable object per data change. Returning a fresh object on every render made every screen that lists
+  // `geo` in a dependency array re-run its effects on each render (on the Transformers page: an endless
+  // fetch/render loop that froze clicks and paging).
+  return useMemo(() => ({ regions, districts, depots, loaded, refresh, ...lookup }), [regions, districts, depots, loaded, refresh, lookup]);
 }
 
 /** Suggest a depot from free text such as the partner's station name ("Kuwadzana"). */
