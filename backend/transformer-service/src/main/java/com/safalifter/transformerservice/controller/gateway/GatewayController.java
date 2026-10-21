@@ -37,6 +37,7 @@ public class GatewayController {
     private final GatewayService gatewayService;
     private final LoriotGatewaySyncService syncService;
     private final GatewaySyncRunRepository syncRunRepository;
+    private final com.safalifter.transformerservice.integration.loriot.LoriotClientAdapter loriotClientAdapter;
     private final SimCardService simCardService;
 
     @GetMapping("/summary")
@@ -132,6 +133,13 @@ public class GatewayController {
                 .startedAt(run != null ? run.getStartedAt() : null)
                 .status(run != null ? run.getStatus().name() : null)
                 .build());
+    }
+
+    @GetMapping("/loriot-sample")
+    @Operation(summary = "First gateways exactly as LORIOT returns them (to check field names). Admin only.")
+    @PreAuthorize("hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
+    public ResponseEntity<List<com.fasterxml.jackson.databind.JsonNode>> loriotSample(@RequestParam(defaultValue = "2") int limit) {
+        return ResponseEntity.ok(loriotClientAdapter.sampleRawGateways(Math.min(5, Math.max(1, limit))));
     }
 
     @GetMapping("/sync/status")

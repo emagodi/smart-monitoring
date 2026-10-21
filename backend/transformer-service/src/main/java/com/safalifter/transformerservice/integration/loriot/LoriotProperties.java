@@ -19,7 +19,7 @@ public class LoriotProperties {
 
     private String networkId = "A0000005";
 
-    private Long gatewaySyncIntervalMs = 300000L;
+    private Long gatewaySyncIntervalMs = 120000L;
 
     @ToString.Exclude
     private String notificationSecret = "";

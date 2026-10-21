@@ -79,6 +79,11 @@ public class LoriotClientAdapter {
             ParsedPage parsed = parseGatewaysPage(body);
             int pageCount = parsed.items == null ? 0 : parsed.items.size();
             if (pageCount > 0) {
+                if (page == 1 && parsed.items.get(0).getRaw() != null) {
+                    java.util.List<String> keys = new java.util.ArrayList<>();
+                    parsed.items.get(0).getRaw().fieldNames().forEachRemaining(keys::add);
+                    log.info("LORIOT gateway fields: {}", keys);
+                }
                 accumulator.addAll(parsed.items);
             }
             boolean hasMore;
@@ -168,33 +173,103 @@ public class LoriotClientAdapter {
         });
     }
 
+    /**
+     * Maps one LORIOT gateway object. LORIOT versions differ in field names (title vs name, EUI vs gweui, MAC vs mac,
+     * location as a nested object, connected/online/status, lastSeen as epoch or ISO), so every known variant is read.
+     */
     private LoriotGateway mapToLoriotGateway(JsonNode node) {
         LoriotGateway g = new LoriotGateway();
         g.setRaw(node);
-        g.setId(textOr(node, "id", "_id", "gweui"));
-        g.setName(textOr(node, "name", "title", "label"));
-        g.setGweui(textOr(node, "gweui", "EUI", "eui", "gwEui", "gatewayEui"));
-        g.setMac(textOr(node, "mac", "macAddress", "MAC"));
+        g.setId(textOr(node, "_id", "id", "gweui", "EUI", "eui"));
+        g.setName(textOr(node, "title", "name", "label"));
+        g.setGweui(textOr(node, "EUI", "gweui", "eui", "gwEui", "gatewayEui"));
+        g.setMac(textOr(node, "MAC", "mac", "macAddress"));
         g.setSerial(textOr(node, "serial", "serialNumber", "sn"));
-        g.setModel(textOr(node, "model", "hwModel", "hw"));
-        g.setManufacturer(textOr(node, "manufacturer", "vendor", "brand"));
+        g.setModel(textOr(node, "model", "hwModel", "hw", "base"));
+        g.setManufacturer(textOr(node, "manufacturer", "vendor", "brand", "base"));
         g.setFw(textOr(node, "fw", "firmware"));
-        g.setFwVersion(textOr(node, "fwVersion", "firmwareVersion", "version"));
+        g.setFwVersion(textOr(node, "version", "fwVersion", "firmwareVersion", "pfVersion"));
         g.setPacketForwarderVersion(textOr(node, "pf", "packetForwarder", "pfVersion"));
         g.setImei(textOr(node, "imei"));
         g.setNetworkId(textOr(node, "network", "networkId", "net"));
-        Boolean explicitOnline = boolOrNull(node, "online", "isOnline", "connected");
+        Boolean explicitOnline = boolOrNull(node, "online", "isOnline", "connected", "alive", "isConnected");
         g.setOnline(explicitOnline);
-        g.setStatus(textOr(node, "status", "state"));
-        Long lastSeenMs = longOrNull(node, "lastSeen", "last_seen", "lastSeenAt", "lastAlive");
-        if (lastSeenMs != null) {
-            g.setLastSeen(Instant.ofEpochMilli(lastSeenMs));
-        }
-        g.setLatitude(decimalOr(node, "latitude", "lat", "y"));
-        g.setLongitude(decimalOr(node, "longitude", "lon", "lng", "x"));
-        g.setAltitude(decimalOr(node, "altitude", "alt"));
-        g.setAddress(textOr(node, "address", "location", "addr"));
+        g.setStatus(textOr(node, "status", "state", "connection", "connectionStatus"));
+        g.setLastSeen(instantOr(node, "lastSeen", "last_seen", "lastSeenAt", "lastAlive", "lastPing", "lastStat", "lastStatus",
+                "lastUplink", "lastActivity", "lastConnected", "lastHeartbeat", "lastRx", "seen", "updatedAt"));
+        JsonNode loc = node.path("location");
+        if (!loc.isObject()) loc = node.path("gps");
+        if (!loc.isObject()) loc = node.path("position");
+        JsonNode locNode = loc.isObject() ? loc : node;
+        g.setLatitude(nonZero(decimalOr(locNode, "lat", "latitude", "y")));
+        g.setLongitude(nonZero(decimalOr(locNode, "lon", "lng", "longitude", "x")));
+        g.setAltitude(decimalOr(locNode, "alt", "altitude"));
+        String address = loc.isObject()
+                ? joinNonBlank(textOr(loc, "address", "street"), textOr(loc, "city"), textOr(loc, "country"))
+                : textOr(node, "address", "addr");
+        if (address == null && !loc.isObject()) address = textOr(node, "location");
+        g.setAddress(address);
         return g;
+    }
+
+    /** First few gateways exactly as LORIOT returns them (for checking field names). */
+    public List<JsonNode> sampleRawGateways(int limit) {
+        String path = properties.getPaths().getGateways();
+        String sep = path.contains("?") ? "&" : "?";
+        String body = authenticatedGet(buildUrl(path) + sep + "perPage=" + Math.max(1, limit) + "&page=1");
+        List<JsonNode> out = new ArrayList<>();
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode items = root.isArray() ? root : (root.has("gateways") ? root.path("gateways") : (root.has("data") ? root.path("data") : root.path("items")));
+            if (items.isArray()) for (JsonNode n : items) { if (out.size() < limit) out.add(n); }
+            if (out.isEmpty()) out.add(root);
+        } catch (Exception e) {
+            out.add(objectMapper.getNodeFactory().textNode(body.length() > 600 ? body.substring(0, 600) + "..." : body));
+        }
+        return out;
+    }
+
+    private static BigDecimal nonZero(BigDecimal v) {
+        return v == null || v.signum() == 0 ? null : v;
+    }
+
+    private static String joinNonBlank(String... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p == null || p.isBlank()) continue;
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(p.trim());
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /** Epoch seconds, epoch millis or an ISO date-time. */
+    private Instant instantOr(JsonNode node, String... keys) {
+        for (String k : keys) {
+            JsonNode n = node.path(k);
+            if (n == null || n.isMissingNode() || n.isNull()) continue;
+            try {
+                if (n.isNumber()) {
+                    long v = n.asLong();
+                    if (v <= 0) continue;
+                    return v < 100_000_000_000L ? Instant.ofEpochSecond(v) : Instant.ofEpochMilli(v);
+                }
+                String s = n.asText().trim();
+                if (s.isEmpty()) continue;
+                if (s.matches("\\d+")) {
+                    long v = Long.parseLong(s);
+                    return v < 100_000_000_000L ? Instant.ofEpochSecond(v) : Instant.ofEpochMilli(v);
+                }
+                return java.time.OffsetDateTime.parse(s).toInstant();
+            } catch (Exception ignored) {
+                try {
+                    return Instant.parse(n.asText().trim());
+                } catch (Exception ignored2) {
+                    // not a date
+                }
+            }
+        }
+        return null;
     }
 
     private String authenticatedGet(String url) {

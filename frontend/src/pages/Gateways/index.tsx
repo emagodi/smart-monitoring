@@ -4,6 +4,7 @@ import axios from "axios";
 import { HeroButton, HeroStat, HeroStats, MobileFilters, PageHero } from "../../components/ui/page";
 import {
   AlertTriangle,
+  CloudDownload,
   CloudOff,
   Eye,
   Loader2,
@@ -118,6 +119,9 @@ const normalizeGatewayItem = <T,>(raw: any): T => {
     const lng = Number(base.longitude ?? base.lng);
     if (Number.isFinite(lng)) (base as any).lng = lng;
   }
+  // The API names these macAddress / firmwareVersion; the screens use mac / fwVersion.
+  if (base.mac == null && base.macAddress != null) (base as any).mac = base.macAddress;
+  if (base.fwVersion == null && base.firmwareVersion != null) (base as any).fwVersion = base.firmwareVersion;
   return base as T;
 };
 
@@ -337,10 +341,10 @@ export default function GatewaysIndex() {
     }
   }, [API_BASE_URL, headers, token]);
 
-  const fetchGateways = useCallback(async () => {
+  const fetchGateways = useCallback(async (silent = false) => {
     if (!token) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const params: Record<string, unknown> = { page, size: pageSize };
       if (statusFilter !== "ALL") params.status = statusFilter;
@@ -383,6 +387,35 @@ export default function GatewaysIndex() {
       void fetchGateways();
     }
   }, [fetchSummary, fetchGateways, token]);
+
+  // The server pulls from LORIOT every 2 minutes; refresh what is on screen every minute so it never lags.
+  useEffect(() => {
+    if (!token) return;
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void fetchSummary();
+      void fetchGateways(true);
+    }, 60_000);
+    return () => window.clearInterval(t);
+  }, [fetchSummary, fetchGateways, token]);
+
+  const [syncingAll, setSyncingAll] = useState(false);
+  const syncAllNow = async () => {
+    if (!canSync || syncingAll) return;
+    setSyncingAll(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/v1/gateways/sync`, {}, { headers });
+    } catch (e) {
+      const ax = e as { response?: { status?: number } };
+      if (ax.response?.status !== 409) setError("Could not start a LORIOT sync.");
+    }
+    // The sync runs in the background (a few seconds for ~100 gateways): pick up the results.
+    for (const wait of [4000, 8000, 15000]) {
+      await new Promise((r) => setTimeout(r, wait));
+      await Promise.all([fetchSummary(), fetchGateways(true)]);
+    }
+    setSyncingAll(false);
+  };
 
   useEffect(() => {
     const nextParams = new URLSearchParams(searchParams);
@@ -608,7 +641,7 @@ export default function GatewaysIndex() {
     if (!selectedGateway || !token) return;
     try {
       const resp = await axios.get(`${API_BASE_URL}/api/v1/gateways/${selectedGateway.id}`, { headers });
-      const refreshed = resp.data as GatewayItem;
+      const refreshed = normalizeGatewayItem<GatewayItem>(resp.data);
       setSelectedGateway(refreshed);
       setItems((prev) => prev.map((it) => (it.id === refreshed.id ? refreshed : it)));
     } catch (e) {
@@ -647,16 +680,23 @@ export default function GatewaysIndex() {
       <PageHero
         eyebrow="Assets · Gateways"
         title={isDepot ? `Gateways · ${myDepotName}` : "LoRaWAN gateways"}
-        subtitle={`${isDepot ? `Gateways assigned to ${myDepotName} depot. ` : ""}LORIOT-synced gateways with their status, SIM cards and location. Last sync: ${syncStatusLabel(summary.lastSyncStatus).toLowerCase()} · ${formatDateTime(summary.lastSyncAt)}.`}
+        subtitle={`${isDepot ? `Gateways assigned to ${myDepotName} depot. ` : ""}Kept in step with LORIOT automatically every 2 minutes. Last sync: ${syncStatusLabel(summary.lastSyncStatus).toLowerCase()} · ${formatDateTime(summary.lastSyncAt)}.`}
         actions={
-          <HeroButton
-            onClick={() => {
-              void fetchSummary();
-              void fetchGateways();
-            }}
-          >
-            Refresh
-          </HeroButton>
+          <>
+            <HeroButton
+              onClick={() => {
+                void fetchSummary();
+                void fetchGateways();
+              }}
+            >
+              Refresh
+            </HeroButton>
+            {canSync ? (
+              <HeroButton icon={<CloudDownload className={`h-4 w-4 ${syncingAll ? "animate-bounce" : ""}`} />} onClick={() => void syncAllNow()}>
+                {syncingAll ? "Syncing with LORIOT…" : "Sync with LORIOT now"}
+              </HeroButton>
+            ) : null}
+          </>
         }
       >
         <HeroStats cols={8}>
