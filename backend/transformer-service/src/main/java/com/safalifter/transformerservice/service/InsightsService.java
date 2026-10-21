@@ -32,7 +32,7 @@ public class InsightsService {
     private final AccessScopeService accessScopeService;
 
     /** Overview per scope, kept 30 s: it reads 30 days of incidents, so it is the heaviest dashboard query. */
-    private final TtlCache<Map<String, Object>> overviewCache = new TtlCache<>(30_000, 512);
+    private final TtlCache<Map<String, Object>> overviewCache = TtlCache.shared(30_000, 512, "insights", new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
 
     public Map<String, Object> overview() {
         return overviewCache.get(accessScopeService.scopeKey(), this::computeOverview);

@@ -77,7 +77,7 @@ export default function NewControllersIndex() {
   const list = useCachedGet<Unmatched[]>(token ? `${API}/api/v1/controllers/unmatched` : null, token, { maxAgeMs: 20_000, errorText: "Could not load new controllers." });
   const reg = useCachedGet<TransformerRow[]>(token ? `${API}/api/v1/transformers/registry` : null, token, { maxAgeMs: 30_000 });
 
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get("q") || "");
   const [filter, setFilter] = useState<Filter>("all");
   const [partner, setPartner] = useState("");
   const [page, setPage] = useState(0);

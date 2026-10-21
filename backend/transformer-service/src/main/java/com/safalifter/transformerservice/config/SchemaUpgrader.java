@@ -30,15 +30,36 @@ import java.util.Map;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor
 @Slf4j
-public class SchemaUpgrader implements ApplicationRunner {
+public class SchemaUpgrader implements ApplicationRunner, org.springframework.beans.factory.InitializingBean {
 
     private final JdbcTemplate jdbc;
 
     @Value("${schema.auto-upgrade:true}")
     private boolean enabled = true;
 
+    private volatile boolean done = false;
+
+    /**
+     * Runs as soon as this bean is created, which (see SchemaFirstConfig) is BEFORE Hibernate starts and validates
+     * the schema (ddl-auto=validate on the server). New columns therefore exist by the time they are checked.
+     */
+    @Override
+    public void afterPropertiesSet() {
+        upgradeOnce();
+    }
+
     @Override
     public void run(ApplicationArguments args) {
+        upgradeOnce();
+    }
+
+    private synchronized void upgradeOnce() {
+        if (done) return;
+        done = true;
+        upgrade();
+    }
+
+    private void upgrade() {
         if (!enabled) {
             log.info("Schema auto-upgrade disabled");
             return;

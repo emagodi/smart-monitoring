@@ -1195,3 +1195,9 @@ span.flatpickr-weekday,
     max-width: 100%;
   }
 }
+
+/* Indeterminate progress bar (lists loading a page or a search) */
+@keyframes ui-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}

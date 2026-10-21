@@ -23,6 +23,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final RemoteUserService remoteUserService;
+    private final com.safalifter.transformerservice.cache.SharedCache sharedCache;
+
+    private static final com.fasterxml.jackson.databind.JavaType PROFILE_TYPE =
+            com.fasterxml.jackson.databind.type.TypeFactory.defaultInstance().constructType(UserAccessProfile.class);
 
     /** Access profiles cached briefly: previously every API request made a Feign call to auth-service. */
     private static final long PROFILE_TTL_MS = 60_000;
@@ -37,7 +41,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (cached != null && cached.expiresAt() > now) {
             return cached.profile();
         }
-        UserAccessProfile fresh = remoteUserService.getAccessByEmail(email);
+        // Second level: Redis (survives restarts; keeps working for a minute if auth-service is briefly down).
+        UserAccessProfile fresh = sharedCache.read("profile", email.toLowerCase(java.util.Locale.ROOT), PROFILE_TYPE);
+        if (fresh == null) {
+            fresh = remoteUserService.getAccessByEmail(email);
+            if (fresh != null) sharedCache.write("profile", email.toLowerCase(java.util.Locale.ROOT), fresh, PROFILE_TTL_MS);
+        }
         if (fresh != null) {
             profileCache.put(email, new CachedProfile(fresh, now + PROFILE_TTL_MS));
             if (profileCache.size() > 5_000) {

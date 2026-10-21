@@ -38,8 +38,8 @@ public class DashboardService {
     private final AccessScopeService scope;
     private final RegistryService registryService;
 
-    private final TtlCache<Map<String, Object>> trendsCache = new TtlCache<>(60_000, 512);
-    private final TtlCache<List<Map<String, Object>>> feedCache = new TtlCache<>(15_000, 2048);
+    private final TtlCache<Map<String, Object>> trendsCache = TtlCache.shared(60_000, 512, "dashboard-trends", new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+    private final TtlCache<List<Map<String, Object>>> feedCache = TtlCache.shared(15_000, 2048, "notifications", new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
 
     // ------------------------------------------------------------------ trends
 
