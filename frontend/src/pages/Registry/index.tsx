@@ -168,20 +168,25 @@ export default function TransformerRegistry() {
       .map((d) => d.id);
   }, [debounced, geo]);
 
+  // Plain-text keys: the query only changes when a filter really changes (array/object identities can change on
+  // every render, which used to re-run the load effect in a loop).
+  const searchDepotKey = searchDepotIds.join(",");
+  const scopeDepotKey = scopeDepotIds.join(",");
+  const statusKey = statuses.join(",");
   const queryString = useCallback(
     (pg: number, size: number) => {
       const qs = new URLSearchParams({ page: String(pg), size: String(size), sort: sort.key, dir: sort.dir === 1 ? "asc" : "desc" });
       if (debounced) qs.set("q", debounced);
-      if (searchDepotIds.length) qs.set("qDepotIds", searchDepotIds.join(","));
-      if (scopeDepotIds.length) qs.set("depotIds", scopeDepotIds.join(","));
-      if (statuses.length) qs.set("status", statuses.join(","));
+      if (searchDepotKey) qs.set("qDepotIds", searchDepotKey);
+      if (scopeDepotKey) qs.set("depotIds", scopeDepotKey);
+      if (statusKey) qs.set("status", statusKey);
       if (partner) qs.set("partner", partner);
       if (type) qs.set("type", type);
       if (arm) qs.set("arm", arm);
       if (alertingOnly) qs.set("alerting", "true");
       return qs.toString();
     },
-    [alertingOnly, arm, debounced, partner, scopeDepotIds, searchDepotIds, sort, statuses, type]
+    [alertingOnly, arm, debounced, partner, scopeDepotKey, searchDepotKey, sort.key, sort.dir, statusKey, type]
   );
 
   type PageResponse = {
@@ -235,10 +240,14 @@ export default function TransformerRegistry() {
     [page, pageSize, pageUrl, token]
   );
 
+  // Load when (and only when) the page URL changes.
+  const currentUrl = pageUrl(page);
+  const loadRef = useRef(load);
+  loadRef.current = load;
   useEffect(() => {
     if (!token) return;
-    void load(false);
-  }, [load, token]);
+    void loadRef.current(false);
+  }, [currentUrl, token]);
 
   // keep filters in the URL so a filtered view can be shared or bookmarked
   useEffect(() => {
