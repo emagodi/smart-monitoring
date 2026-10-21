@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   ArrowDownUp,
+  ChevronDown,
   Cpu,
   Download,
+  Building2,
+  Filter,
+  Layers,
+  Map as MapIcon,
+  Handshake,
   Eye,
   Link2,
   Loader2,
@@ -99,7 +105,7 @@ export default function TransformerRegistry() {
   const showUnmatched = isNational;
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState<RegistryRow[]>([]);
-  const [unmatched, setUnmatched] = useState<Unmatched[]>([]);
+  const [unmatched] = useState<Unmatched[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab] = useState<"all" | "unmatched">("all");
@@ -129,6 +135,10 @@ export default function TransformerRegistry() {
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Record<Status, number>>({ ONLINE: 0, DELAYED: 0, OFFLINE: 0, NEVER_SEEN: 0, NO_DEVICE: 0 });
   const [partners, setPartners] = useState<Array<[string, string]>>([]);
+  const [unmatchedCount, setUnmatchedCount] = useState(0);
+  const [controllerHits, setControllerHits] = useState<Array<{ id: number; devEui: string; name?: string | null; supplierName?: string | null }>>([]);
+  const [fetching, setFetching] = useState(false);
+  const reqSeq = useRef(0);
   const [debounced, setDebounced] = useState(search.trim());
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced(search.trim()), 300);
@@ -174,29 +184,55 @@ export default function TransformerRegistry() {
     [alertingOnly, arm, debounced, partner, scopeDepotIds, searchDepotIds, sort, statuses, type]
   );
 
-  type PageResponse = { content: RegistryRow[]; totalElements: number; counts: Record<Status, number>; partners: Record<string, string> };
+  type PageResponse = {
+    content: RegistryRow[];
+    totalElements: number;
+    totalPages?: number;
+    counts: Record<Status, number>;
+    partners: Record<string, string>;
+    unmatchedCount?: number;
+    controllerHits?: Array<{ id: number; devEui: string; name?: string | null; supplierName?: string | null }>;
+  };
+
+  // A filter / sort change goes back to page 1 in the SAME render, so only one request is made per change.
+  const filterKey = queryString(0, pageSize);
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    if (page !== 0) setPage(0);
+  }
+
+  const pageUrl = useCallback((pg: number) => `${API_BASE_URL}/api/v1/transformers/registry/page?${queryString(pg, pageSize)}`, [pageSize, queryString]);
+
   const load = useCallback(
     async (force = true) => {
-      const url = `${API_BASE_URL}/api/v1/transformers/registry/page?${queryString(page, pageSize)}`;
+      const url = pageUrl(page);
+      const seq = ++reqSeq.current;
+      const cached = peekCache<PageResponse>(url, token);
+      if (!cached) setFetching(true);
       try {
-        if (!peekCache(url, token)) setLoading(true);
-        const [r, u] = await Promise.all([
-          cachedGet<PageResponse>(url, token, 20_000, force),
-          cachedGet<Unmatched[]>(`${API_BASE_URL}/api/v1/controllers/unmatched`, token, 30_000, false).catch(() => [] as Unmatched[]),
-        ]);
+        const r = await cachedGet<PageResponse>(url, token, 20_000, force);
+        if (seq !== reqSeq.current) return; // a newer request has been made: ignore this answer
         setRows(Array.isArray(r?.content) ? r.content : []);
         setTotal(r?.totalElements ?? 0);
         if (r?.counts) setCounts({ ...({ ONLINE: 0, DELAYED: 0, OFFLINE: 0, NEVER_SEEN: 0, NO_DEVICE: 0 } as Record<Status, number>), ...(r.counts as Partial<Record<Status, number>>) });
         setPartners(Object.entries(r?.partners ?? {}).sort((a, b) => a[1].localeCompare(b[1])));
-        setUnmatched(Array.isArray(u) ? u : []);
+        setUnmatchedCount(r?.unmatchedCount ?? 0);
+        setControllerHits(r?.controllerHits ?? []);
         setError(null);
+        // Warm the next page so clicking "next" is instant.
+        const pages = r?.totalPages ?? Math.ceil((r?.totalElements ?? 0) / pageSize);
+        if (page + 1 < pages) void cachedGet<PageResponse>(pageUrl(page + 1), token, 20_000, false).catch(() => undefined);
       } catch {
-        setError("Could not load the transformer registry.");
+        if (seq === reqSeq.current) setError("Could not load the transformer registry. Check your connection and try again.");
       } finally {
-        setLoading(false);
+        if (seq === reqSeq.current) {
+          setFetching(false);
+          setLoading(false);
+        }
       }
     },
-    [page, pageSize, queryString, token]
+    [page, pageSize, pageUrl, token]
   );
 
   useEffect(() => {
@@ -231,7 +267,6 @@ export default function TransformerRegistry() {
     [districtId, geo, regionId]
   );
 
-  useEffect(() => setPage(0), [regionId, districtId, depotId, partner, type, statuses, debounced, arm, alertingOnly, pageSize, sort]);
 
   const pageRows = useMemo(() => rows.map((r) => ({ row: r, path: geo.pathOf(r.depotId) })), [geo, rows]);
   const matched = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -343,7 +378,7 @@ export default function TransformerRegistry() {
           >
             <div>
               <p className="text-[11px] text-blue-100/75">Controllers waiting for a transformer</p>
-              <p className="mt-0.5 text-2xl font-semibold">{unmatched.length}</p>
+              <p className="mt-0.5 text-2xl font-semibold">{unmatchedCount}</p>
               <p className="text-[11px] text-blue-100/70">Auto-registered by partner feeds. Open New controllers to create or link their transformers →</p>
             </div>
             <Cpu className="h-8 w-8 text-amber-300" />
@@ -357,87 +392,143 @@ export default function TransformerRegistry() {
 
       {tab === "all" ? (
         <>
-          {/* Filters: one row, cascading Region -> District -> Depot */}
-          <section className="enterprise-card space-y-3 p-3">
-            <div className={`grid gap-2 md:grid-cols-2 ${isDepot ? "xl:grid-cols-[2fr_1fr_0.8fr]" : "xl:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_0.8fr]"}`}>
-              <div className="enterprise-chip flex items-center gap-2 px-3 py-2">
-                <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search name, EUI, depot, partner…"
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:text-slate-100"
-                />
+          {/* Filters: search + cascading Region -> District -> Depot, partner, type; status chips with counts */}
+          <section className="relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-[#0b4fc4] to-red-500" />
+            <div className="space-y-2.5 p-3 pt-3.5">
+              <div className={`grid gap-2 md:grid-cols-2 ${isDepot ? "xl:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))]" : "xl:grid-cols-[minmax(0,1.7fr)_repeat(5,minmax(0,1fr))]"}`}>
+                <label className="relative flex items-center">
+                  {fetching && debounced ? (
+                    <Loader2 className="pointer-events-none absolute left-3 h-4 w-4 animate-spin text-blue-500" />
+                  ) : (
+                    <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
+                  )}
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search name, number, EUI, depot or partner…"
+                    className="h-9 w-full rounded-full border border-slate-200 bg-slate-50 pl-9 pr-8 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                  {search ? (
+                    <button type="button" onClick={() => setSearch("")} className="absolute right-3 text-slate-400 hover:text-slate-600" aria-label="Clear search">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </label>
+                <MobileFilters active={[regionId, districtId, depotId, partner, type].filter(Boolean).length}>
+                  {isDepot ? null : (
+                    <>
+                      <Select
+                        icon={<MapIcon className="h-3.5 w-3.5" />}
+                        value={regionId}
+                        onChange={(v) => {
+                          setRegionId(v);
+                          setDistrictId("");
+                          setDepotId("");
+                        }}
+                        placeholder="All regions"
+                        options={geo.regions.map((r) => [String(r.id), r.name])}
+                      />
+                      <Select
+                        icon={<Layers className="h-3.5 w-3.5" />}
+                        value={districtId}
+                        onChange={(v) => {
+                          setDistrictId(v);
+                          setDepotId("");
+                        }}
+                        placeholder={regionId ? "All districts in region" : "All districts"}
+                        options={districtOptions.map((d) => [String(d.id), d.name])}
+                      />
+                      <Select icon={<Building2 className="h-3.5 w-3.5" />} value={depotId} onChange={setDepotId} placeholder={districtId ? "All depots in district" : "All depots"} options={depotOptions.map((d) => [String(d.id), d.name])} />
+                    </>
+                  )}
+                  <Select icon={<Handshake className="h-3.5 w-3.5" />} value={partner} onChange={setPartner} placeholder="All partners" options={partners} />
+                  <Select icon={<Zap className="h-3.5 w-3.5" />} value={type} onChange={setType} placeholder="GMT & PMT" options={[["GROUND_MOUNTED", "Ground mounted (GMT)"], ["POLE_MOUNTED", "Pole mounted (PMT)"]]} />
+                </MobileFilters>
               </div>
-              <MobileFilters active={[regionId, districtId, depotId, partner, type].filter(Boolean).length}>
-              {isDepot ? null : (
-              <>
-              <Select
-                value={regionId}
-                onChange={(v) => {
-                  setRegionId(v);
-                  setDistrictId("");
-                  setDepotId("");
-                }}
-                placeholder="All regions"
-                options={geo.regions.map((r) => [String(r.id), r.name])}
-              />
-              <Select
-                value={districtId}
-                onChange={(v) => {
-                  setDistrictId(v);
-                  setDepotId("");
-                }}
-                placeholder={regionId ? "All districts in region" : "All districts"}
-                options={districtOptions.map((d) => [String(d.id), d.name])}
-              />
-              <Select value={depotId} onChange={setDepotId} placeholder={districtId ? "All depots in district" : "All depots"} options={depotOptions.map((d) => [String(d.id), d.name])} />
-              </>
-              )}
-              <Select value={partner} onChange={setPartner} placeholder="All partners" options={partners} />
-              <Select value={type} onChange={setType} placeholder="GMT & PMT" options={[["GROUND_MOUNTED", "Ground mounted (GMT)"], ["POLE_MOUNTED", "Pole mounted (PMT)"]]} />
-              </MobileFilters>
-            </div>
-            <div className="no-scrollbar -mx-3 flex items-center gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0">
-              {(Object.keys(STATUS) as Status[]).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => toggleStatus(s)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
-                    statuses.includes(s) ? `${STATUS[s].chip} ring-2` : "bg-white text-slate-600 ring-slate-200 hover:ring-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-full ${STATUS[s].dot}`} />
-                  {STATUS[s].label}
-                </button>
-              ))}
-              {arm ? (
-                <button type="button" onClick={() => setArm("")} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
-                  {arm === "ARMED" ? "Armed sites" : "Disarmed sites"} <X className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
-              {alertingOnly ? (
-                <button type="button" onClick={() => setAlertingOnly(false)} className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 ring-1 ring-red-200">
-                  With open alerts <X className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
-              {anyFilter ? (
-                <button type="button" onClick={clearFilters} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
-                  <X className="h-3.5 w-3.5" /> Clear filters
-                </button>
-              ) : null}
+              <div className="no-scrollbar -mx-3 flex items-center gap-1.5 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0">
+                <span className="mr-1 hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 sm:inline-flex">
+                  <Filter className="h-3 w-3" /> Status
+                </span>
+                {(Object.keys(STATUS) as Status[]).map((st) => {
+                  const on = statuses.includes(st);
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => toggleStatus(st)}
+                      aria-pressed={on}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition ${
+                        on ? `${STATUS[st].chip} ring-2` : "bg-white text-slate-600 ring-slate-200 hover:ring-blue-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${STATUS[st].dot}`} />
+                      {STATUS[st].label}
+                      <span className={`rounded-full px-1.5 text-[10px] font-bold ${on ? "bg-white/60" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>{counts[st]}</span>
+                    </button>
+                  );
+                })}
+                {arm ? (
+                  <button type="button" onClick={() => setArm("")} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-200">
+                    {arm === "ARMED" ? "Armed sites" : "Disarmed sites"} <X className="h-3 w-3" />
+                  </button>
+                ) : null}
+                {alertingOnly ? (
+                  <button type="button" onClick={() => setAlertingOnly(false)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 ring-1 ring-red-200">
+                    With open alerts <X className="h-3 w-3" />
+                  </button>
+                ) : null}
+                <span className="ml-auto flex shrink-0 items-center gap-3 pl-2">
+                  <span className="text-[11px] text-slate-500">
+                    {fetching ? (
+                      <span className="inline-flex items-center gap-1 text-blue-600">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+                      </span>
+                    ) : (
+                      <>
+                        <b className="text-slate-800 dark:text-slate-100">{total.toLocaleString()}</b> transformer{total === 1 ? "" : "s"}
+                      </>
+                    )}
+                  </span>
+                  {anyFilter ? (
+                    <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:underline">
+                      <X className="h-3 w-3" /> Clear filters
+                    </button>
+                  ) : null}
+                </span>
+              </div>
             </div>
           </section>
 
           {/* Table */}
-          <section className="enterprise-card overflow-hidden">
+          <section className="enterprise-card relative overflow-hidden" aria-busy={fetching}>
+            {/* Thin progress bar while a page / search is loading */}
+            <div className={`absolute inset-x-0 top-0 z-20 h-0.5 overflow-hidden transition-opacity ${fetching ? "opacity-100" : "opacity-0"}`}>
+              <div className="h-full w-1/3 animate-[ui-progress_1.1s_ease-in-out_infinite] bg-gradient-to-r from-blue-600 via-sky-400 to-red-500" />
+            </div>
             {loading && rows.length === 0 ? (
-              <div className="flex items-center justify-center gap-3 py-20 text-sm text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-500" /> Loading transformers…
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {Array.from({ length: Math.min(pageSize, 8) }).map((_, k) => (
+                  <div key={k} className="flex items-center gap-4 px-4 py-3.5">
+                    <span className="h-9 w-9 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+                    <span className="flex-1 space-y-2">
+                      <span className="block h-3 w-1/3 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+                      <span className="block h-2.5 w-1/5 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+                    </span>
+                    <span className="hidden h-3 w-1/6 animate-pulse rounded bg-slate-100 sm:block dark:bg-slate-800" />
+                    <span className="hidden h-6 w-20 animate-pulse rounded-full bg-slate-100 sm:block dark:bg-slate-800" />
+                  </div>
+                ))}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
+                {fetching ? (
+                  <div className="absolute inset-0 z-10 flex items-start justify-center bg-white/55 pt-16 backdrop-blur-[1px] dark:bg-slate-950/55">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-lg ring-1 ring-blue-100 dark:bg-slate-900 dark:text-blue-200 dark:ring-blue-500/30">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading transformers…
+                    </span>
+                  </div>
+                ) : null}
                 <table className="w-full min-w-[1080px] text-left text-xs">
                   <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:bg-slate-900/60">
                     <tr>
@@ -531,8 +622,37 @@ export default function TransformerRegistry() {
                     ))}
                     {pageRows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-16 text-center text-sm text-slate-500">
-                          No transformers match these filters.
+                        <td colSpan={8} className="px-4 py-14 text-center">
+                          {controllerHits.length ? (
+                            <div className="mx-auto max-w-md">
+                              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-50 to-red-50 text-amber-600 ring-1 ring-amber-200">
+                                <Cpu className="h-6 w-6" />
+                              </span>
+                              <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100">No transformer yet — but this is a new controller</p>
+                              <p className="text-xs text-slate-500">It is waiting in New controllers to be linked to a transformer.</p>
+                              <div className="mt-3 space-y-1.5">
+                                {controllerHits.map((c) => (
+                                  <Link
+                                    key={c.id}
+                                    to={`/new-controllers?q=${encodeURIComponent(c.devEui)}`}
+                                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs transition hover:border-blue-300 hover:bg-blue-50/50 dark:border-slate-700 dark:bg-slate-900"
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block font-mono font-semibold text-slate-800 dark:text-slate-100">{c.devEui}</span>
+                                      <span className="block truncate text-[11px] text-slate-500">{c.supplierName || c.name || "Partner device"}</span>
+                                    </span>
+                                    <span className="shrink-0 font-semibold text-blue-600">Open in New controllers →</span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <Search className="mx-auto h-8 w-8 text-slate-300" />
+                              <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">No transformers match these filters</p>
+                              <p className="text-xs text-slate-500">{anyFilter ? "Try another search or clear the filters." : "Add one from a device EUI."}</p>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ) : null}
@@ -540,7 +660,9 @@ export default function TransformerRegistry() {
                 </table>
               </div>
             )}
-            <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={(n) => setPageSize(n)} />
+            <div className={fetching ? "pointer-events-none opacity-60" : ""}>
+              <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={(n) => setPageSize(n)} />
+            </div>
           </section>
         </>
       ) : (
@@ -736,20 +858,26 @@ function MatchModal({
   );
 }
 
-function Select({ value, onChange, placeholder, options }: { value: string; onChange: (v: string) => void; placeholder: string; options: Array<[string, string]> }) {
+function Select({ value, onChange, placeholder, options, icon }: { value: string; onChange: (v: string) => void; placeholder: string; options: Array<[string, string]>; icon?: ReactNode }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`enterprise-chip w-full px-3 py-2 text-sm outline-none dark:text-slate-100 ${value ? "font-semibold text-blue-700 dark:text-blue-300" : "text-slate-600"}`}
-    >
-      <option value="">{placeholder}</option>
-      {options.map(([v, l]) => (
-        <option key={v} value={v}>
-          {l}
-        </option>
-      ))}
-    </select>
+    <label className="relative flex min-w-0 items-center">
+      {icon ? <span className={`pointer-events-none absolute left-3 ${value ? "text-blue-600" : "text-slate-400"}`}>{icon}</span> : null}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`h-9 w-full min-w-0 appearance-none truncate rounded-full border bg-slate-50 pr-8 text-xs outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:bg-slate-900 dark:text-slate-100 ${icon ? "pl-8" : "pl-3"} ${
+          value ? "border-blue-300 bg-blue-50/70 font-semibold text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200" : "border-slate-200 text-slate-600 dark:border-slate-700"
+        }`}
+      >
+        <option value="">{placeholder}</option>
+        {options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-400" />
+    </label>
   );
 }
 

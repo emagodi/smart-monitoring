@@ -4,6 +4,10 @@ import axios from "axios";
 import {
   ArrowLeft,
   ArrowRightLeft,
+  Activity,
+  BellRing,
+  Clock,
+  ShieldOff,
   Cpu,
   ExternalLink,
   Hash,
@@ -17,7 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { cachedGet, invalidateCache } from "../../lib/cache";
+import { cachedGet, invalidateCache, useCachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { useScope } from "../../lib/scope";
 import { depotDistrictId, districtRegionId, useGeography } from "../Registry/geo";
@@ -365,6 +369,9 @@ export default function EditTransformer() {
           </form>
         </Panel>
 
+        <div className="space-y-4">
+        <AtAGlance id={id} token={token} />
+
         {/* ------------------------------------------------------------ controllers */}
         <Panel
           icon={<Cpu className="h-4 w-4" />}
@@ -429,6 +436,7 @@ export default function EditTransformer() {
             })}
           </div>
         </Panel>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------ dialogs */}
@@ -677,5 +685,122 @@ function AddDialog({ open, token, onClose, onPick }: { open: boolean; token: str
         </ul>
       </div>
     </Dialog>
+  );
+}
+
+// ------------------------------------------------------------------ at a glance (right column)
+
+type GlanceRow = {
+  status?: string;
+  minutesSinceSignal?: number | null;
+  lastSignalAt?: string | null;
+  reportedArmState?: string | null;
+  lastCommandAction?: string | null;
+  openAlerts?: number;
+  totalAlerts?: number;
+  lastAlertAt?: string | null;
+};
+type GlanceAlert = { id: number; message?: string | null; value?: string | null; createdAt?: string | null; lastSeenAt?: string | null; occurrenceCount?: number | null; caseStatus?: string | null; status?: string | null };
+
+const GLANCE_STATUS: Record<string, { label: string; cls: string; dot: string }> = {
+  ONLINE: { label: "Online", cls: "text-emerald-700 bg-emerald-50 ring-emerald-200", dot: "bg-emerald-500" },
+  DELAYED: { label: "Delayed", cls: "text-amber-700 bg-amber-50 ring-amber-200", dot: "bg-amber-500" },
+  OFFLINE: { label: "Offline", cls: "text-red-700 bg-red-50 ring-red-200", dot: "bg-red-500" },
+  NEVER_SEEN: { label: "Never seen", cls: "text-slate-600 bg-slate-100 ring-slate-200", dot: "bg-slate-400" },
+  NO_DEVICE: { label: "No device", cls: "text-slate-500 bg-slate-50 ring-slate-200", dot: "bg-slate-300" },
+};
+
+/** Live state of the site while you edit it: status, last signal, arm state, alerts and the latest few alerts. */
+function AtAGlance({ id, token }: { id?: string; token?: string | null }) {
+  const det = useCachedGet<GlanceRow>(token && id ? `${API}/api/v1/transformers/registry/${id}` : null, token, { maxAgeMs: 15_000 });
+  const al = useCachedGet<{ content?: GlanceAlert[] }>(token && id ? `${API}/api/v1/alerts?transformerId=${id}&page=0&size=4` : null, token, { maxAgeMs: 15_000 });
+  const d = det.data;
+  const st = GLANCE_STATUS[d?.status || ""] ?? GLANCE_STATUS.NEVER_SEEN;
+  const arm = d?.reportedArmState || (d?.lastCommandAction === "ARM" ? "ARMED" : d?.lastCommandAction === "DISARM" ? "DISARMED" : null);
+  const alerts = al.data?.content ?? [];
+  return (
+    <section className="relative overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-[#0b4fc4] to-red-500" />
+      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <Activity className="h-4 w-4 text-blue-600" /> At a glance
+        </h3>
+        <Link to={`/transformer/${id}`} className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:underline">
+          Full details <ExternalLink className="h-3 w-3" />
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 gap-2 px-4 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
+        {det.loading && !d ? (
+          Array.from({ length: 4 }).map((_, k) => <div key={k} className="ui-skeleton h-16 rounded-2xl" />)
+        ) : (
+          <>
+            <Tile label="Status">
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${st.cls}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                {st.label}
+              </span>
+            </Tile>
+            <Tile label="Last signal" icon={<Clock className="h-3 w-3" />}>
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{d?.lastSignalAt ? timeAgo(d.lastSignalAt) : "Never"}</span>
+            </Tile>
+            <Tile label="Site security">
+              {arm ? (
+                <span className={`inline-flex items-center gap-1 text-sm font-semibold ${arm === "ARMED" ? "text-emerald-700" : "text-amber-700"}`}>
+                  {arm === "ARMED" ? <ShieldCheck className="h-4 w-4" /> : <ShieldOff className="h-4 w-4" />}
+                  {arm === "ARMED" ? "Armed" : "Disarmed"}
+                </span>
+              ) : (
+                <span className="text-sm text-slate-400">Not reported</span>
+              )}
+            </Tile>
+            <Tile label="Open alerts" icon={<BellRing className="h-3 w-3" />}>
+              <span className={`text-sm font-semibold ${d?.openAlerts ? "text-red-600" : "text-slate-900 dark:text-slate-100"}`}>
+                {d?.openAlerts ?? 0}
+                <span className="ml-1 text-[11px] font-normal text-slate-400">of {d?.totalAlerts ?? 0}</span>
+              </span>
+            </Tile>
+          </>
+        )}
+      </div>
+      <div className="mt-3 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Latest alerts</p>
+        {al.loading && !al.data ? (
+          <div className="space-y-1.5">
+            <div className="ui-skeleton h-8 rounded-xl" />
+            <div className="ui-skeleton h-8 rounded-xl" />
+          </div>
+        ) : !alerts.length ? (
+          <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">No alerts recorded for this site.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {alerts.map((a) => {
+              const open = !["RESOLVED", "CLOSED", "FALSE_ALARM"].includes(String(a.caseStatus || a.status || "").toUpperCase());
+              return (
+                <li key={a.id} className="flex items-center gap-2.5 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${open ? "bg-red-500" : "bg-slate-300"}`} />
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 dark:text-slate-100">
+                    {a.message || a.value || "Alert"}
+                    {a.occurrenceCount && a.occurrenceCount > 1 ? <span className="ml-1 text-[10px] font-bold text-red-600">×{a.occurrenceCount}</span> : null}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-slate-400">{timeAgo(a.lastSeenAt || a.createdAt || undefined)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Tile({ label, icon, children }: { label: string; icon?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-slate-50 to-white p-2.5 ring-1 ring-slate-200/80 dark:from-slate-900 dark:to-slate-950 dark:ring-slate-800">
+      <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+        {icon}
+        {label}
+      </p>
+      {children}
+    </div>
   );
 }

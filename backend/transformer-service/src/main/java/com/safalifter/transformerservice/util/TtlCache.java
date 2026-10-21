@@ -38,6 +38,37 @@ public class TtlCache<V> {
         }
     }
 
+    /**
+     * Stale-while-revalidate: a fresh value is returned as is; an expired one younger than {@code maxStaleMillis}
+     * is returned immediately while ONE background refresh runs (via {@code refresher}); only a missing or very old
+     * value makes the caller wait. Keeps list pages instant even when the underlying query takes a while.
+     */
+    public V getSwr(String key, Supplier<V> loader, long maxStaleMillis, java.util.function.Consumer<Runnable> refresher) {
+        long now = System.currentTimeMillis();
+        Entry<V> hit = entries.get(key);
+        if (hit != null && hit.expiresAt() > now) return hit.value();
+        if (hit != null && hit.expiresAt() + maxStaleMillis > now) {
+            if (refreshing.add(key)) {
+                try {
+                    refresher.accept(() -> {
+                        try {
+                            V value = loader.get();
+                            entries.put(key, new Entry<>(value, System.currentTimeMillis() + ttlMillis));
+                        } finally {
+                            refreshing.remove(key);
+                        }
+                    });
+                } catch (RuntimeException e) {
+                    refreshing.remove(key);
+                }
+            }
+            return hit.value();
+        }
+        return get(key, loader);
+    }
+
+    private final java.util.Set<String> refreshing = ConcurrentHashMap.newKeySet();
+
     public void clear() {
         entries.clear();
     }

@@ -104,7 +104,57 @@ public class RegistryService {
     /** Registry rows for the caller's scope, served from a short cache. Treat the list as read-only. */
     @Transactional(readOnly = true)
     public List<RegistryRow> scopedRows() {
-        return rowsCache.get(accessScopeService.scopeKey(), () -> registry(null));
+        // Served from cache; after 20 s the old rows are still returned (for up to 10 min) while one background
+        // query refreshes them, so the Transformers list, map and dashboards never wait on the full registry query.
+        org.springframework.security.core.context.SecurityContext ctx = org.springframework.security.core.context.SecurityContextHolder.getContext();
+        return rowsCache.getSwr(accessScopeService.scopeKey(), () -> registry(null), 600_000, task -> REFRESHER.execute(() -> {
+            org.springframework.security.core.context.SecurityContextHolder.setContext(ctx);
+            try {
+                task.run();
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(RegistryService.class).warn("Background registry refresh failed: {}", e.getMessage());
+            } finally {
+                org.springframework.security.core.context.SecurityContextHolder.clearContext();
+            }
+        }));
+    }
+
+    private static final java.util.concurrent.ExecutorService REFRESHER = java.util.concurrent.Executors.newFixedThreadPool(2, r -> {
+        Thread t = new Thread(r, "registry-refresh");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** Controllers waiting for a transformer (count only), cached briefly per scope. */
+    private final TtlCache<Long> unmatchedCountCache = new TtlCache<>(20_000, 512);
+
+    public long unmatchedCount() {
+        if (accessScopeService.isDepotScoped()) return 0;
+        String supplier = accessScopeService.getCurrentSupplierCode();
+        return unmatchedCountCache.get(accessScopeService.scopeKey(), () -> {
+            MapSqlParameterSource p = new MapSqlParameterSource();
+            if (supplier != null) p.addValue("s", supplier);
+            Long n = jdbc.queryForObject("SELECT COUNT(*) FROM controllers WHERE transformer_id IS NULL" + (supplier != null ? " AND supplier_code = :s" : ""), p, Long.class);
+            return n == null ? 0L : n;
+        });
+    }
+
+    /** Unlinked controllers whose EUI contains the search text (so a search for a new device's EUI can point to it). */
+    private List<Map<String, Object>> unmatchedHits(String term) {
+        if (term == null || term.length() < 4 || accessScopeService.isDepotScoped()) return List.of();
+        String supplier = accessScopeService.getCurrentSupplierCode();
+        MapSqlParameterSource p = new MapSqlParameterSource("q", "%" + term.replaceAll("[^0-9a-zA-Z]", "") + "%");
+        if (supplier != null) p.addValue("s", supplier);
+        return jdbc.query("SELECT id, dev_eui, name, supplier_name FROM controllers WHERE transformer_id IS NULL AND LOWER(dev_eui) LIKE LOWER(:q)"
+                        + (supplier != null ? " AND supplier_code = :s" : "") + " ORDER BY id DESC LIMIT 5", p,
+                (rs, i) -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", rs.getLong("id"));
+                    m.put("devEui", rs.getString("dev_eui"));
+                    m.put("name", rs.getString("name"));
+                    m.put("supplierName", rs.getString("supplier_name"));
+                    return m;
+                });
     }
 
     /**
@@ -169,6 +219,8 @@ public class RegistryService {
         out.put("matched", counts.values().stream().mapToLong(Long::longValue).sum());
         out.put("allTotal", all.size());
         out.put("partners", partners);
+        out.put("unmatchedCount", unmatchedCount());
+        if (total == 0 && !term.isEmpty()) out.put("controllerHits", unmatchedHits(term));
         return out;
     }
 
@@ -179,6 +231,7 @@ public class RegistryService {
     /** Drop cached rows after anything that changes transformers or their devices. */
     public void invalidate() {
         rowsCache.clear();
+        unmatchedCountCache.clear();
     }
 
     @Transactional(readOnly = true)
