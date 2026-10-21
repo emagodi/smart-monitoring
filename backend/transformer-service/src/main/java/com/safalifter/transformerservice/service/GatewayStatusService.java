@@ -34,6 +34,10 @@ public class GatewayStatusService {
     @Value("${gateway.uplink-freshness-ms:7200000}")
     private long uplinkFreshnessMs;
 
+    /** When LORIOT gives only a "last seen" time, a gateway heard within this window counts as online. */
+    @Value("${gateway.lastseen-online-ms:600000}")
+    private long lastSeenOnlineMs;
+
     @Transactional
     public void updateFromLoriotApi(Gateway gateway, LoriotGateway dto) {
         if (gateway == null || dto == null) return;
@@ -48,16 +52,35 @@ public class GatewayStatusService {
                 reported = GatewayStatus.ONLINE;
             }
         }
+        if (reported == null && dto.getLastSeen() != null) {
+            // No explicit online flag: judge by how recently LORIOT last heard from the gateway.
+            reported = Duration.between(dto.getLastSeen(), Instant.now()).toMillis() <= lastSeenOnlineMs ? GatewayStatus.ONLINE : GatewayStatus.OFFLINE;
+        }
         if (reported != null) {
             gateway.setLoriotReportedStatus(reported);
         }
-        if (dto.getLastSeen() != null) {
-            gateway.setLastLoriotSeenAt(dto.getLastSeen());
-        } else if (reported == GatewayStatus.ONLINE) {
+        // lastLoriotSeenAt = when this status report was taken (keeps the LORIOT verdict "fresh" for the status
+        // engine). The gateway's own last-heard time from LORIOT goes into lastTrafficSeenAt when it is newer.
+        if (reported != null) {
             gateway.setLastLoriotSeenAt(Instant.now());
+        }
+        if (dto.getLastSeen() != null && !dto.getLastSeen().isAfter(Instant.now().plusSeconds(300))
+                && (gateway.getLastTrafficSeenAt() == null || dto.getLastSeen().isAfter(gateway.getLastTrafficSeenAt()))) {
+            gateway.setLastTrafficSeenAt(dto.getLastSeen());
         }
         gateway.setLastHealthCheckAt(Instant.now());
         computeAndApplyEffectiveStatus(gateway, GatewayStatusSource.LORIOT_API);
+    }
+
+    /** The gateway is no longer listed in LORIOT (deleted or re-registered there): show it as offline, with why. */
+    @Transactional
+    public void markNotInLoriot(Gateway gateway) {
+        if (gateway == null) return;
+        if (gateway.getLoriotReportedStatus() == GatewayStatus.OFFLINE && gateway.getEffectiveStatus() == GatewayStatus.OFFLINE) return;
+        gateway.setLoriotReportedStatus(GatewayStatus.OFFLINE);
+        gateway.setLastLoriotSeenAt(Instant.now());
+        gateway.setLastHealthCheckAt(Instant.now());
+        computeAndApplyEffectiveStatus(gateway, GatewayStatusSource.LORIOT_API, "Not listed in LORIOT any more");
     }
 
     @Transactional

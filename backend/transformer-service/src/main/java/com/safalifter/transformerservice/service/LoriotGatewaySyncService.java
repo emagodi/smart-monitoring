@@ -59,7 +59,7 @@ public class LoriotGatewaySyncService {
         }
     }
 
-    @Scheduled(fixedDelayString = "${loriot.gateway-sync-interval-ms:300000}")
+    @Scheduled(initialDelayString = "${loriot.gateway-sync-interval-ms:120000}", fixedDelayString = "${loriot.gateway-sync-interval-ms:120000}")
     public void scheduledSync() {
         runSync(false);
     }
@@ -146,6 +146,8 @@ public class LoriotGatewaySyncService {
                     log.warn("LORIOT sync failed to process gateway id={} name={}", dto.getId(), dto.getName(), e);
                 }
             }
+            int missing = markMissingFromLoriot(fetched);
+            if (missing > 0) log.info("LORIOT sync: {} gateway(s) in the app are no longer in LORIOT; marked offline", missing);
             GatewaySyncRunStatus status = failed > 0 && (created + updated + unchanged) > 0
                     ? GatewaySyncRunStatus.PARTIAL
                     : failed > 0
@@ -238,11 +240,12 @@ public class LoriotGatewaySyncService {
             g.setNetworkId(netId);
             changed = true;
         }
-        if (shouldOverwrite(g.getName(), dto.getName())) {
+        // LORIOT owns the gateway's name, EUI, MAC, model and firmware: always take its current value.
+        if (differs(g.getName(), dto.getName())) {
             g.setName(trimToNull(dto.getName()));
             changed = true;
         }
-        if (g.getGatewayEui() == null && dto.getGweui() != null) {
+        if (dto.getGweui() != null && !Objects.equals(normalizeEuiSafe(g.getGatewayEui()), normalizeEuiSafe(dto.getGweui()))) {
             g.setGatewayEui(trimToNull(dto.getGweui()));
             changed = true;
         }
@@ -251,7 +254,7 @@ public class LoriotGatewaySyncService {
             g.setNormalizedGatewayEui(normEui);
             changed = true;
         }
-        if (g.getMacAddress() == null && dto.getMac() != null) {
+        if (dto.getMac() != null && !Objects.equals(normalizeMacSafe(g.getMacAddress()), normalizeMacSafe(dto.getMac()))) {
             g.setMacAddress(trimToNull(dto.getMac()));
             changed = true;
         }
@@ -268,16 +271,16 @@ public class LoriotGatewaySyncService {
             g.setImei(trimToNull(dto.getImei()));
             changed = true;
         }
-        if (shouldOverwrite(g.getManufacturer(), dto.getManufacturer())) {
+        if (differs(g.getManufacturer(), dto.getManufacturer())) {
             g.setManufacturer(trimToNull(dto.getManufacturer()));
             changed = true;
         }
-        if (shouldOverwrite(g.getModel(), dto.getModel())) {
+        if (differs(g.getModel(), dto.getModel())) {
             g.setModel(trimToNull(dto.getModel()));
             changed = true;
         }
         String fw = firstNonNull(dto.getFwVersion(), dto.getFw());
-        if (shouldOverwrite(g.getFirmwareVersion(), fw)) {
+        if (differs(g.getFirmwareVersion(), fw)) {
             g.setFirmwareVersion(trimToNull(fw));
             changed = true;
         }
@@ -329,6 +332,35 @@ public class LoriotGatewaySyncService {
         return changed;
     }
 
+    /**
+     * Gateways we have that LORIOT no longer lists (deleted or re-registered there) are marked offline with a clear
+     * reason, so the counts match LORIOT. Skipped when the fetch came back empty (a LORIOT outage must not do this).
+     */
+    private int markMissingFromLoriot(List<LoriotGateway> fetched) {
+        if (fetched == null || fetched.isEmpty()) return 0;
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        java.util.Set<String> euis = new java.util.HashSet<>();
+        for (LoriotGateway d : fetched) {
+            if (trimToNull(d.getId()) != null) ids.add(d.getId().trim());
+            String e = normalizeEuiSafe(d.getGweui());
+            if (e != null) euis.add(e);
+        }
+        int n = 0;
+        for (Gateway g : gatewayRepository.findAll()) {
+            if (Boolean.TRUE.equals(g.getDecommissioned())) continue;
+            boolean present = (g.getLoriotGatewayId() != null && ids.contains(g.getLoriotGatewayId()))
+                    || (g.getNormalizedGatewayEui() != null && euis.contains(g.getNormalizedGatewayEui()));
+            if (present) continue;
+            try {
+                gatewayStatusService.markNotInLoriot(g);
+                n++;
+            } catch (Exception e) {
+                log.warn("Could not mark gateway id={} as missing from LORIOT", g.getId(), e);
+            }
+        }
+        return n;
+    }
+
     @Transactional
     public void finalizeRun(Long runId, GatewaySyncRunStatus status, int created, int updated, int unchanged, int failed, String errorSummary) {
         GatewaySyncRun run = syncRunRepository.findById(runId).orElse(null);
@@ -343,6 +375,12 @@ public class LoriotGatewaySyncService {
         syncRunRepository.save(run);
         log.info("LORIOT sync run id={} finished status={} created={} updated={} unchanged={} failed={}",
                 runId, status, created, updated, unchanged, failed);
+    }
+
+    /** LORIOT has a value and it is not what we have. */
+    private static boolean differs(String stored, String incoming) {
+        String in = trimToNull(incoming);
+        return in != null && !in.equals(trimToNull(stored));
     }
 
     private boolean shouldOverwrite(String stored, String incoming) {
