@@ -278,6 +278,15 @@ public class SchemaUpgrader implements ApplicationRunner, org.springframework.be
                 }
                 return c;
             });
+            changes += step("gateways: drop LORIOT placeholder positions", () -> {
+                if (!tableExists("gateways")) return 0;
+                // LORIOT reports a default point in Switzerland for gateways whose location was never set there.
+                return jdbc.update("""
+                        UPDATE gateways SET latitude = NULL, longitude = NULL, altitude = NULL, location_source = NULL
+                         WHERE latitude BETWEEN 46.80764 AND 46.80774 AND longitude BETWEEN 7.10048 AND 7.10058
+                           AND (location_source IS NULL OR location_source = 'LORIOT')
+                           AND (location_verified IS NULL OR location_verified = 0)""");
+            });
             log.info("Schema auto-upgrade finished: {} change(s) applied", changes);
         } catch (Exception e) {
             // Never block startup; the failing step is already logged.

@@ -268,7 +268,7 @@ public class GatewayService {
             if (g.getLatitude() == null || g.getLongitude() == null) continue;
             if (BigDecimal.ZERO.equals(g.getLatitude()) && BigDecimal.ZERO.equals(g.getLongitude())) continue;
             String msisdn = resolveActiveAssignedMsisdn(g.getId());
-            Instant lastSeen = latest(g.getLastTrafficSeenAt(), g.getLastLoriotSeenAt());
+            Instant lastSeen = lastHeard(g);
             result.add(GatewayMapPointResponse.builder()
                     .id(g.getId())
                     .name(g.getName())
@@ -311,7 +311,7 @@ public class GatewayService {
                 simIccidMasked = SimCardService.maskIccid(s.getIccid(), s.getNormalizedIccid());
             }
         }
-        Instant lastSeen = latest(g.getLastTrafficSeenAt(), g.getLastLoriotSeenAt());
+        Instant lastSeen = lastHeard(g);
         return GatewayResponse.builder()
                 .id(g.getId())
                 .loriotGatewayId(g.getLoriotGatewayId())
@@ -384,6 +384,22 @@ public class GatewayService {
         return assignmentRepository.findActiveByGatewayId(gatewayId)
                 .map(GatewaySimAssignment::getSimId).orElse(null);
     }
+
+    /**
+     * When the gateway was last actually heard: its own last-seen time from LORIOT or our last uplink through it.
+     * The time of our last LORIOT check only counts while the gateway is online (LORIOT confirmed it is connected),
+     * so an offline gateway never shows a recent "last seen" just because we checked it.
+     */
+    private static Instant lastHeard(Gateway g) {
+        Instant heard = g.getLastTrafficSeenAt();
+        boolean online = g.getEffectiveStatus() == com.safalifter.transformerservice.enums.GatewayStatus.ONLINE
+                || g.getEffectiveStatus() == com.safalifter.transformerservice.enums.GatewayStatus.DEGRADED;
+        Instant checked = online ? g.getLastLoriotSeenAt() : null;
+        if (heard == null) return checked;
+        if (checked == null) return heard;
+        return checked.isAfter(heard) ? checked : heard;
+    }
+
 
     private static Instant latest(Instant a, Instant b) {
         if (a == null) return b;

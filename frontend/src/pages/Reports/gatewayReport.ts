@@ -43,12 +43,16 @@ const num = (v: number | string | null | undefined): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+const PLACEHOLDERS: Array<[number, number]> = [[46.807689, 7.100528]];
+
 /** Valid coordinates only (0,0 and out-of-range values count as "no location"). */
 export const coordsOf = (g: ReportGateway): { lat: number; lng: number } | null => {
   const lat = num(g.latitude);
   const lng = num(g.longitude);
   if (lat == null || lng == null) return null;
   if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return null;
+  // LORIOT's default point (Switzerland) for gateways whose location was never set there.
+  if (PLACEHOLDERS.some(([a, b]) => Math.abs(a - lat) < 0.00005 && Math.abs(b - lng) < 0.00005)) return null;
   return { lat, lng };
 };
 
@@ -59,7 +63,7 @@ export const mapsUrl = (c: { lat: number; lng: number }) => `https://www.google.
 export const lastSeenOf = (g: ReportGateway) => g.lastSeenAt || g.lastLoriotSeenAt || null;
 
 export const fmtDateTime = (iso?: string | null) => {
-  if (!iso) return "Never";
+  if (!iso) return "Not reported";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -209,9 +213,9 @@ export async function downloadGatewayPdf(rows: ReportGateway[], meta: ReportMeta
       g.depotName || "—",
       ...(c
         ? [fmtCoord(c.lat), fmtCoord(c.lng)]
-        : [{ content: "No location", colSpan: 2, styles: { halign: "center" as const, font: "helvetica", fontStyle: "italic" as const, textColor: [180, 83, 9] as [number, number, number] } }]),
+        : [{ content: "Location not set", colSpan: 2, styles: { halign: "center" as const, font: "helvetica", fontStyle: "italic" as const, textColor: [180, 83, 9] as [number, number, number] } }]),
       STATUS_INFO[statusOf(g)].label,
-      seen ? `${fmtDateTime(seen)}${fmtAgo(seen) ? `\n${fmtAgo(seen)}` : ""}` : "Never",
+      seen ? `${fmtDateTime(seen)}${fmtAgo(seen) ? `\n${fmtAgo(seen)}` : ""}` : statusOf(g) === "NEVER_SEEN" ? "Never" : "Not reported",
     ];
   });
 
@@ -288,7 +292,7 @@ export async function downloadGatewayPdf(rows: ReportGateway[], meta: ReportMeta
     doc.line(M, H - 9, W - M, H - 9);
     doc.setFontSize(7.5);
     doc.setTextColor(...muted);
-    doc.text("Status is the gateway's live state from LORIOT at the time of generation. Click a coordinate to open it in Google Maps.", M, H - 5);
+    doc.text("Status is the live state from LORIOT when generated. \"Location not set\": no real position in LORIOT yet. Click a coordinate to open Google Maps.", M, H - 5);
     doc.text(`Page ${p} of ${pages}`, W - M, H - 5, { align: "right" });
   }
 

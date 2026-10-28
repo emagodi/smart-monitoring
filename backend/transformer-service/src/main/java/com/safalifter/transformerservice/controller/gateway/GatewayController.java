@@ -142,6 +142,13 @@ public class GatewayController {
         return ResponseEntity.ok(loriotClientAdapter.sampleRawGateways(Math.min(5, Math.max(1, limit))));
     }
 
+    @GetMapping("/loriot-location-audit")
+    @Operation(summary = "Every LORIOT gateway: registered vs gateway-reported position, placeholder, last heard. Admin only.")
+    @PreAuthorize("hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
+    public ResponseEntity<List<java.util.Map<String, Object>>> loriotLocationAudit() {
+        return ResponseEntity.ok(loriotClientAdapter.locationAudit());
+    }
+
     @GetMapping("/sync/status")
     @Operation(summary = "Last gateway sync runs")
     @PreAuthorize("hasAuthority('gateways.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")

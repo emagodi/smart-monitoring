@@ -305,7 +305,7 @@ export default function ReportsPage() {
                           </a>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 text-xs italic text-amber-700 dark:text-amber-400">
-                            <MapPinOff className="h-3.5 w-3.5" /> No location
+                            <MapPinOff className="h-3.5 w-3.5" /> Location not set
                           </span>
                         )}
                       </td>
@@ -316,7 +316,7 @@ export default function ReportsPage() {
                         </span>
                       </td>
                       <td className={tableCls.td} data-label="Last seen">
-                        <p className="whitespace-nowrap text-xs">{fmtDateTime(seen)}</p>
+                        <p className="whitespace-nowrap text-xs">{seen ? fmtDateTime(seen) : s === "NEVER_SEEN" ? "Never" : "Not reported"}</p>
                         {seen ? <p className="text-[11px] text-slate-500">{fmtAgo(seen)}</p> : null}
                       </td>
                     </tr>
