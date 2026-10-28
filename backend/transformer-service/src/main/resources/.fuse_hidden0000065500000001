@@ -1,0 +1,65 @@
+spring.application.name=transformer-service
+spring.cloud.config.enabled=true
+
+server.port=8083
+# gzip JSON responses (lists and dashboards shrink ~80%)
+server.compression.enabled=true
+server.compression.mime-types=application/json,text/plain
+server.compression.min-response-size=2048
+
+# Fallback JWT Configuration
+application.security.jwt.secret-key=w7rj85o9SnDk1q2W8gHixMfNYaW6mDpcFXH0f1RmZDU=
+application.security.jwt.expiration=18000000
+application.security.jwt.cookie-name=jwt-cookie
+
+# Database Configuration (Fallback)
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.datasource.url=jdbc:mysql://localhost:3306/tms
+spring.datasource.username=root
+spring.datasource.password=secret
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect
+spring.jackson.time-zone=Africa/Harare
+
+# Eureka (Fallback)
+eureka.client.service-url.defaultZone=${EUREKA_URI:http://localhost:8761/eureka}
+eureka.instance.prefer-ip-address=true
+# eureka.instance.ip-address=10.167.155.205
+eureka.client.register-with-eureka=true
+eureka.client.fetch-registry=true
+
+# Swagger
+springdoc.swagger-ui.disable-swagger-default-url=true
+springdoc.swagger-ui.url=/transformer/v3/api-docs
+springdoc.swagger-ui.config-url=/transformer/v3/api-docs/swagger-config
+
+# WebSocket Configuration
+loriot.ws.enabled=true
+oculus.ws.enabled=true
+oculus.ws.url=wss://lorawan.powertel.co.zw/app?token=vgEACwAAABZsb3Jhd2FuLnBvd2VydGVsLmNvLnp3tjYlRffQ3aFr1wWcT9O_hA==
+oculus.ws.log=true
+oculus.ws.insecure-ssl=${LORIOT_INSECURE_SSL:true}
+oculus.loriot.api-url=${LORIOT_API_URL:}
+oculus.loriot.app-id=${LORIOT_APP_ID:}
+oculus.loriot.api-key=${LORIOT_API_KEY:}
+oculus.loriot.downlink-port=${LORIOT_DOWNLINK_PORT:2}
+oculus.loriot.downlink-confirmed=${LORIOT_DOWNLINK_CONFIRMED:false}
+oculus.loriot.insecure-ssl=${LORIOT_INSECURE_SSL:true}
+remote.transformer.lookup.url=${REMOTE_TRANSFORMER_LOOKUP_URL:http://68.183.126.109:3001/api/transformer/details}
+
+# --- Performance ---
+# Load lazy collections in batches (one IN query instead of one query per row: avoids N+1)
+spring.jpa.properties.hibernate.default_batch_fetch_size=50
+# Group inserts/updates into JDBC batches
+spring.jpa.properties.hibernate.jdbc.batch_size=50
+spring.jpa.properties.hibernate.order_inserts=true
+spring.jpa.properties.hibernate.order_updates=true
+# Redis second-level cache: on when REDIS_HOST is set (docker-compose sets it); off = in-memory caches only
+redis.host=${REDIS_HOST:}
+redis.port=${REDIS_PORT:6379}
+redis.password=${REDIS_PASSWORD:}
+redis.key-prefix=${REDIS_KEY_PREFIX:tms}
+# Scheduled jobs run on their own small pool, so one slow job (e.g. a LORIOT call) cannot stop the others.
+spring.task.scheduling.pool.size=4
+# Default positions LORIOT reports for gateways whose location was never set ("lat,lon;lat,lon"): treated as no location.
+loriot.placeholder-locations=${LORIOT_PLACEHOLDER_LOCATIONS:46.807689,7.100528}

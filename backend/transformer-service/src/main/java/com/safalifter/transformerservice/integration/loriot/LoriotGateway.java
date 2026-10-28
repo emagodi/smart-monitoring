@@ -29,6 +29,10 @@ public class LoriotGateway {
     private BigDecimal longitude;
     private BigDecimal altitude;
     private String address;
+    /** LORIOT returned a known placeholder / default position instead of the gateway's real location. */
+    private boolean locationPlaceholder;
+    /** The position came from the gateway itself (LORIOT location.gwlat / gwlon), not from typed-in registration data. */
+    private boolean locationReportedByGateway;
     private JsonNode raw;
 
     public boolean isOnlineValue() {

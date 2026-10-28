@@ -25,7 +25,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,6 +45,31 @@ public class LoriotGatewaySyncService {
     private final LoriotProperties properties;
 
     private final AtomicBoolean inProgress = new AtomicBoolean(false);
+    /** When the running sync started; used to recover if a run ever hangs, so syncing can never stop for good. */
+    private volatile long inProgressSince = 0;
+    private static final long STUCK_AFTER_MS = 15 * 60_000L;
+    /** The same exact position reported for this many gateways or more is a default value, not a real location. */
+    private static final int SHARED_POSITION_THRESHOLD = 5;
+
+    private boolean acquire() {
+        if (inProgress.compareAndSet(false, true)) {
+            inProgressSince = System.currentTimeMillis();
+            return true;
+        }
+        long age = System.currentTimeMillis() - inProgressSince;
+        if (inProgressSince > 0 && age > STUCK_AFTER_MS) {
+            log.warn("LORIOT sync: previous run has been running for {} min; treating it as stuck and starting a new run", age / 60_000);
+            inProgressSince = System.currentTimeMillis();
+            return true;
+        }
+        log.info("LORIOT sync skipped: a run is already in progress ({} s)", age / 1000);
+        return false;
+    }
+
+    private void release() {
+        inProgressSince = 0;
+        inProgress.set(false);
+    }
 
     @EventListener(ApplicationReadyEvent.class)
     @Async
@@ -69,7 +96,7 @@ public class LoriotGatewaySyncService {
         if (accessScopeService.isSupplierScoped()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Supplier users cannot trigger sync");
         }
-        if (!inProgress.compareAndSet(false, true)) {
+        if (!acquire()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A gateway sync is already in progress");
         }
         try {
@@ -77,7 +104,7 @@ public class LoriotGatewaySyncService {
             runAsync(run.getId());
             return run.getId();
         } catch (Exception e) {
-            inProgress.set(false);
+            release();
             throw e;
         }
     }
@@ -87,21 +114,18 @@ public class LoriotGatewaySyncService {
         try {
             doRunSync(runId);
         } finally {
-            inProgress.set(false);
+            release();
         }
     }
 
     public GatewaySyncRun runSync(boolean manual) {
-        if (!inProgress.compareAndSet(false, true)) {
-            log.debug("LORIOT sync skipped: already in progress");
-            return null;
-        }
+        if (!acquire()) return null;
         try {
             GatewaySyncRun run = createRun();
             doRunSync(run.getId());
             return run;
         } finally {
-            inProgress.set(false);
+            release();
         }
     }
 
@@ -131,6 +155,7 @@ public class LoriotGatewaySyncService {
             finalizeRun(runId, GatewaySyncRunStatus.FAILED, created, updated, unchanged, failed, truncate(e.getMessage(), 1800));
             return;
         }
+        flagSharedPositions(fetched);
         try {
             for (LoriotGateway dto : fetched) {
                 try {
@@ -158,6 +183,45 @@ public class LoriotGatewaySyncService {
             log.error("LORIOT sync: upsert loop failed", e);
             finalizeRun(runId, GatewaySyncRunStatus.FAILED, created, updated, unchanged, failed, truncate(e.getMessage(), 1800));
         }
+    }
+
+    /**
+     * Many gateways at exactly the same position means LORIOT is returning a default point for gateways whose
+     * location was never set. Those positions are dropped (treated as "location not set").
+     */
+    private void flagSharedPositions(List<LoriotGateway> fetched) {
+        if (fetched == null || fetched.isEmpty()) return;
+        Map<String, Integer> counts = new HashMap<>();
+        for (LoriotGateway g : fetched) {
+            String k = positionKey(g);
+            if (k != null) counts.merge(k, 1, Integer::sum);
+        }
+        int placeholders = 0;
+        for (LoriotGateway g : fetched) {
+            if (g.isLocationPlaceholder()) {
+                placeholders++;
+                continue;
+            }
+            String k = positionKey(g);
+            if (k != null && counts.getOrDefault(k, 0) >= SHARED_POSITION_THRESHOLD) {
+                g.setLatitude(null);
+                g.setLongitude(null);
+                g.setAltitude(null);
+                g.setLocationPlaceholder(true);
+                placeholders++;
+            }
+        }
+        counts.forEach((k, n) -> {
+            if (n >= SHARED_POSITION_THRESHOLD) log.warn("LORIOT sync: {} gateways share the position {}; treated as a default (location not set)", n, k);
+        });
+        if (placeholders > 0) {
+            log.info("LORIOT sync: {} of {} gateways have no real location in LORIOT (set it in LORIOT or edit the gateway here)", placeholders, fetched.size());
+        }
+    }
+
+    private static String positionKey(LoriotGateway g) {
+        if (g.getLatitude() == null || g.getLongitude() == null) return null;
+        return g.getLatitude().setScale(5, java.math.RoundingMode.HALF_UP).toPlainString() + "," + g.getLongitude().setScale(5, java.math.RoundingMode.HALF_UP).toPlainString();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -291,6 +355,16 @@ public class LoriotGatewaySyncService {
         boolean skipLocation = g.getLocationSource() == GatewayLocationSource.MANUAL
                 || g.getLocationSource() == GatewayLocationSource.GPS
                 || Boolean.TRUE.equals(g.getLocationVerified());
+        if (!skipLocation && dto.isLocationPlaceholder()
+                && (g.getLocationSource() == null || g.getLocationSource() == GatewayLocationSource.LORIOT)
+                && (g.getLatitude() != null || g.getLongitude() != null)) {
+            // We stored LORIOT's default point earlier: clear it so the gateway shows "location not set".
+            g.setLatitude(null);
+            g.setLongitude(null);
+            g.setAltitude(null);
+            g.setLocationSource(null);
+            changed = true;
+        }
         if (!skipLocation) {
             if (dto.getLatitude() != null && (g.getLatitude() == null || g.getLocationSource() == null || g.getLocationSource() == GatewayLocationSource.LORIOT)) {
                 if (!Objects.equals(g.getLatitude(), dto.getLatitude())) {

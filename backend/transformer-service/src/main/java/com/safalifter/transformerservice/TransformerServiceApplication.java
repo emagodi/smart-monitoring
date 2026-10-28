@@ -9,6 +9,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 @SpringBootApplication
@@ -24,6 +25,10 @@ public class TransformerServiceApplication {
 
     @Bean
     public RestTemplate restTemplate() {
-        return new RestTemplate();
+        // Hard timeouts: without them one stuck outside call (e.g. LORIOT) can hang the gateway sync forever.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(45_000);
+        return new RestTemplate(factory);
     }
 }

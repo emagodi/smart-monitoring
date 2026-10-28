@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -36,6 +37,40 @@ public class LoriotClientAdapter {
 
     private final LoriotProperties properties;
     private final RestTemplate restTemplate;
+
+    /**
+     * Positions LORIOT reports for gateways whose real location was never set (a default point in Switzerland).
+     * "lat,lon;lat,lon". Such values are treated as "location not set", never stored as the gateway's location.
+     */
+    @Value("${loriot.placeholder-locations:46.807689,7.100528}")
+    private String placeholderLocations;
+
+    private volatile List<double[]> placeholders;
+
+    public boolean isPlaceholderLocation(BigDecimal lat, BigDecimal lon) {
+        if (lat == null || lon == null) return false;
+        List<double[]> list = placeholders;
+        if (list == null) {
+            list = new ArrayList<>();
+            String spec = placeholderLocations == null ? "" : placeholderLocations;
+            for (String part : spec.split(";")) {
+                String[] xy = part.trim().split(",");
+                if (xy.length != 2) continue;
+                try {
+                    list.add(new double[]{Double.parseDouble(xy[0].trim()), Double.parseDouble(xy[1].trim())});
+                } catch (NumberFormatException ignored) {
+                    // skip a malformed entry
+                }
+            }
+            placeholders = list;
+        }
+        double la = lat.doubleValue();
+        double lo = lon.doubleValue();
+        for (double[] p : list) {
+            if (Math.abs(p[0] - la) < 0.00005 && Math.abs(p[1] - lo) < 0.00005) return true;
+        }
+        return false;
+    }
 
     private final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
@@ -195,15 +230,36 @@ public class LoriotClientAdapter {
         Boolean explicitOnline = boolOrNull(node, "online", "isOnline", "connected", "alive", "isConnected");
         g.setOnline(explicitOnline);
         g.setStatus(textOr(node, "status", "state", "connection", "connectionStatus"));
-        g.setLastSeen(instantOr(node, "lastSeen", "last_seen", "lastSeenAt", "lastAlive", "lastPing", "lastStat", "lastStatus",
-                "lastUplink", "lastActivity", "lastConnected", "lastHeartbeat", "lastRx", "seen", "updatedAt"));
+        // LORIOT: lastPong = last keep-alive from the gateway (epoch ms), lastData = last packet. Take the newest of all
+        // "last heard" style fields; never config timestamps such as updatedAt / createdAt.
+        g.setLastSeen(latestInstant(node, "lastPong", "lastData", "lastConnect", "lastSeen", "last_seen", "lastSeenAt", "lastAlive",
+                "lastPing", "lastStat", "lastStatus", "lastUplink", "lastActivity", "lastConnected", "lastHeartbeat", "lastRx",
+                "lastRxTime", "lastPacket", "lastPacketTime", "lastSeenTime"));
         JsonNode loc = node.path("location");
         if (!loc.isObject()) loc = node.path("gps");
         if (!loc.isObject()) loc = node.path("position");
         JsonNode locNode = loc.isObject() ? loc : node;
-        g.setLatitude(nonZero(decimalOr(locNode, "lat", "latitude", "y")));
-        g.setLongitude(nonZero(decimalOr(locNode, "lon", "lng", "longitude", "x")));
+        // gwlat / gwlon = the position the gateway itself reports (GPS or its configured fixed position); LORIOT only
+        // fills these for gateways that send it (e.g. Milesight gateways on LORIOT's own Milesight connector).
+        // lat / lon = the location typed into LORIOT when the gateway was registered (a default point if never set).
+        BigDecimal gwLat = nonZero(decimalOr(locNode, "gwlat", "gpsLat", "gps_lat"));
+        BigDecimal gwLon = nonZero(decimalOr(locNode, "gwlon", "gpsLon", "gps_lon", "gwlng"));
+        boolean gatewayReported = gwLat != null && gwLon != null && gwLat.abs().compareTo(BigDecimal.valueOf(90)) <= 0
+                && gwLon.abs().compareTo(BigDecimal.valueOf(180)) <= 0 && !isPlaceholderLocation(gwLat, gwLon);
+        g.setLocationReportedByGateway(gatewayReported);
+        g.setLatitude(gatewayReported ? gwLat : nonZero(decimalOr(locNode, "lat", "latitude", "y")));
+        g.setLongitude(gatewayReported ? gwLon : nonZero(decimalOr(locNode, "lon", "lng", "longitude", "x")));
         g.setAltitude(decimalOr(locNode, "alt", "altitude"));
+        BigDecimal lat = g.getLatitude();
+        BigDecimal lon = g.getLongitude();
+        boolean outOfRange = (lat != null && lat.abs().compareTo(BigDecimal.valueOf(90)) > 0)
+                || (lon != null && lon.abs().compareTo(BigDecimal.valueOf(180)) > 0);
+        if (outOfRange || isPlaceholderLocation(lat, lon)) {
+            g.setLatitude(null);
+            g.setLongitude(null);
+            g.setAltitude(null);
+            g.setLocationPlaceholder(true);
+        }
         String address = loc.isObject()
                 ? joinNonBlank(textOr(loc, "address", "street"), textOr(loc, "city"), textOr(loc, "country"))
                 : textOr(node, "address", "addr");
@@ -244,6 +300,43 @@ public class LoriotClientAdapter {
     }
 
     /** Epoch seconds, epoch millis or an ISO date-time. */
+    /** The newest of several timestamp fields (each may be epoch s / ms or ISO). */
+    private Instant latestInstant(JsonNode node, String... keys) {
+        Instant best = null;
+        Instant ceiling = Instant.now().plusSeconds(300);
+        for (String k : keys) {
+            Instant v = instantOr(node, k);
+            if (v != null && !v.isAfter(ceiling) && (best == null || v.isAfter(best))) best = v;
+        }
+        return best;
+    }
+
+    /** One line per LORIOT gateway: where its location comes from and when it was last heard (admin troubleshooting). */
+    public List<java.util.Map<String, Object>> locationAudit() {
+        List<java.util.Map<String, Object>> out = new ArrayList<>();
+        for (LoriotGateway g : fetchGateways()) {
+            JsonNode raw = g.getRaw();
+            JsonNode loc = raw == null ? null : raw.path("location");
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("title", g.getName());
+            m.put("eui", g.getGweui());
+            m.put("connector", raw == null ? null : textOr(raw, "basename", "base"));
+            m.put("model", raw == null ? null : textOr(raw, "modelname", "model"));
+            m.put("version", raw == null ? null : textOr(raw, "version"));
+            m.put("connected", g.getOnline());
+            m.put("registeredLat", loc == null ? null : decimalOr(loc, "lat"));
+            m.put("registeredLon", loc == null ? null : decimalOr(loc, "lon"));
+            m.put("gatewayLat", loc == null ? null : decimalOr(loc, "gwlat"));
+            m.put("gatewayLon", loc == null ? null : decimalOr(loc, "gwlon"));
+            m.put("locationReportedByGateway", g.isLocationReportedByGateway());
+            m.put("placeholder", g.isLocationPlaceholder());
+            m.put("lastSeen", g.getLastSeen());
+            m.put("createdAt", raw == null ? null : textOr(raw, "createdAt"));
+            out.add(m);
+        }
+        return out;
+    }
+
     private Instant instantOr(JsonNode node, String... keys) {
         for (String k : keys) {
             JsonNode n = node.path(k);
