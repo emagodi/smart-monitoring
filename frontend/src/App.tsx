@@ -36,6 +36,7 @@ const FleetPage = lazyPage(() => import("./pages/Response/Fleet"));
 const CrewRespond = lazyPage(() => import("./pages/Response/CrewRespond"));
 const TransformerRegistry = lazyPage(() => import("./pages/Registry"));
 const InsightsPage = lazyPage(() => import("./pages/Insights"));
+const ReportsPage = lazyPage(() => import("./pages/Reports"));
 const IntegrationsPage = lazyPage(() => import("./pages/Integrations"));
 
 const AppRoutes = () => {
@@ -167,6 +168,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute scopes={["NATIONAL"]} permission="controllers.update">
               <EditController />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="reports"
+          element={
+            <ProtectedRoute scopes={["NATIONAL", "DEPOT"]} depotAnyOf={["gateways.view", "transformers.read"]} permission="gateways.view" disallowSupplier>
+              <ReportsPage />
             </ProtectedRoute>
           }
         />

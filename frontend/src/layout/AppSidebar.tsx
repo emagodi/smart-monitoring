@@ -70,6 +70,15 @@ const navGroups: NavGroup[] = [
         scopes: ["NATIONAL"],
         permission: "dashboard.read",
       },
+      {
+        icon: <FileText className="w-5 h-5" />,
+        name: "Reports",
+        path: "/reports",
+        scopes: ["NATIONAL", "DEPOT"],
+        permission: "gateways.view",
+        depotAnyOf: ["gateways.view", "transformers.read"],
+        hideForSupplier: true,
+      },
     ],
   },
   {
