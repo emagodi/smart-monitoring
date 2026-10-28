@@ -156,6 +156,7 @@ public class LoriotGatewaySyncService {
             return;
         }
         flagSharedPositions(fetched);
+        fillFromGatewayGps(fetched);
         try {
             for (LoriotGateway dto : fetched) {
                 try {
@@ -217,6 +218,38 @@ public class LoriotGatewaySyncService {
         if (placeholders > 0) {
             log.info("LORIOT sync: {} of {} gateways have no real location in LORIOT (set it in LORIOT or edit the gateway here)", placeholders, fetched.size());
         }
+    }
+
+    /** When each gateway's GPS history was last checked (gateways without a position are re-checked every 30 min). */
+    private final Map<String, Long> gpsCheckedAt = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long GPS_RECHECK_MS = 30 * 60_000L;
+
+    /**
+     * Gateways with no usable position in LORIOT's gateway record: look at the GPS fixes the gateway itself sent
+     * (LORIOT's GPS tab). If there is one, use it, so a gateway that reports GPS gets its location automatically.
+     */
+    private void fillFromGatewayGps(List<LoriotGateway> fetched) {
+        if (fetched == null) return;
+        long now = System.currentTimeMillis();
+        int found = 0;
+        for (LoriotGateway g : fetched) {
+            if (g.getLatitude() != null && g.getLongitude() != null) continue;
+            String id = g.getId() != null ? g.getId() : g.getGweui();
+            if (id == null) continue;
+            Long last = gpsCheckedAt.get(id);
+            if (last != null && now - last < GPS_RECHECK_MS) continue;
+            gpsCheckedAt.put(id, now);
+            BigDecimal[] fix = clientAdapter.latestGpsFix(id);
+            if (fix == null) continue;
+            g.setLatitude(fix[0]);
+            g.setLongitude(fix[1]);
+            g.setAltitude(fix[2]);
+            g.setLocationPlaceholder(false);
+            g.setLocationReportedByGateway(true);
+            gpsCheckedAt.remove(id); // keep following a gateway that reports GPS
+            found++;
+        }
+        if (found > 0) log.info("LORIOT sync: took the position for {} gateway(s) from the GPS fixes they report", found);
     }
 
     private static String positionKey(LoriotGateway g) {
