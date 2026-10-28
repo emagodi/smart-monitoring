@@ -304,11 +304,37 @@ public class LoriotClientAdapter {
     private Instant latestInstant(JsonNode node, String... keys) {
         Instant best = null;
         Instant ceiling = Instant.now().plusSeconds(300);
+        Instant floor = Instant.parse("2015-01-01T00:00:00Z"); // LORIOT uses 1970-01-01 for "never"
         for (String k : keys) {
             Instant v = instantOr(node, k);
-            if (v != null && !v.isAfter(ceiling) && (best == null || v.isAfter(best))) best = v;
+            if (v != null && v.isAfter(floor) && !v.isAfter(ceiling) && (best == null || v.isAfter(best))) best = v;
         }
         return best;
+    }
+
+    /**
+     * Latest GPS fix the gateway itself sent to LORIOT (LORIOT's "GPS" tab: /1/nwk/gateway/{id}/gps), or null.
+     * Returns {lat, lon, alt}; alt may be null. Never throws.
+     */
+    public BigDecimal[] latestGpsFix(String gatewayId) {
+        if (gatewayId == null || gatewayId.isBlank()) return null;
+        try {
+            String id = gatewayId.replace("-", "").replace(":", "").trim().toUpperCase(Locale.ROOT);
+            String body = authenticatedGet(buildUrl("/1/nwk/gateway/" + id + "/gps?sort=-date&page=1&perPage=1"));
+            if (body == null || body.isBlank()) return null;
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode list = root.isArray() ? root : root.path("gps");
+            if (!list.isArray() || list.isEmpty()) return null;
+            JsonNode fix = list.get(0);
+            BigDecimal lat = nonZero(decimalOr(fix, "lat", "latitude"));
+            BigDecimal lon = nonZero(decimalOr(fix, "lon", "lng", "longitude"));
+            if (lat == null || lon == null || lat.abs().compareTo(BigDecimal.valueOf(90)) > 0
+                    || lon.abs().compareTo(BigDecimal.valueOf(180)) > 0 || isPlaceholderLocation(lat, lon)) return null;
+            return new BigDecimal[]{lat, lon, decimalOr(fix, "alt", "altitude")};
+        } catch (Exception e) {
+            log.debug("LORIOT GPS lookup failed for {}: {}", gatewayId, e.getMessage());
+            return null;
+        }
     }
 
     /** One line per LORIOT gateway: where its location comes from and when it was last heard (admin troubleshooting). */
