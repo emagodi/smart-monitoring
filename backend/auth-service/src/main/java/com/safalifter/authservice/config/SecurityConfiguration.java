@@ -38,6 +38,7 @@ public class SecurityConfiguration {
                                 "/api/v1/auth/refresh-token-cookie",
                                 "/api/v1/auth/access/email/**",
                                 "/api/v1/auth/internal/notification-routing/**",
+                                "/api/v1/auth/internal/directory/**",
                                 "/api/v1/auth/internal/chat-command-users/**",
                                 "/v2/api-docs", "/v3/api-docs/**",
                                 "/swagger-resources/**", "/swagger-ui/**",

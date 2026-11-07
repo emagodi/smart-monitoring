@@ -34,6 +34,8 @@ public class SecurityConfiguration {
                                 "/swagger-resources/**", "/swagger-ui/**",
                                 "/webjars/**", "/swagger-ui.html", "/error",
                                 "/api/v1/chat-commands/**",
+                                // WhatsApp / USSD / mobile channel bridges: guarded by the channel bridge key + registered phone
+                                "/api/v1/channels/**",
                                 "/api/v1/integrations/digital/**",
                                 "/internal/integrations/loriot/**",
                                 // crew response links: guarded by a 192-bit random token per dispatch

@@ -23,4 +23,11 @@ public interface TransformerChatBridgeClient {
             @RequestHeader("X-Chat-Bridge-Key") String bridgeKey,
             @RequestBody ChatCommandBridgeRequest request
     );
+
+    /** Reaction desk over WhatsApp: OPEN, ACK <id>, ARRIVED <id>, CLOSE <id> REAL|FALSE|FAULT|AUTH. Returns {reply}. */
+    @PostMapping("/api/v1/channels/whatsapp")
+    java.util.Map<String, Object> reactionCommand(
+            @RequestHeader("X-Channel-Key") String channelKey,
+            @RequestBody java.util.Map<String, String> request
+    );
 }

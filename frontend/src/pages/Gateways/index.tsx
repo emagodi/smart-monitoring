@@ -17,6 +17,7 @@ import {
   CardSim,
   Wifi,
   WifiOff,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
@@ -26,6 +27,7 @@ import { Modal } from "../../components/ui/modal";
 import { EditGatewayModal } from "./EditGatewayModal";
 import { AssignSimModal } from "./AssignSimModal";
 import { GatewayDetailSheet } from "./GatewayDetailSheet";
+import GatewayTransformersDialog from "./GatewayTransformersDialog";
 
 type GatewayStatus = "ONLINE" | "OFFLINE" | "DEGRADED" | "NEVER_SEEN" | "UNKNOWN";
 
@@ -309,6 +311,7 @@ export default function GatewaysIndex() {
   const [simAssignments, setSimAssignments] = useState<GatewaySimAssignment[]>([]);
 
   const [assignSimModalOpen, setAssignSimModalOpen] = useState(false);
+  const [transformersOf, setTransformersOf] = useState<{ id: number; name: string } | null>(null);
   const [assignSimTargetGatewayId, setAssignSimTargetGatewayId] = useState<number | null>(null);
 
   const canSync = hasPermission("gateways.sync");
@@ -1072,6 +1075,14 @@ export default function GatewaysIndex() {
                       <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                         <button
                           type="button"
+                          onClick={() => setTransformersOf({ id: item.id, name: item.name })}
+                          title="Transformers on this gateway"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-violet-200 bg-violet-50 text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
+                        >
+                          <Zap className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void openDetailModal(item)}
                           title="View / Edit"
                           className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
@@ -1212,6 +1223,7 @@ export default function GatewaysIndex() {
           apiBaseUrl={API_BASE_URL}
         />
       ) : null}
+      <GatewayTransformersDialog gateway={transformersOf} token={token} onClose={() => setTransformersOf(null)} />
     </div>
   );
 }

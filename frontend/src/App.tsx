@@ -37,6 +37,12 @@ const CrewRespond = lazyPage(() => import("./pages/Response/CrewRespond"));
 const TransformerRegistry = lazyPage(() => import("./pages/Registry"));
 const InsightsPage = lazyPage(() => import("./pages/Insights"));
 const ReportsPage = lazyPage(() => import("./pages/Reports"));
+const InstallationsPage = lazyPage(() => import("./pages/Installations"));
+const InstallationDetailPage = lazyPage(() => import("./pages/Installations/InstallationDetail"));
+const CommissioningFormPage = lazyPage(() => import("./pages/Installations/CommissioningForm"));
+const DutyRosterPage = lazyPage(() => import("./pages/Duty"));
+const FaultsPage = lazyPage(() => import("./pages/Faults"));
+const AlarmInsightsPage = lazyPage(() => import("./pages/AlarmInsights"));
 const IntegrationsPage = lazyPage(() => import("./pages/Integrations"));
 
 const AppRoutes = () => {
@@ -174,7 +180,7 @@ const AppRoutes = () => {
         <Route
           path="reports"
           element={
-            <ProtectedRoute scopes={["NATIONAL", "DEPOT"]} depotAnyOf={["gateways.view", "transformers.read"]} permission="gateways.view" disallowSupplier>
+            <ProtectedRoute anyOf={["reports.read", "gateways.view", "installations.read", "faults.read"]}>
               <ReportsPage />
             </ProtectedRoute>
           }
@@ -200,6 +206,54 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute scopes={["NATIONAL"]} permission="integrations.read">
               {isSupplierUser ? <Navigate to="/dashboard" replace /> : <IntegrationsPage />}
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="duty"
+          element={
+            <ProtectedRoute anyOf={["duty.read", "duty.manage"]} disallowSupplier>
+              <DutyRosterPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="faults"
+          element={
+            <ProtectedRoute anyOf={["faults.read", "faults.record"]}>
+              <FaultsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="alarm-insights"
+          element={
+            <ProtectedRoute anyOf={["alerts.read", "response.read", "reports.read"]}>
+              <AlarmInsightsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="installations"
+          element={
+            <ProtectedRoute permission="installations.read">
+              <InstallationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="installations/:id"
+          element={
+            <ProtectedRoute permission="installations.read">
+              <InstallationDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="installations/:id/attempts/:attemptId"
+          element={
+            <ProtectedRoute permission="installations.read">
+              <CommissioningFormPage />
             </ProtectedRoute>
           }
         />

@@ -31,7 +31,11 @@ import {
   Truck,
   BarChart3,
   Plug,
-  Handshake
+  Handshake,
+  ClipboardCheck,
+  Flame,
+  UserCheck,
+  Wrench
 } from 'lucide-react';
 
 interface NavItem {
@@ -46,6 +50,8 @@ interface NavItem {
   scopes?: Scope[];
   /** For depot users: shown if they hold any of these (depot staff see their own sites and gateways). */
   depotAnyOf?: string[];
+  /** Shown if the user holds any of these permissions (all scopes). */
+  anyOf?: string[];
 }
 
 interface NavGroup {
@@ -74,10 +80,13 @@ const navGroups: NavGroup[] = [
         icon: <FileText className="w-5 h-5" />,
         name: "Reports",
         path: "/reports",
-        scopes: ["NATIONAL", "DEPOT"],
-        permission: "gateways.view",
-        depotAnyOf: ["gateways.view", "transformers.read"],
-        hideForSupplier: true,
+        anyOf: ["reports.read", "gateways.view", "installations.read", "faults.read"],
+      },
+      {
+        icon: <Flame className="w-5 h-5" />,
+        name: "Alarm insights",
+        path: "/alarm-insights",
+        anyOf: ["alerts.read", "response.read", "reports.read"],
       },
     ],
   },
@@ -152,6 +161,25 @@ const navGroups: NavGroup[] = [
   {
     name: "Operations",
     items: [
+      {
+        icon: <ClipboardCheck className="w-5 h-5" />,
+        name: "Installations",
+        path: "/installations",
+        permission: "installations.read",
+      },
+      {
+        icon: <UserCheck className="w-5 h-5" />,
+        name: "Duty roster",
+        path: "/duty",
+        anyOf: ["duty.read", "duty.manage"],
+        hideForSupplier: true,
+      },
+      {
+        icon: <Wrench className="w-5 h-5" />,
+        name: "Fault alarms",
+        path: "/faults",
+        anyOf: ["faults.read", "faults.record"],
+      },
       {
         icon: <Siren className="w-5 h-5" />,
         name: "Response Desk",
@@ -275,9 +303,11 @@ const AppSidebar: React.FC = () => {
           )
           .filter(
           (item) =>
-            (scope === "DEPOT" && item.depotAnyOf
-              ? item.depotAnyOf.some((p) => hasPermission(p))
-              : !item.permission || hasPermission(item.permission)) &&
+            (item.anyOf
+              ? item.anyOf.some((p) => hasPermission(p))
+              : scope === "DEPOT" && item.depotAnyOf
+                ? item.depotAnyOf.some((p) => hasPermission(p))
+                : !item.permission || hasPermission(item.permission)) &&
             !(isSupplierUser && item.hideForSupplier) &&
             (!isSupplierUser ||
               !item.supplierCodes ||

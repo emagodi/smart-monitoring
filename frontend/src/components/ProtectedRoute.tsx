@@ -12,9 +12,11 @@ interface ProtectedRouteProps {
   scopes?: Scope[];
   /** For depot users: allowed with any of these instead of `permission`. */
   depotAnyOf?: string[];
+  /** Allowed with any of these permissions (all scopes). */
+  anyOf?: string[];
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, permission, disallowSupplier = false, allowedSupplierCodes, scopes, depotAnyOf }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, permission, disallowSupplier = false, allowedSupplierCodes, scopes, depotAnyOf, anyOf }) => {
   const { isAuthenticated, hasPermission, user } = useAuth();
   const { scope } = useScope();
   const isSupplierUser = Boolean(user?.supplierCode) || (user?.userType || '').toLowerCase() === 'supplier';
@@ -43,6 +45,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, permission, d
   if (scope === 'DEPOT' && depotAnyOf) {
     if (!depotAnyOf.some((p) => hasPermission(p))) return <Navigate to="/forbidden" replace />;
     return <>{children}</>;
+  }
+
+  if (anyOf && !anyOf.some((p) => hasPermission(p))) {
+    return <Navigate to="/forbidden" replace />;
   }
 
   if (permission && !hasPermission(permission)) {

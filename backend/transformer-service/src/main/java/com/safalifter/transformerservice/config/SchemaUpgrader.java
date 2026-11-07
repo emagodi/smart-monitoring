@@ -278,6 +278,203 @@ public class SchemaUpgrader implements ApplicationRunner, org.springframework.be
                 }
                 return c;
             });
+            changes += step("installation & commissioning lifecycle", () -> {
+                int c = 0;
+                c += createTable("installation_requests", """
+                        CREATE TABLE IF NOT EXISTS installation_requests (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            reference VARCHAR(32) NULL,
+                            supplier_code VARCHAR(64) NULL,
+                            supplier_name VARCHAR(255) NULL,
+                            region_id BIGINT NULL,
+                            region_name VARCHAR(255) NULL,
+                            depot_id BIGINT NULL,
+                            depot_name VARCHAR(255) NULL,
+                            planned_date DATE NULL,
+                            planned_end_date DATE NULL,
+                            access_note VARCHAR(2000) NULL,
+                            status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+                            requested_by VARCHAR(255) NULL,
+                            requested_at DATETIME(6) NULL,
+                            decided_by VARCHAR(255) NULL,
+                            decided_at DATETIME(6) NULL,
+                            decision_note VARCHAR(1000) NULL,
+                            updated_at DATETIME(6) NULL,
+                            PRIMARY KEY (id),
+                            KEY idx_ir_status (status),
+                            KEY idx_ir_depot (depot_id),
+                            KEY idx_ir_supplier (supplier_code),
+                            KEY idx_ir_planned (planned_date)
+                        ) ENGINE = InnoDB
+                        """);
+                c += createTable("installation_request_items", """
+                        CREATE TABLE IF NOT EXISTS installation_request_items (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            request_id BIGINT NOT NULL,
+                            transformer_id BIGINT NULL,
+                            site_label VARCHAR(255) NULL,
+                            PRIMARY KEY (id),
+                            KEY idx_iri_request (request_id),
+                            KEY idx_iri_transformer (transformer_id)
+                        ) ENGINE = InnoDB
+                        """);
+                c += createTable("transformer_installations", """
+                        CREATE TABLE IF NOT EXISTS transformer_installations (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            transformer_id BIGINT NOT NULL,
+                            request_id BIGINT NULL,
+                            supplier_code VARCHAR(64) NULL,
+                            supplier_name VARCHAR(255) NULL,
+                            depot_id BIGINT NULL,
+                            status VARCHAR(32) NOT NULL DEFAULT 'INSTALLED',
+                            installed_on DATE NULL,
+                            installed_by VARCHAR(255) NULL,
+                            device_eui VARCHAR(64) NULL,
+                            install_note VARCHAR(1000) NULL,
+                            ready_at DATETIME(6) NULL,
+                            ready_by VARCHAR(255) NULL,
+                            ready_note VARCHAR(1000) NULL,
+                            tentative_date DATE NULL,
+                            scheduled_by VARCHAR(255) NULL,
+                            scheduled_at DATETIME(6) NULL,
+                            schedule_note VARCHAR(1000) NULL,
+                            commissioned_at DATETIME(6) NULL,
+                            failed_at DATETIME(6) NULL,
+                            attempts INT NOT NULL DEFAULT 0,
+                            is_current TINYINT(1) NOT NULL DEFAULT 1,
+                            created_at DATETIME(6) NULL,
+                            updated_at DATETIME(6) NULL,
+                            PRIMARY KEY (id),
+                            KEY idx_ti_transformer (transformer_id, is_current),
+                            KEY idx_ti_status (status),
+                            KEY idx_ti_supplier (supplier_code),
+                            KEY idx_ti_depot (depot_id),
+                            KEY idx_ti_installed (installed_on),
+                            KEY idx_ti_request (request_id)
+                        ) ENGINE = InnoDB
+                        """);
+                c += createTable("commissioning_attempts", """
+                        CREATE TABLE IF NOT EXISTS commissioning_attempts (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            installation_id BIGINT NOT NULL,
+                            transformer_id BIGINT NULL,
+                            attempt_no INT NOT NULL,
+                            status VARCHAR(16) NOT NULL DEFAULT 'DRAFT',
+                            test_date DATE NULL,
+                            depot_label VARCHAR(255) NULL,
+                            location_label VARCHAR(255) NULL,
+                            ss_number VARCHAR(64) NULL,
+                            items MEDIUMTEXT NULL,
+                            comments TEXT NULL,
+                            signatures MEDIUMTEXT NULL,
+                            decided_by VARCHAR(255) NULL,
+                            decided_at DATETIME(6) NULL,
+                            decision_note VARCHAR(1000) NULL,
+                            created_by VARCHAR(255) NULL,
+                            created_at DATETIME(6) NULL,
+                            updated_by VARCHAR(255) NULL,
+                            updated_at DATETIME(6) NULL,
+                            PRIMARY KEY (id),
+                            KEY idx_ca_installation (installation_id),
+                            KEY idx_ca_status (status),
+                            KEY idx_ca_test_date (test_date)
+                        ) ENGINE = InnoDB
+                        """);
+                c += createTable("lifecycle_events", """
+                        CREATE TABLE IF NOT EXISTS lifecycle_events (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            installation_id BIGINT NULL,
+                            request_id BIGINT NULL,
+                            transformer_id BIGINT NULL,
+                            attempt_id BIGINT NULL,
+                            event_type VARCHAR(48) NOT NULL,
+                            from_status VARCHAR(32) NULL,
+                            to_status VARCHAR(32) NULL,
+                            actor_email VARCHAR(255) NULL,
+                            actor_org VARCHAR(16) NULL,
+                            note VARCHAR(2000) NULL,
+                            created_at DATETIME(6) NULL,
+                            PRIMARY KEY (id),
+                            KEY idx_le_installation (installation_id),
+                            KEY idx_le_request (request_id),
+                            KEY idx_le_transformer (transformer_id),
+                            KEY idx_le_created (created_at)
+                        ) ENGINE = InnoDB
+                        """);
+                return c;
+            });
+            changes += step("loss control duty roster + fault alarms", () -> {
+                int c = 0;
+                c += createTable("duty_roster", """
+                        CREATE TABLE IF NOT EXISTS duty_roster (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            depot_id BIGINT NOT NULL,
+                            user_id BIGINT NOT NULL,
+                            user_email VARCHAR(255) NULL,
+                            user_name VARCHAR(255) NULL,
+                            phone VARCHAR(32) NULL,
+                            whatsapp VARCHAR(32) NULL,
+                            on_duty TINYINT(1) NOT NULL DEFAULT 0,
+                            notify_sms TINYINT(1) NOT NULL DEFAULT 1,
+                            notify_whatsapp TINYINT(1) NOT NULL DEFAULT 1,
+                            notify_email TINYINT(1) NOT NULL DEFAULT 0,
+                            shift_note VARCHAR(255) NULL,
+                            updated_by VARCHAR(255) NULL,
+                            updated_at DATETIME(6) NULL,
+                            PRIMARY KEY (id),
+                            UNIQUE KEY uq_duty_depot_user (depot_id, user_id),
+                            KEY idx_duty_user (user_id),
+                            KEY idx_duty_on (depot_id, on_duty)
+                        ) ENGINE = InnoDB
+                        """);
+                c += createTable("transformer_faults", """
+                        CREATE TABLE IF NOT EXISTS transformer_faults (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            transformer_id BIGINT NOT NULL,
+                            depot_id BIGINT NULL,
+                            supplier_code VARCHAR(64) NULL,
+                            supplier_name VARCHAR(255) NULL,
+                            alert_id BIGINT NULL,
+                            fault_type VARCHAR(48) NOT NULL,
+                            description VARCHAR(2000) NULL,
+                            status VARCHAR(16) NOT NULL DEFAULT 'OPEN',
+                            reported_by VARCHAR(255) NULL,
+                            reported_at DATETIME(6) NULL,
+                            resolved_by VARCHAR(255) NULL,
+                            resolved_at DATETIME(6) NULL,
+                            resolution_note VARCHAR(2000) NULL,
+                            PRIMARY KEY (id),
+                            KEY idx_tf_transformer (transformer_id, status),
+                            KEY idx_tf_status (status),
+                            KEY idx_tf_supplier (supplier_code),
+                            KEY idx_tf_reported (reported_at)
+                        ) ENGINE = InnoDB
+                        """);
+                return c;
+            });
+            changes += step("gateway links + fault alarm suppression", () -> {
+                int c = 0;
+                c += createTable("controller_gateway_links", """
+                        CREATE TABLE IF NOT EXISTS controller_gateway_links (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            controller_id BIGINT NOT NULL,
+                            gateway_eui VARCHAR(32) NOT NULL,
+                            first_heard_at DATETIME(6) NULL,
+                            last_heard_at DATETIME(6) NULL,
+                            last_rssi INT NULL,
+                            last_snr DOUBLE NULL,
+                            uplinks BIGINT NOT NULL DEFAULT 0,
+                            PRIMARY KEY (id),
+                            UNIQUE KEY uq_cgl (controller_id, gateway_eui),
+                            KEY idx_cgl_gateway (gateway_eui, last_heard_at)
+                        ) ENGINE = InnoDB
+                        """);
+                c += addColumn("transformer_faults", "suppress_alerts", "TINYINT(1) NOT NULL DEFAULT 1");
+                c += addColumn("transformer_faults", "suppressed_triggers", "INT NOT NULL DEFAULT 0");
+                c += addColumn("transformer_faults", "last_suppressed_at", "DATETIME(6) NULL");
+                c += addColumn("transformer_faults", "alerts_closed", "INT NOT NULL DEFAULT 0");
+                return c;
+            });
             changes += step("gateways: drop LORIOT placeholder positions", () -> {
                 if (!tableExists("gateways")) return 0;
                 // LORIOT reports a default point in Switzerland for gateways whose location was never set there.

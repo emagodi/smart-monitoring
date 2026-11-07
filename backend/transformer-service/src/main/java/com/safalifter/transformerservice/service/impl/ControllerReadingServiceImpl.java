@@ -45,11 +45,19 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     private final TransformerRepository transformerRepository;
     private final AlertService alertService;
     private final NotificationClient notificationClient;
+    private final com.safalifter.transformerservice.reaction.DutyNotifier dutyNotifier;
+    private final com.safalifter.transformerservice.reaction.FaultService faultService;
+    private final com.safalifter.transformerservice.reaction.GatewayLinkService gatewayLinkService;
     private final ObjectMapper objectMapper;
 
     @Override
     public ControllerReading save(ControllerReading reading) {
         ControllerReading saved = repository.save(reading);
+        try {
+            gatewayLinkService.learn(saved.getControllerId(), saved.getRawPayload(), saved.getCreatedAt());
+        } catch (Exception ignored) {
+            // learning which gateway heard the device is best effort
+        }
         Controller controller = saved.getControllerId() != null
                 ? controllerRepository.findById(saved.getControllerId()).orElse(null)
                 : null;
@@ -111,6 +119,14 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     }
 
     private void createAlert(Transformer transformer, Controller controller, ControllerReading reading) {
+        // An open fault alarm with "pause alerts" on means this device is known to be faulty: no incident, no paging,
+        // no siren until the fault is resolved. The trigger is only counted on the fault.
+        Long pausedBy = faultService.suppressingFault(transformer.getId());
+        if (pausedBy != null) {
+            faultService.recordSuppressedTrigger(pausedBy);
+            log.info("Trigger on transformer {} ignored: alerts paused by open fault alarm #{}", transformer.getId(), pausedBy);
+            return;
+        }
         String triggerSummary = buildTriggerSummary(transformer.getType(), reading);
         AlertRequest alert = AlertRequest.builder()
                 .transformerId(transformer.getId())
@@ -153,6 +169,12 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                     .message(alert.getMessage())
                     .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(transformer, triggerSummary, reading.getCreatedAt()))
                     .build());
+        } catch (Exception ignored) {
+        }
+        // Loss Control staff on duty for this depot are paged directly, with the alert number to acknowledge.
+        try {
+            dutyNotifier.pageOnDuty(raised.getId(), transformer.getDepotId(), transformer.getName(), triggerSummary, null,
+                    buildSecurityAlertTemplateParameters(transformer, triggerSummary, reading.getCreatedAt()), !result.isCreated(), occurrences);
         } catch (Exception ignored) {
         }
     }

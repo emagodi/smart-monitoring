@@ -37,6 +37,7 @@ public class DashboardService {
     private final NamedParameterJdbcTemplate jdbc;
     private final AccessScopeService scope;
     private final RegistryService registryService;
+    private final com.safalifter.transformerservice.lifecycle.LifecycleService lifecycleService;
 
     private final TtlCache<Map<String, Object>> trendsCache = TtlCache.shared(60_000, 512, "dashboard-trends", new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
     private final TtlCache<List<Map<String, Object>>> feedCache = TtlCache.shared(15_000, 2048, "notifications", new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
@@ -163,7 +164,7 @@ public class DashboardService {
      */
     public List<Map<String, Object>> notifications() {
         String key = scope.scopeKey() + "|" + scope.hasPermission("alerts.read") + scope.hasPermission("response.read")
-                + scope.hasPermission("transformers.update") + "|" + scope.getCurrentUserEmail();
+                + scope.hasPermission("transformers.update") + scope.hasPermission("installations.read") + "|" + scope.getCurrentUserEmail();
         return feedCache.get(key, this::computeNotifications);
     }
 
@@ -257,6 +258,8 @@ public class DashboardService {
                 // controllers table not available
             }
         }
+
+        if (lifecycleService != null) items.addAll(lifecycleService.bellItems());
 
         items.sort(Comparator.comparing((Map<String, Object> m) -> (LocalDateTime) m.get("at")).reversed());
         return items.size() > 25 ? new ArrayList<>(items.subList(0, 25)) : items;
