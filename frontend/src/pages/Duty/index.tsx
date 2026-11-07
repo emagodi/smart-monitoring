@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import axios from "axios";
-import { BellRing, Check, Loader2, Mail, MessageCircle, Phone, Save, ShieldCheck, Smartphone, UserCheck, Users } from "lucide-react";
+import { BellRing, Loader2, Mail, MessageCircle, Phone, Save, ShieldCheck, UserCheck, Users } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
 import { cachedGet, invalidateCache } from "../../lib/cache";
 import { Button, EmptyRow, HeroStat, HeroStats, Notice, PageHero, Panel, SearchBox, SelectBox, SkeletonRows, tableCls } from "../../components/ui/page";
 import { useGeography } from "../Registry/geo";
 import { apiError } from "../Response/shared";
+import AckGuide from "./AckGuide";
 
 const API = (import.meta.env.VITE_API_BASE_URL || "") + "/api/v1/duty";
 
@@ -306,26 +307,7 @@ export default function DutyRoster() {
         ) : null}
       </Panel>
 
-      <Panel title="How the team acknowledges" icon={<Smartphone className="h-4 w-4" />}>
-        <div className="grid gap-3 p-4 text-sm text-slate-600 sm:grid-cols-3 dark:text-slate-300">
-          <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
-            <p className="mb-1 font-semibold text-slate-800 dark:text-slate-100">Web</p>
-            The siren rings on every page for people on duty until the alert is acknowledged. Use <b>Acknowledge</b> on the red banner or the Response Desk.
-          </div>
-          <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
-            <p className="mb-1 font-semibold text-slate-800 dark:text-slate-100">WhatsApp</p>
-            Reply to the alert: <code>ACK 1234</code>, <code>ARRIVED 1234</code>, <code>CLOSE 1234 FALSE</code> (or REAL / FAULT / AUTH). <code>OPEN</code> lists open alerts.
-          </div>
-          <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
-            <p className="mb-1 font-semibold text-slate-800 dark:text-slate-100">USSD</p>
-            Dial the TAIS short code: 1 Open alerts · 2 Acknowledge · 3 Team on site · 4 Close. Works on any phone, no data needed.
-          </div>
-        </div>
-        <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500 dark:border-slate-800">
-          <Check className="mr-1 inline h-3 w-3" />
-          The phone number used must be on the person&apos;s user profile; every action runs with their own permissions and is recorded in the incident timeline.
-        </p>
-      </Panel>
+      <AckGuide />
     </div>
   );
 }

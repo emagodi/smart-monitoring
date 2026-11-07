@@ -36,7 +36,13 @@ public class FaultService {
     private final NamedParameterJdbcTemplate jdbc;
     private final AccessScopeService scope;
 
-    public record Raise(Long transformerId, String faultType, String description, Long alertId) {}
+    public record Raise(Long transformerId, String faultType, String description, Long alertId, Boolean suppressAlerts, Boolean closeOpenAlerts) {}
+
+    public record Suppress(Boolean suppress) {}
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.safalifter.transformerservice.service.ResponseService responseService;
 
     public record Resolve(String note) {}
 
@@ -45,7 +51,72 @@ public class FaultService {
         if (in == null || in.transformerId() == null) bad("Choose the transformer");
         String type = in.faultType() == null ? "OTHER" : in.faultType().trim().toUpperCase(Locale.ROOT);
         if (!TYPES.contains(type)) bad("Unknown fault type");
-        return insert(in.transformerId(), type, in.description(), in.alertId(), scope.getCurrentUserEmail(), true);
+        Map<String, Object> f = insert(in.transformerId(), type, in.description(), in.alertId(), scope.getCurrentUserEmail(), true);
+        long id = ((Number) f.get("id")).longValue();
+        boolean suppress = !Boolean.FALSE.equals(in.suppressAlerts());
+        jdbc.update("UPDATE transformer_faults SET suppress_alerts = :s WHERE id = :id", new MapSqlParameterSource("s", suppress).addValue("id", id));
+        if (!Boolean.FALSE.equals(in.closeOpenAlerts())) {
+            int closed = closeOpenAlerts(in.transformerId(), id, FAULT_LABEL.getOrDefault(type, type));
+            jdbc.update("UPDATE transformer_faults SET alerts_closed = :n WHERE id = :id", new MapSqlParameterSource("n", closed).addValue("id", id));
+        }
+        return get(id);
+    }
+
+    private static final Map<String, String> FAULT_LABEL = Map.of("FALSE_TRIGGERING", "keeps triggering falsely", "SENSOR_FAULT", "sensor fault",
+            "POWER_SUPPLY", "power supply", "BATTERY", "battery", "COMMUNICATION", "communication", "SIREN_LIGHTS", "siren / lights",
+            "TAMPERED", "tampered", "DEVICE_OFFLINE", "device offline", "OTHER", "fault");
+
+    /** Closes the transformer's open incidents as "technical fault" (the device, not an intruder, caused them). */
+    private int closeOpenAlerts(Long transformerId, long faultId, String what) {
+        List<Long> open = jdbc.queryForList("""
+                SELECT a.id FROM alerts a LEFT JOIN alert_cases c ON c.alert_id = a.id
+                 WHERE a.transformer_id = :t AND (c.id IS NULL OR c.status NOT IN ('RESOLVED', 'FALSE_ALARM')) ORDER BY a.id LIMIT 5000""",
+                Map.of("t", transformerId), Long.class);
+        int n = 0;
+        for (Long alertId : open) {
+            try {
+                if (responseService.closeAsSystem(alertId, com.safalifter.transformerservice.enums.IncidentOutcome.TECHNICAL_FAULT,
+                        "Closed with fault alarm #" + faultId + " (" + what + ") raised by " + scope.getCurrentUserEmail())) n++;
+            } catch (Exception e) {
+                // keep going: one bad case must not stop the rest
+            }
+        }
+        return n;
+    }
+
+    /** Pause / resume alerts for an open fault. */
+    public Map<String, Object> setSuppression(long id, Suppress in) {
+        require("faults.record");
+        Map<String, Object> f = get(id);
+        if (!"OPEN".equals(f.get("status"))) bad("The fault is already resolved");
+        jdbc.update("UPDATE transformer_faults SET suppress_alerts = :s WHERE id = :id",
+                new MapSqlParameterSource("s", in == null || !Boolean.FALSE.equals(in.suppress())).addValue("id", id));
+        return get(id);
+    }
+
+    /**
+     * Open fault on this transformer that pauses its alerts (no incident, no paging, no siren) until resolved, or null.
+     * Used by the alert pipeline; no permission check.
+     */
+    public Long suppressingFault(Long transformerId) {
+        if (transformerId == null) return null;
+        try {
+            List<Long> ids = jdbc.queryForList("SELECT id FROM transformer_faults WHERE transformer_id = :t AND status = 'OPEN' AND suppress_alerts = 1 ORDER BY id DESC LIMIT 1",
+                    Map.of("t", transformerId), Long.class);
+            return ids.isEmpty() ? null : ids.get(0);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void recordSuppressedTrigger(Long faultId) {
+        if (faultId == null) return;
+        try {
+            jdbc.update("UPDATE transformer_faults SET suppressed_triggers = suppressed_triggers + 1, last_suppressed_at = :now WHERE id = :id",
+                    new MapSqlParameterSource("now", Timestamp.valueOf(LocalDateTime.now())).addValue("id", faultId));
+        } catch (Exception ignored) {
+            // counting is best effort
+        }
     }
 
     /** Called when an incident is closed as a technical fault (no permission check: the close itself was checked). */
@@ -54,8 +125,16 @@ public class FaultService {
         try {
             Long open = jdbc.query("SELECT id FROM transformer_faults WHERE transformer_id = :t AND status = 'OPEN' AND alert_id = :a LIMIT 1",
                     new MapSqlParameterSource("t", transformerId).addValue("a", alertId), rs -> rs.next() ? rs.getLong(1) : null);
-            if (open == null) insert(transformerId, "FALSE_TRIGGERING".equals(note) ? "FALSE_TRIGGERING" : "SENSOR_FAULT",
-                    note != null ? note : "Incident #" + alertId + " closed as technical fault", alertId, actor, false);
+            if (open == null) {
+                try {
+                    insert(transformerId, "SENSOR_FAULT", note != null ? note : "Incident #" + alertId + " closed as technical fault", alertId, actor, false);
+                } catch (Exception ignored) {
+                    // inserted; reading it back needs faults.read, which the closing user may not have
+                }
+                // raised from one incident: alerts keep flowing until someone pauses them on the Fault alarms page
+                jdbc.update("UPDATE transformer_faults SET suppress_alerts = 0 WHERE transformer_id = :t AND alert_id = :a",
+                        new MapSqlParameterSource("t", transformerId).addValue("a", alertId));
+            }
         } catch (Exception ignored) {
             // table not ready yet: the incident close must still succeed
         }

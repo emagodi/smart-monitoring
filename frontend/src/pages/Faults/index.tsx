@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertOctagon, Check, CheckCircle2, Plus, Wrench } from "lucide-react";
+import { AlertOctagon, Bell, BellOff, Check, CheckCircle2, Plus, Wrench } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
 import { cachedGet } from "../../lib/cache";
@@ -43,7 +43,13 @@ export type Fault = {
   resolvedAt?: string | null;
   resolutionNote?: string | null;
   ageHours?: number | null;
+  suppressAlerts?: boolean | number | null;
+  suppressedTriggers?: number | null;
+  lastSuppressedAt?: string | null;
+  alertsClosed?: number | null;
 };
+
+const paused = (f: Fault) => f.status === "OPEN" && (f.suppressAlerts === true || f.suppressAlerts === 1);
 
 /** Raise a fault alarm: usable from the transformer list (preset transformer) or the Faults page. */
 export function RaiseFaultDialog({
@@ -55,12 +61,14 @@ export function RaiseFaultDialog({
   open: boolean;
   onClose: () => void;
   onDone: () => void;
-  transformer?: { id: number; name: string; transformerNumber?: string | null } | null;
+  transformer?: { id: number; name: string; transformerNumber?: string | null; openAlerts?: number } | null;
 }) {
   const { token } = useAuth();
   const [txs, setTxs] = useState<Array<{ id: number; name: string; transformerNumber?: string | null }>>([]);
   const [type, setType] = useState("SENSOR_FAULT");
   const [desc, setDesc] = useState("");
+  const [pause, setPause] = useState(true);
+  const [closeOpen, setCloseOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -72,7 +80,7 @@ export function RaiseFaultDialog({
     setBusy(true);
     setError(null);
     try {
-      await axios.post(API, { transformerId: target.id, faultType: type, description: desc }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post(API, { transformerId: target.id, faultType: type, description: desc, suppressAlerts: pause, closeOpenAlerts: closeOpen }, { headers: { Authorization: `Bearer ${token}` } });
       setDesc("");
       onDone();
     } catch (e) {
@@ -121,6 +129,26 @@ export function RaiseFaultDialog({
         <Field label="Details">
           <textarea className={`${inputCls} h-24 py-2`} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. Door sensor triggers every night at ~02:00 with nobody on site" />
         </Field>
+        <label className={`flex cursor-pointer gap-3 rounded-2xl border p-3 transition ${pause ? "border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10" : "border-slate-200 dark:border-slate-700"}`}>
+          <input type="checkbox" checked={pause} onChange={(e) => setPause(e.target.checked)} className="mt-0.5 h-4 w-4 accent-amber-600" />
+          <span>
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <BellOff className="h-4 w-4 text-amber-600" /> Pause alerts from this transformer until the fault is fixed
+            </span>
+            <span className="block text-xs text-slate-500">
+              Its triggers no longer open incidents, page the team or ring the siren. They are only counted on this fault. Alerts resume automatically when it is marked fixed.
+            </span>
+          </span>
+        </label>
+        <label className="flex cursor-pointer gap-3 rounded-2xl border border-slate-200 p-3 dark:border-slate-700">
+          <input type="checkbox" checked={closeOpen} onChange={(e) => setCloseOpen(e.target.checked)} className="mt-0.5 h-4 w-4 accent-blue-600" />
+          <span>
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Close its open alerts as technical fault{transformer?.openAlerts ? ` (${transformer.openAlerts})` : ""}
+            </span>
+            <span className="block text-xs text-slate-500">Clears the alerts this fault already caused from the Response Desk and the siren.</span>
+          </span>
+        </label>
       </div>
     </Dialog>
   );
@@ -185,12 +213,22 @@ export default function FaultsPage() {
       await axios.post(`${API}/${resolveFor.id}/resolve`, { note: resolveNote }, { headers: { Authorization: `Bearer ${token}` } });
       setResolveFor(null);
       setResolveNote("");
-      setNotice("Fault marked as fixed.");
+      setNotice(paused(resolveFor) ? "Fault marked as fixed. Alerts from this transformer are active again." : "Fault marked as fixed.");
       void load(true);
     } catch (e) {
       setError(apiError(e, "Could not resolve."));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const togglePause = async (f: Fault) => {
+    try {
+      await axios.post(`${API}/${f.id}/suppress`, { suppress: !paused(f) }, { headers: { Authorization: `Bearer ${token}` } });
+      setNotice(paused(f) ? `Alerts from ${f.transformerName} resumed.` : `Alerts from ${f.transformerName} paused until the fault is fixed.`);
+      void load(true);
+    } catch (e) {
+      setError(apiError(e, "Could not change the alert pause."));
     }
   };
 
@@ -304,9 +342,21 @@ export default function FaultsPage() {
                     </td>
                     <td className={tableCls.td} data-label="Status">
                       {f.status === "OPEN" ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                          Open · {f.ageHours != null ? (f.ageHours < 48 ? `${f.ageHours} h` : `${Math.round(f.ageHours / 24)} d`) : ""}
-                        </span>
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                            Open · {f.ageHours != null ? (f.ageHours < 48 ? `${f.ageHours} h` : `${Math.round(f.ageHours / 24)} d`) : ""}
+                          </span>
+                          {paused(f) ? (
+                            <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700" title={f.lastSuppressedAt ? `Last ignored trigger ${fmtDateTime(f.lastSuppressedAt)}` : undefined}>
+                              <BellOff className="h-3 w-3" /> Alerts paused{f.suppressedTriggers ? ` · ${f.suppressedTriggers} trigger${f.suppressedTriggers === 1 ? "" : "s"} ignored` : ""}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                              <Bell className="h-3 w-3" /> Alerts still active
+                            </span>
+                          )}
+                          {f.alertsClosed ? <span className="block text-[10px] text-slate-400">{f.alertsClosed} open alert{f.alertsClosed === 1 ? "" : "s"} closed</span> : null}
+                        </div>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" title={f.resolutionNote ?? ""}>
                           Fixed {fmtDateTime(f.resolvedAt)}
@@ -315,9 +365,14 @@ export default function FaultsPage() {
                     </td>
                     <td className={`${tableCls.td} text-right`} data-actions>
                       {canRecord && f.status === "OPEN" ? (
-                        <Button size="sm" icon={<Check className="h-3.5 w-3.5" />} onClick={() => setResolveFor(f)}>
-                          Mark fixed
-                        </Button>
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          <Button size="sm" variant="ghost" icon={paused(f) ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />} onClick={() => void togglePause(f)}>
+                            {paused(f) ? "Resume alerts" : "Pause alerts"}
+                          </Button>
+                          <Button size="sm" icon={<Check className="h-3.5 w-3.5" />} onClick={() => setResolveFor(f)}>
+                            Mark fixed
+                          </Button>
+                        </div>
                       ) : null}
                     </td>
                   </tr>

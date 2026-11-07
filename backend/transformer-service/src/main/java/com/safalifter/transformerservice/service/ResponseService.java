@@ -284,6 +284,24 @@ public class ResponseService {
         return toDispatchResponse(dispatch);
     }
 
+    /**
+     * Closes an incident on behalf of the system (e.g. a fault alarm was raised for the transformer, so its open alerts
+     * were caused by the device). No permission check: the caller has already been authorised. Returns false when the
+     * alert does not exist or is already closed.
+     */
+    public boolean closeAsSystem(Long alertId, com.safalifter.transformerservice.enums.IncidentOutcome outcome, String note) {
+        Alert alert = alertRepository.findById(alertId).orElse(null);
+        if (alert == null) return false;
+        AlertCase alertCase = caseForAlert(alert);
+        if (alertCase.getStatus() != null && !alertCase.getStatus().isOpen()) return false;
+        CloseIncidentRequest r = new CloseIncidentRequest();
+        r.setOutcome(outcome);
+        r.setNote(note);
+        String actor = accessScopeService.getCurrentUserEmail();
+        closeInternal(alert, r, actor != null ? actor : "system");
+        return true;
+    }
+
     public AlertResponse close(Long alertId, CloseIncidentRequest request) {
         requirePermission(PERM_CLOSE);
         Alert alert = loadVisibleAlert(alertId);

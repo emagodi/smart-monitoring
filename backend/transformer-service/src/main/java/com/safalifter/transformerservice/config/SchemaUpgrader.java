@@ -452,6 +452,29 @@ public class SchemaUpgrader implements ApplicationRunner, org.springframework.be
                         """);
                 return c;
             });
+            changes += step("gateway links + fault alarm suppression", () -> {
+                int c = 0;
+                c += createTable("controller_gateway_links", """
+                        CREATE TABLE IF NOT EXISTS controller_gateway_links (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            controller_id BIGINT NOT NULL,
+                            gateway_eui VARCHAR(32) NOT NULL,
+                            first_heard_at DATETIME(6) NULL,
+                            last_heard_at DATETIME(6) NULL,
+                            last_rssi INT NULL,
+                            last_snr DOUBLE NULL,
+                            uplinks BIGINT NOT NULL DEFAULT 0,
+                            PRIMARY KEY (id),
+                            UNIQUE KEY uq_cgl (controller_id, gateway_eui),
+                            KEY idx_cgl_gateway (gateway_eui, last_heard_at)
+                        ) ENGINE = InnoDB
+                        """);
+                c += addColumn("transformer_faults", "suppress_alerts", "TINYINT(1) NOT NULL DEFAULT 1");
+                c += addColumn("transformer_faults", "suppressed_triggers", "INT NOT NULL DEFAULT 0");
+                c += addColumn("transformer_faults", "last_suppressed_at", "DATETIME(6) NULL");
+                c += addColumn("transformer_faults", "alerts_closed", "INT NOT NULL DEFAULT 0");
+                return c;
+            });
             changes += step("gateways: drop LORIOT placeholder positions", () -> {
                 if (!tableExists("gateways")) return 0;
                 // LORIOT reports a default point in Switzerland for gateways whose location was never set there.

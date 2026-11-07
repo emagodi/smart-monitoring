@@ -142,6 +142,15 @@ export default function TransformerRegistry() {
       .catch(() => setOpenFaults({}));
   }, [token, canFault, hasPermission]);
   useEffect(loadFaults, [loadFaults]);
+  // The gateway each transformer reports through (learnt from its uplinks).
+  const canGateways = !isSupplier && hasPermission("gateways.view");
+  const [gatewayOf, setGatewayOf] = useState<Record<string, { gatewayId: number; name?: string | null; status?: string | null; rssi?: number | null; lastHeardAt?: string | null; gatewayCount: number }>>({});
+  useEffect(() => {
+    if (!token) return;
+    cachedGet<typeof gatewayOf>(`${API_BASE_URL}/api/v1/gateways/links/by-transformer`, token, 30_000)
+      .then((m) => setGatewayOf(m ?? {}))
+      .catch(() => setGatewayOf({}));
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy loading: only the page on screen comes from the server (filtered, sorted and paged there).
   const [pageSize, setPageSize] = useState(10);
@@ -551,13 +560,14 @@ export default function TransformerRegistry() {
                     </span>
                   </div>
                 ) : null}
-                <table className="w-full min-w-[1080px] text-left text-xs">
+                <table className="w-full min-w-[1220px] text-left text-xs">
                   <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:bg-slate-900/60">
                     <tr>
                       <Th onClick={() => sortBy("name")} active={sort.key === "name"}>Transformer</Th>
                       <Th onClick={() => sortBy("region")} active={sort.key === "region"}>Region › District › Depot</Th>
                       <Th onClick={() => sortBy("partner")} active={sort.key === "partner"}>Partner</Th>
                       <Th>Devices</Th>
+                      <Th>Gateway</Th>
                       <Th onClick={() => sortBy("status")} active={sort.key === "status"}>Status</Th>
                       <Th>Arm state</Th>
                       <Th onClick={() => sortBy("alerts")} active={sort.key === "alerts"}>Alerts</Th>
@@ -597,6 +607,33 @@ export default function TransformerRegistry() {
                         <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{row.supplierName || row.supplierCode || <span className="text-slate-400">—</span>}</td>
                         <td className="px-4 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">
                           {row.controllerEuis.length ? row.controllerEuis.map((e) => <div key={e}>{e}</div>) : <span className="font-sans text-slate-400">None linked</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const g = gatewayOf[String(row.id)];
+                            if (!g) return <span className="text-[11px] text-slate-400">{row.controllerCount ? "Not heard yet" : "—"}</span>;
+                            const tone = g.status === "ONLINE" ? "bg-emerald-500" : g.status === "OFFLINE" ? "bg-red-500" : g.status === "DEGRADED" ? "bg-amber-500" : "bg-slate-400";
+                            const body = (
+                              <>
+                                <span className="flex items-center gap-1.5 font-semibold text-slate-800 group-hover:text-blue-700 dark:text-slate-100">
+                                  <span className={`h-2 w-2 shrink-0 rounded-full ${tone}`} />
+                                  <span className="max-w-[150px] truncate">{g.name || `Gateway #${g.gatewayId}`}</span>
+                                </span>
+                                <span className="block text-[10px] text-slate-500">
+                                  {(g.status || "UNKNOWN").replace("_", " ").toLowerCase()}
+                                  {g.rssi != null ? ` · ${g.rssi} dBm` : ""}
+                                  {g.gatewayCount > 1 ? ` · +${g.gatewayCount - 1} more` : ""}
+                                </span>
+                              </>
+                            );
+                            return canGateways ? (
+                              <Link to={`/gateways?open=${g.gatewayId}`} className="group block rounded-lg px-1 py-0.5 hover:bg-blue-50 dark:hover:bg-slate-800" title={`Open gateway · last heard ${g.lastHeardAt ? new Date(g.lastHeardAt).toLocaleString() : "—"}`}>
+                                {body}
+                              </Link>
+                            ) : (
+                              <div className="px-1 py-0.5">{body}</div>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ${STATUS[row.status].chip}`}>
@@ -659,7 +696,7 @@ export default function TransformerRegistry() {
                     ))}
                     {pageRows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-14 text-center">
+                        <td colSpan={9} className="px-4 py-14 text-center">
                           {controllerHits.length ? (
                             <div className="mx-auto max-w-md">
                               <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-50 to-red-50 text-amber-600 ring-1 ring-amber-200">
@@ -716,11 +753,12 @@ export default function TransformerRegistry() {
 
       <RaiseFaultDialog
         open={Boolean(faultFor)}
-        transformer={faultFor ? { id: faultFor.id, name: faultFor.name, transformerNumber: faultFor.transformerNumber } : null}
+        transformer={faultFor ? { id: faultFor.id, name: faultFor.name, transformerNumber: faultFor.transformerNumber, openAlerts: faultFor.openAlerts } : null}
         onClose={() => setFaultFor(null)}
         onDone={() => {
           setFaultFor(null);
           loadFaults();
+          void load();
         }}
       />
       <AddFromEuiDrawer

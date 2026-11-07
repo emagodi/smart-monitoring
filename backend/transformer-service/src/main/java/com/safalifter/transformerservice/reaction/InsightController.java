@@ -24,6 +24,10 @@ public class InsightController {
 
     private final FaultService faultService;
     private final AnalyticsService analyticsService;
+    private final GatewayLinkService gatewayLinkService;
+
+    private volatile Map<Long, Map<String, Object>> byTransformerCache;
+    private volatile long byTransformerAt;
 
     @GetMapping("/api/v1/faults")
     public Map<String, Object> faults(@RequestParam(required = false) String status,
@@ -53,6 +57,37 @@ public class InsightController {
     @PostMapping("/api/v1/faults/{id}/resolve")
     public Map<String, Object> resolve(@PathVariable long id, @RequestBody(required = false) FaultService.Resolve body) {
         return faultService.resolve(id, body);
+    }
+
+    @PostMapping("/api/v1/faults/{id}/suppress")
+    @Operation(summary = "Pause (suppress=true) or resume alerts from the transformer while this fault is open")
+    public Map<String, Object> suppress(@PathVariable long id, @RequestBody(required = false) FaultService.Suppress body) {
+        return faultService.setSuppression(id, body);
+    }
+
+    @GetMapping("/api/v1/gateways/{id}/transformers")
+    @Operation(summary = "Transformers heard through this gateway (learnt from uplinks) or linked to it by hand")
+    public Map<String, Object> gatewayTransformers(@PathVariable long id) {
+        return gatewayLinkService.transformersOf(id);
+    }
+
+    @GetMapping("/api/v1/gateways/links/by-transformer")
+    @Operation(summary = "Transformer id -> the gateway it reports through (for the transformer list)")
+    public Map<Long, Map<String, Object>> gatewayByTransformer() {
+        long now = System.currentTimeMillis();
+        Map<Long, Map<String, Object>> c = byTransformerCache;
+        if (c == null || now - byTransformerAt > 30_000) {
+            c = gatewayLinkService.gatewayByTransformer();
+            byTransformerCache = c;
+            byTransformerAt = now;
+        }
+        return c;
+    }
+
+    @GetMapping("/api/v1/transformers/{id}/gateways")
+    @Operation(summary = "Every gateway that has heard this transformer's devices")
+    public List<Map<String, Object>> transformerGateways(@PathVariable long id) {
+        return gatewayLinkService.gatewaysOf(id);
     }
 
     @GetMapping("/api/v1/analytics/alerts")
