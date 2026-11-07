@@ -39,11 +39,23 @@ public class GatewayLinkService {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
     private final AccessScopeService scope;
+    private final GatewayStatusService gatewayStatusService;
+
+    /** Last time each gateway's status was refreshed from relayed traffic (so we touch it at most once a minute). */
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> statusTouched = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile Set<String> heardCache;
+    private volatile long heardAt;
+    private volatile Map<Long, Map<String, Object>> countsCache;
+    private volatile long countsAt;
 
     private record Heard(String eui, Integer rssi, Double snr) {}
 
-    /** Called for every stored reading. Never throws. */
+    /** Called for every stored reading. Never throws. Also marks the relaying gateways as alive. */
     public void learn(Long controllerId, String rawPayload, LocalDateTime at) {
+        learn(controllerId, rawPayload, at, true);
+    }
+
+    private void learn(Long controllerId, String rawPayload, LocalDateTime at, boolean live) {
         if (controllerId == null || rawPayload == null || rawPayload.isBlank() || !rawPayload.contains("gw")) return;
         try {
             List<Heard> heard = parse(rawPayload);
@@ -60,9 +72,23 @@ public class GatewayLinkService {
                             first_heard_at = LEAST(COALESCE(first_heard_at, :t), :t)""",
                         new MapSqlParameterSource().addValue("c", controllerId).addValue("g", h.eui()).addValue("t", ts)
                                 .addValue("r", h.rssi()).addValue("s", h.snr()));
+                if (live) touchStatus(h.eui(), at);
             }
         } catch (Exception e) {
             log.debug("Gateway link not learnt for controller {}: {}", controllerId, e.getMessage());
+        }
+    }
+
+    private void touchStatus(String eui, LocalDateTime at) {
+        long now = System.currentTimeMillis();
+        Long prev = statusTouched.get(eui);
+        if (prev != null && now - prev < 60_000) return;
+        statusTouched.put(eui, now);
+        try {
+            java.time.Instant ts = at != null ? at.atZone(java.time.ZoneId.systemDefault()).toInstant() : java.time.Instant.now();
+            gatewayStatusService.registerRelayedUplink(eui, ts);
+        } catch (Exception e) {
+            log.debug("Gateway {} status not refreshed from relayed uplink: {}", eui, e.getMessage());
         }
     }
 
@@ -120,7 +146,7 @@ public class GatewayLinkService {
                     Object at = r.get("created_at");
                     LocalDateTime t = at instanceof Timestamp ts ? ts.toLocalDateTime() : at instanceof LocalDateTime l ? l : null;
                     if (c != null) {
-                        learn(((Number) c).longValue(), (String) r.get("raw_payload"), t);
+                        learn(((Number) c).longValue(), (String) r.get("raw_payload"), t, false);
                         learnt++;
                     }
                 }
@@ -213,5 +239,46 @@ public class GatewayLinkService {
                  WHERE c.transformer_id = :t
                  GROUP BY g.id, g.name, g.effective_status, g.gateway_eui
                  ORDER BY last_heard_at DESC""", Map.of("t", transformerId)).stream().map(r -> camel(r)).toList();
+    }
+
+    /** Normalised EUIs of every gateway that has relayed at least one transformer uplink (never empty, for SQL IN). */
+    public Set<String> heardGatewayEuis() {
+        long now = System.currentTimeMillis();
+        Set<String> c = heardCache;
+        if (c == null || now - heardAt > 30_000) {
+            c = new LinkedHashSet<>(jdbc.queryForList("SELECT DISTINCT gateway_eui FROM controller_gateway_links", Map.of(), String.class));
+            if (c.isEmpty()) c.add("-");
+            heardCache = c;
+            heardAt = now;
+        }
+        return c;
+    }
+
+    /** Gateway id -> {transformers, lastHeardAt}: how many transformers each gateway relays, for the gateway list. */
+    public Map<Long, Map<String, Object>> relayCounts() {
+        if (!scope.hasPermission("gateways.view") && !scope.hasPermission("transformers.read")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot view gateways");
+        }
+        long now = System.currentTimeMillis();
+        Map<Long, Map<String, Object>> c = countsCache;
+        if (c == null || now - countsAt > 30_000) {
+            Map<Long, Map<String, Object>> out = new LinkedHashMap<>();
+            jdbc.query("""
+                    SELECT g.id, COUNT(DISTINCT c.transformer_id) AS transformers, MAX(l.last_heard_at) AS last_heard_at
+                      FROM controller_gateway_links l
+                      JOIN gateways g ON g.normalized_gateway_eui = l.gateway_eui
+                      JOIN controllers c ON c.id = l.controller_id AND c.transformer_id IS NOT NULL
+                     GROUP BY g.id""", new MapSqlParameterSource(), (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("transformers", rs.getInt("transformers"));
+                Timestamp at = rs.getTimestamp("last_heard_at");
+                m.put("lastHeardAt", at != null ? at.toLocalDateTime().toString() : null);
+                out.put(rs.getLong("id"), m);
+            });
+            c = out;
+            countsCache = c;
+            countsAt = now;
+        }
+        return c;
     }
 }

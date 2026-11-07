@@ -84,6 +84,12 @@ public class InsightController {
         return c;
     }
 
+    @GetMapping("/api/v1/gateways/links/counts")
+    @Operation(summary = "Gateway id -> number of transformers it relays and when it last relayed one")
+    public Map<Long, Map<String, Object>> gatewayRelayCounts() {
+        return gatewayLinkService.relayCounts();
+    }
+
     @GetMapping("/api/v1/transformers/{id}/gateways")
     @Operation(summary = "Every gateway that has heard this transformer's devices")
     public List<Map<String, Object>> transformerGateways(@PathVariable long id) {

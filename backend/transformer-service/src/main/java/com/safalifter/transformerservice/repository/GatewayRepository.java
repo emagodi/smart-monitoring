@@ -57,6 +57,8 @@ public interface GatewayRepository extends JpaRepository<Gateway, Long> {
             "(:operator IS NULL OR :operator = '' OR LOWER(COALESCE(g.operator, '')) = LOWER(:operator)) AND " +
             "(:hasLocation IS NULL OR (CASE WHEN :hasLocation = TRUE THEN (g.latitude IS NOT NULL AND g.longitude IS NOT NULL) ELSE (g.latitude IS NULL OR g.longitude IS NULL) END) = TRUE) AND " +
             "(:hasSim IS NULL OR (CASE WHEN :hasSim = TRUE THEN EXISTS (SELECT 1 FROM GatewaySimAssignment a WHERE a.gatewayId = g.id AND a.active = TRUE) ELSE NOT EXISTS (SELECT 1 FROM GatewaySimAssignment a WHERE a.gatewayId = g.id AND a.active = TRUE) END) = TRUE) AND " +
+            "(:relaying IS NULL OR (:relaying = TRUE AND g.normalizedGatewayEui IN :heardEuis) OR " +
+            "(:relaying = FALSE AND (g.normalizedGatewayEui IS NULL OR g.normalizedGatewayEui NOT IN :heardEuis))) AND " +
             "(:search IS NULL OR :search = '' OR " +
             "LOWER(g.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(g.gatewayEui) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
@@ -83,6 +85,8 @@ public interface GatewayRepository extends JpaRepository<Gateway, Long> {
             @Param("regionName") String regionName,
             @Param("depotName") String depotName,
             @Param("networkName") String networkName,
+            @Param("relaying") Boolean relaying,
+            @Param("heardEuis") java.util.Collection<String> heardEuis,
             Pageable pageable
     );
 }

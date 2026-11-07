@@ -63,6 +63,7 @@ public class GatewayController {
             @RequestParam(required = false) String operator,
             @RequestParam(required = false) Boolean hasLocation,
             @RequestParam(required = false) Boolean hasSim,
+            @RequestParam(required = false) Boolean relaying,
             @RequestParam(required = false) String regionName,
             @RequestParam(required = false) String depotName,
             @RequestParam(required = false) String networkName,
@@ -86,6 +87,7 @@ public class GatewayController {
         filter.setOperator(operator);
         filter.setHasLocation(hasLocation);
         filter.setHasSim(hasSim);
+        filter.setRelaying(relaying);
         filter.setRegionName(regionName);
         filter.setDepotName(depotName);
         filter.setNetworkName(networkName);

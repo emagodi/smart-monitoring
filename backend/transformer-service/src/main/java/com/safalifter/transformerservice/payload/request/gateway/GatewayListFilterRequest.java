@@ -19,6 +19,8 @@ public class GatewayListFilterRequest {
     private String operator;
     private Boolean hasLocation;
     private Boolean hasSim;
+    /** true: gateways that have relayed transformer uplinks; false: never relayed any. */
+    private Boolean relaying;
     private String regionName;
     private String depotName;
     private String networkName;
