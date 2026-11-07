@@ -45,6 +45,7 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
     private final TransformerRepository transformerRepository;
     private final AlertService alertService;
     private final NotificationClient notificationClient;
+    private final com.safalifter.transformerservice.reaction.DutyNotifier dutyNotifier;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -153,6 +154,12 @@ public class ControllerReadingServiceImpl implements ControllerReadingService {
                     .message(alert.getMessage())
                     .whatsappTemplateParameters(buildSecurityAlertTemplateParameters(transformer, triggerSummary, reading.getCreatedAt()))
                     .build());
+        } catch (Exception ignored) {
+        }
+        // Loss Control staff on duty for this depot are paged directly, with the alert number to acknowledge.
+        try {
+            dutyNotifier.pageOnDuty(raised.getId(), transformer.getDepotId(), transformer.getName(), triggerSummary, null,
+                    buildSecurityAlertTemplateParameters(transformer, triggerSummary, reading.getCreatedAt()), !result.isCreated(), occurrences);
         } catch (Exception ignored) {
         }
     }

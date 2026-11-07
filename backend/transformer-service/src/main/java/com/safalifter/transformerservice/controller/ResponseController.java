@@ -48,6 +48,12 @@ public class ResponseController {
         return ResponseEntity.ok(responseService.acknowledge(alertId, request != null ? request.getNote() : null));
     }
 
+    @PostMapping("/cases/{alertId}/on-scene")
+    @Operation(summary = "The responding team is on site (without a dispatched vehicle)")
+    public ResponseEntity<AlertResponse> onScene(@PathVariable Long alertId, @RequestBody(required = false) CaseNoteRequest request) {
+        return ResponseEntity.ok(responseService.markOnScene(alertId, request != null ? request.getNote() : null));
+    }
+
     @PostMapping("/cases/{alertId}/dispatch")
     @Operation(summary = "Send a response vehicle; the crew lead gets an SMS/WhatsApp/email link")
     public ResponseEntity<DispatchResponse> dispatch(@PathVariable Long alertId, @RequestBody DispatchRequest request) {

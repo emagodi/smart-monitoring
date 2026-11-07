@@ -54,6 +54,8 @@ public class DataLoader implements CommandLineRunner {
         seedAdministratorRole();
         seedSupplierAdministratorRole();
         seedOperationalRoles();
+        seedProcessRoles();
+        backfillUserGeographyIds();
         createOrUpdateSuperAdmin();
         createOrUpdateOculusSupplierUser();
         if (seedTestUsers) {
@@ -67,6 +69,8 @@ public class DataLoader implements CommandLineRunner {
      *   dispatcher@powertel.co.zw   Dispatcher             (ZESA, national)
      *   supervisor@powertel.co.zw   Loss Control Supervisor(ZESA, national)
      *   depot.user@powertel.co.zw   Dispatcher             (ZESA, scoped to the first depot)
+     *   installer@powertel.co.zw    Installation Coordinator (Powertel, national)
+     *   depot.approver@powertel.co.zw Depot Approver       (ZESA, scoped to the first depot)
      *   magodi@oculus.co.zw         Supplier Administrator (Oculus partner portal)
      * plus <usertype>.test@powertel.co.zw for every other user type that has no user yet.
      */
@@ -76,6 +80,8 @@ public class DataLoader implements CommandLineRunner {
         seedPersona("dispatcher@powertel.co.zw", "Tendai", "Dispatcher", "Dispatcher", zesa, null, false);
         seedPersona("supervisor@powertel.co.zw", "Rudo", "Supervisor", "Loss Control Supervisor", zesa, null, false);
         seedPersona("depot.user@powertel.co.zw", "Farai", "Depot", "Dispatcher", zesa, null, true);
+        seedPersona("installer@powertel.co.zw", "Tapiwa", "Installer", "Installation Coordinator", zesa, null, false);
+        seedPersona("depot.approver@powertel.co.zw", "Nyasha", "Approver", "Depot Approver", zesa, null, true);
         userRepository.findByEmail("magodi@oculus.co.zw").ifPresent(u -> {
             u.setPassword(passwordEncoder.encode(TEST_PASSWORD));
             u.setTemporaryPassword(false);
@@ -173,6 +179,14 @@ public class DataLoader implements CommandLineRunner {
         moduleActions.put("control", List.of("arm", "disarm"));
         // Partner telemetry feeds (LORIOT apps / HTTP push) and their decoders
         moduleActions.put("integrations", List.of("read", "manage"));
+        // Installation green light (region / depot) and installations recorded by Powertel; partners mark sites ready
+        moduleActions.put("installations", List.of("read", "request", "approve", "record", "ready"));
+        // Commissioning (PAT form): tentative dates, filling the form, Loss Control's final pass / fail
+        moduleActions.put("commissioning", List.of("read", "schedule", "perform", "decide"));
+        // Loss Control duty roster: who receives alerts for a region / depot right now
+        moduleActions.put("duty", List.of("read", "manage"));
+        // Fault alarms raised against transformers (equipment faults, not intrusions)
+        moduleActions.put("faults", List.of("read", "record"));
 
         moduleActions.forEach((module, actions) -> actions.forEach(action -> upsertPermission(module, action)));
     }
@@ -225,7 +239,13 @@ public class DataLoader implements CommandLineRunner {
                 "response.read",
                 // partners keep arm/disarm of their own transformers (web + WhatsApp)
                 "control.arm",
-                "control.disarm"
+                "control.disarm",
+                // installation / commissioning of their own sites; reaction reports for their own devices
+                "installations.read",
+                "installations.ready",
+                "commissioning.read",
+                "faults.read",
+                "reports.read"
         )));
         roleRepository.save(supplierRole);
     }
@@ -254,6 +274,59 @@ public class DataLoader implements CommandLineRunner {
                         "alerts.read", "alerts.update", "reports.read", "reports.export",
                         "response.read", "response.acknowledge", "response.dispatch", "response.close",
                         "fleet.read", "fleet.update", "gateways.view"));
+    }
+
+    /**
+     * Roles for the installation / commissioning / reaction process. New roles are created only when missing;
+     * permissions that are brand new in this build are added once to the existing roles that need them, so an
+     * administrator's later edits on the Roles screen are respected.
+     */
+    private void seedProcessRoles() {
+        createRoleIfMissing("Installation Coordinator",
+                "Powertel: asks regions / depots for the green light, records installations and arranges commissioning",
+                List.of("dashboard.read", "dashboard.zesa", "regions.read", "districts.read", "depots.read",
+                        "transformers.read", "controllers.read", "sites.read", "reports.read", "reports.export",
+                        "installations.read", "installations.request", "installations.record",
+                        "commissioning.read", "commissioning.schedule", "commissioning.perform", "faults.read", "faults.record"));
+        createRoleIfMissing("Depot Approver",
+                "Region / depot: gives the green light (switching and access) for installations",
+                List.of("dashboard.read", "dashboard.zesa", "regions.read", "districts.read", "depots.read",
+                        "transformers.read", "sites.read", "installations.read", "installations.approve", "commissioning.read"));
+        grantNewPermissions("Loss Control Supervisor", List.of("installations.read", "installations.approve",
+                "commissioning.read", "commissioning.schedule", "commissioning.perform", "commissioning.decide",
+                "duty.read", "duty.manage", "faults.read", "faults.record"));
+        grantNewPermissions("Dispatcher", List.of("duty.read", "faults.read", "faults.record"));
+        grantNewPermissions("Contact Centre Agent", List.of("duty.read", "faults.read", "faults.record"));
+    }
+
+    /** Users saved by name only (older users screen): fill region / district / depot ids so scoping and duty rosters work. */
+    private void backfillUserGeographyIds() {
+        try {
+            int n = jdbcTemplate.update("""
+                    UPDATE _user u JOIN regions r ON LOWER(r.name) = LOWER(u.region)
+                       SET u.region_id = r.id WHERE u.region_id IS NULL AND u.region IS NOT NULL AND u.region <> ''""");
+            n += jdbcTemplate.update("""
+                    UPDATE _user u JOIN districts d ON LOWER(d.name) = LOWER(u.district) AND (u.region_id IS NULL OR d.region_id = u.region_id)
+                       SET u.district_id = d.id WHERE u.district_id IS NULL AND u.district IS NOT NULL AND u.district <> ''""");
+            n += jdbcTemplate.update("""
+                    UPDATE _user u JOIN depots p ON LOWER(p.name) = LOWER(u.depot) AND (u.district_id IS NULL OR p.district_id = u.district_id)
+                       SET u.depot_id = p.id WHERE u.depot_id IS NULL AND u.depot IS NOT NULL AND u.depot <> ''
+                         AND (u.role IS NULL OR u.role <> 'ADMIN')""");
+            if (n > 0) org.slf4j.LoggerFactory.getLogger(DataLoader.class).info("Filled region / district / depot ids for {} user field(s)", n);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(DataLoader.class).warn("Could not back-fill user geography ids: {}", e.getMessage());
+        }
+    }
+
+    private void grantNewPermissions(String roleName, List<String> permissionNames) {
+        List<String> fresh = permissionNames.stream().filter(newlyCreatedPermissions::contains).toList();
+        if (fresh.isEmpty()) return;
+        roleRepository.findByName(roleName).ifPresent(role -> {
+            Set<PermissionEntity> perms = new java.util.HashSet<>(role.getPermissions() == null ? Set.of() : role.getPermissions());
+            perms.addAll(resolvePermissionsByName(fresh));
+            role.setPermissions(perms);
+            roleRepository.save(role);
+        });
     }
 
     private void createRoleIfMissing(String name, String description, List<String> permissionNames) {
@@ -377,9 +450,15 @@ public class DataLoader implements CommandLineRunner {
         supplierRepository.save(supplier);
     }
 
+    /** Permissions that did not exist before this start: granted once to the operational roles that need them. */
+    private final Set<String> newlyCreatedPermissions = new java.util.HashSet<>();
+
     private void upsertPermission(String module, String action) {
         String name = module + "." + action;
-        PermissionEntity permission = permissionRepository.findByName(name).orElseGet(PermissionEntity::new);
+        PermissionEntity permission = permissionRepository.findByName(name).orElseGet(() -> {
+            newlyCreatedPermissions.add(name);
+            return new PermissionEntity();
+        });
         permission.setName(name);
         permission.setModule(module);
         permission.setAction(action);

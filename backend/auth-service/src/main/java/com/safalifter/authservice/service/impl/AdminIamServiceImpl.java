@@ -241,6 +241,32 @@ public class AdminIamServiceImpl implements AdminIamService {
         userTypeRepository.deleteById(userTypeId);
     }
 
+    /**
+     * The users screen sends region / district / depot by name. Their ids drive depot scoping, the Loss Control duty
+     * roster and alert routing, so they are looked up here when not sent; a cleared name clears the id.
+     */
+    private void resolveGeographyIds(User user) {
+        try {
+            if (user.getRegion() == null) user.setRegionId(null);
+            else if (user.getRegionId() == null) user.setRegionId(firstId("SELECT id FROM regions WHERE LOWER(name) = LOWER(?)", user.getRegion()));
+            if (user.getDistrict() == null) user.setDistrictId(null);
+            else if (user.getDistrictId() == null) user.setDistrictId(user.getRegionId() != null
+                    ? firstId("SELECT id FROM districts WHERE region_id = ? AND LOWER(name) = LOWER(?)", user.getRegionId(), user.getDistrict())
+                    : firstId("SELECT id FROM districts WHERE LOWER(name) = LOWER(?)", user.getDistrict()));
+            if (user.getDepot() == null) user.setDepotId(null);
+            else if (user.getDepotId() == null) user.setDepotId(user.getDistrictId() != null
+                    ? firstId("SELECT id FROM depots WHERE district_id = ? AND LOWER(name) = LOWER(?)", user.getDistrictId(), user.getDepot())
+                    : firstId("SELECT id FROM depots WHERE LOWER(name) = LOWER(?)", user.getDepot()));
+        } catch (Exception ignored) {
+            // geography tables unavailable: keep what was sent
+        }
+    }
+
+    private Long firstId(String sql, Object... args) {
+        java.util.List<Long> ids = jdbcTemplate.queryForList(sql, Long.class, args);
+        return ids.isEmpty() ? null : ids.get(0);
+    }
+
     private void applyUserRequest(User user, AdminUserRequest request, boolean creating) {
         user.setFirstname(normalizeRequired(request.getFirstname()));
         user.setLastname(normalizeRequired(request.getLastname()));
@@ -255,6 +281,7 @@ public class AdminIamServiceImpl implements AdminIamService {
         user.setDistrictId(request.getDistrictId());
         user.setDepot(normalizeOptional(request.getDepot()));
         user.setDepotId(request.getDepotId());
+        resolveGeographyIds(user);
         user.setUserType(resolveUserType(request.getUserTypeId()));
         user.setSupplier(resolveSupplier(request.getSupplierId()));
         user.setRoles(resolveRoles(request.getRoleIds()));

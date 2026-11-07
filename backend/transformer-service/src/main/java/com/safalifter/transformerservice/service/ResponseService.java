@@ -67,6 +67,10 @@ import java.util.stream.Collectors;
 @Transactional
 public class ResponseService {
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private com.safalifter.transformerservice.reaction.FaultService faultService;
+
     public static final String PERM_RESPOND = "response.acknowledge";
     public static final String PERM_DISPATCH = "response.dispatch";
     public static final String PERM_CLOSE = "response.close";
@@ -231,6 +235,43 @@ public class ResponseService {
         return response;
     }
 
+    /**
+     * The responding team reports it is on site (from WhatsApp / USSD / mobile / web) without going through a
+     * dispatched vehicle. Moves the case to ON_SCENE; an active dispatch for the case is updated as well.
+     */
+    public AlertResponse markOnScene(Long alertId, String note) {
+        requirePermission(PERM_RESPOND);
+        Alert alert = loadVisibleAlert(alertId);
+        AlertCase alertCase = caseForAlert(alert);
+        requireOpen(alertCase);
+        String actor = currentActor();
+        AlertCaseStatus before = alertCase.getStatus();
+        if (alertCase.getAcknowledgedAt() == null) alertCase.setAcknowledgedAt(LocalDateTime.now());
+        if (alertCase.getAssignedToEmail() == null) {
+            alertCase.setAssignedToEmail(actor);
+            alertCase.setAssignedToName(actor);
+            alertCase.setAssignedAt(LocalDateTime.now());
+        }
+        alertCase.setStatus(AlertCaseStatus.ON_SCENE);
+        alertCase.setOnSceneAt(LocalDateTime.now());
+        touch(alertCase, actor, note != null ? note : "Team on site");
+        alertCaseRepository.save(alertCase);
+        activity(alertCase.getId(), AlertCaseActivityType.STATUS_CHANGED, before, AlertCaseStatus.ON_SCENE, actor, note != null ? note : "Team on site");
+        dispatchRepository.findAllByAlertCaseIdOrderByIdDesc(alertCase.getId()).stream()
+                .filter(d -> d.getStatus() == com.safalifter.transformerservice.enums.DispatchStatus.DISPATCHED
+                        || d.getStatus() == com.safalifter.transformerservice.enums.DispatchStatus.ACCEPTED)
+                .findFirst()
+                .ifPresent(d -> {
+                    try {
+                        applyDispatchStatus(d, alert, com.safalifter.transformerservice.enums.DispatchStatus.ON_SCENE, note, actor);
+                    } catch (Exception ignored) {
+                        // the case itself is already on scene
+                    }
+                });
+        alertStateService.refresh(alert.getTransformerId());
+        return reload(alertId);
+    }
+
     public DispatchResponse updateDispatch(Long dispatchId, DispatchStatusRequest request) {
         requirePermission(PERM_DISPATCH);
         AlertDispatch dispatch = dispatchRepository.findById(dispatchId)
@@ -247,6 +288,10 @@ public class ResponseService {
         requirePermission(PERM_CLOSE);
         Alert alert = loadVisibleAlert(alertId);
         closeInternal(alert, request, currentActor());
+        if (request.getOutcome() == com.safalifter.transformerservice.enums.IncidentOutcome.TECHNICAL_FAULT && faultService != null) {
+            // a technical-fault outcome opens a fault alarm on the transformer for the partner to fix
+            faultService.fromIncident(alert.getTransformerId(), alertId, request.getNote(), currentActor());
+        }
         return reload(alertId);
     }
 

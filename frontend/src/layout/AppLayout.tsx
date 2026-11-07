@@ -4,6 +4,7 @@ import { Outlet } from "react-router";
 import AppHeader from "./AppHeader";
 import Backdrop from "./Backdrop";
 import AppSidebar from "./AppSidebar";
+import AlertSiren from "../components/reaction/AlertSiren";
 
 const LayoutContent: React.FC = () => {
   const { isExpanded, isMobileOpen } = useSidebar();
@@ -22,6 +23,7 @@ const LayoutContent: React.FC = () => {
         <AppHeader />
         <div className="flex-1 px-3 pb-4 pt-2 md:px-4 md:pb-6 md:pt-3 xl:px-6">
           <div className="mx-auto w-full max-w-[1800px]">
+            <AlertSiren />
             <Outlet />
           </div>
         </div>

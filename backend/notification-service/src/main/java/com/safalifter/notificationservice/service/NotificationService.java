@@ -779,6 +779,18 @@ public class NotificationService {
             return;
         }
 
+        if (isReactionCommand(normalized) && !CHAT_STATE_AWAITING_SELECTION.equalsIgnoreCase(firstNonBlank(state.getCommandSessionState(), CHAT_STATE_IDLE))
+                && !CHAT_STATE_AWAITING_CONFIRMATION.equalsIgnoreCase(firstNonBlank(state.getCommandSessionState(), CHAT_STATE_IDLE))) {
+            try {
+                Map<String, Object> res = transformerChatBridgeClient.reactionCommand(requiredBridgeKey(), Map.of("phone", from, "text", normalized));
+                Object reply = res == null ? null : res.get("reply");
+                sendChatReply(from, reply != null ? reply.toString() : "Done.");
+            } catch (Exception e) {
+                sendChatReply(from, "Sorry, the reaction desk could not be reached. Please try again or use the web desk.");
+            }
+            return;
+        }
+
         if (start != null) {
             state.setPendingCommandAction(start.action());
             state.setPendingSearchQuery(trimToNull(start.query()));
@@ -1068,7 +1080,14 @@ public class NotificationService {
     }
 
     private String buildHelpMessage() {
-        return "Reply with Arm transformer or Disarm transformer, then send the transformer name. I will show the matching transformers before any control action is sent.";
+        return "Reply with Arm transformer or Disarm transformer, then send the transformer name. I will show the matching transformers before any control action is sent."
+                + "\n\nReaction desk: OPEN (open alerts in your area), ACK 1234 (acknowledge alert #1234), ARRIVED 1234 (team on site),"
+                + " CLOSE 1234 FALSE | REAL | FAULT | AUTH (close with the outcome).";
+    }
+
+    /** Reaction desk commands handled by transformer-service (acknowledge / on scene / close an alert). */
+    private static boolean isReactionCommand(String text) {
+        return text != null && text.trim().matches("(?is)^(open|alerts|ack|acknowledge|arrived|onsite|on site|close|false|real|fault)(\\b.*)?$");
     }
 
     private void sendChatReply(String recipient, String message) {

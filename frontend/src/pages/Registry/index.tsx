@@ -25,12 +25,14 @@ import {
   SignalHigh,
   X,
   Zap,
+  Wrench,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
 import { API_BASE_URL, districtRegionId, useGeography } from "./geo";
 import { cachedGet, peekCache } from "../../lib/cache";
 import AddFromEuiDrawer from "./AddFromEuiDrawer";
+import { RaiseFaultDialog } from "../Faults";
 import { MobileFilters, Pager } from "../../components/ui/page";
 
 export type RegistryRow = {
@@ -129,6 +131,17 @@ export default function TransformerRegistry() {
   const [matching, setMatching] = useState<Unmatched | null>(null);
   const isSupplier = Boolean(user?.supplierCode) || (user?.userType || "").toLowerCase() === "supplier";
   const canEdit = !isSupplier && (hasPermission("transformers.create") || hasPermission("transformers.update"));
+  // Fault alarms (equipment faults the partner must fix), raised from this list.
+  const canFault = hasPermission("faults.record");
+  const [openFaults, setOpenFaults] = useState<Record<string, number>>({});
+  const [faultFor, setFaultFor] = useState<RegistryRow | null>(null);
+  const loadFaults = useCallback(() => {
+    if (!token || !(hasPermission("faults.read") || canFault)) return;
+    cachedGet<Record<string, number>>(`${API_BASE_URL}/api/v1/faults/open-by-transformer`, token, 30_000, true)
+      .then((m) => setOpenFaults(m ?? {}))
+      .catch(() => setOpenFaults({}));
+  }, [token, canFault, hasPermission]);
+  useEffect(loadFaults, [loadFaults]);
 
   // Lazy loading: only the page on screen comes from the server (filtered, sorted and paged there).
   const [pageSize, setPageSize] = useState(10);
@@ -607,6 +620,11 @@ export default function TransformerRegistry() {
                           })()}
                         </td>
                         <td className="px-4 py-3">
+                          {openFaults[String(row.id)] ? (
+                            <Link to={`/faults?q=${encodeURIComponent(row.name)}`} className="mb-1 mr-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300">
+                              <Wrench className="h-3 w-3" /> {openFaults[String(row.id)]} fault
+                            </Link>
+                          ) : null}
                           {row.openAlerts > 0 ? (
                             <Link to="/response" className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[11px] font-bold text-red-700 ring-1 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30">
                               {row.openAlerts} open
@@ -624,6 +642,16 @@ export default function TransformerRegistry() {
                               <IconLink to={`/transformers/${row.id}/edit`} title="Edit">
                                 <Pencil className="h-3.5 w-3.5" />
                               </IconLink>
+                            ) : null}
+                            {canFault ? (
+                              <button
+                                type="button"
+                                title="Raise a fault alarm"
+                                onClick={() => setFaultFor(row)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:border-amber-300 hover:text-amber-700 dark:border-slate-700 dark:text-slate-300"
+                              >
+                                <Wrench className="h-3.5 w-3.5" />
+                              </button>
                             ) : null}
                           </div>
                         </td>
@@ -686,6 +714,15 @@ export default function TransformerRegistry() {
         />
       )}
 
+      <RaiseFaultDialog
+        open={Boolean(faultFor)}
+        transformer={faultFor ? { id: faultFor.id, name: faultFor.name, transformerNumber: faultFor.transformerNumber } : null}
+        onClose={() => setFaultFor(null)}
+        onDone={() => {
+          setFaultFor(null);
+          loadFaults();
+        }}
+      />
       <AddFromEuiDrawer
         open={addOpen}
         initialEui={addEui}

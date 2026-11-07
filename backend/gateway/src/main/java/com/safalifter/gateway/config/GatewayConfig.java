@@ -25,6 +25,12 @@ public class GatewayConfig {
                         .filters(f -> f.filter(filter))
                         .uri("lb://notification-service"))
 
+                // Service-to-service auth endpoints (recipient routing, user directory, chat-command user lookup) must
+                // never be reachable from the internet: they return contact details. Services call auth-service directly.
+                .route("auth-internal-blocked", r -> r.path("/api/v1/auth/internal/**")
+                        .filters(f -> f.setStatus(org.springframework.http.HttpStatus.NOT_FOUND))
+                        .uri("no://op"))
+
                 .route("auth-service", r -> r.path("/api/v1/auth/**")
                         .uri("lb://auth-service"))
 
@@ -66,6 +72,16 @@ public class GatewayConfig {
 
                 .route("transformer-response", r -> r.path("/api/v1/response/**")
                         .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                // Installation green light, commissioning (PAT), duty roster, fault alarms and analytics
+                .route("transformer-lifecycle", r -> r.path("/api/v1/lifecycle/**", "/api/v1/duty/**", "/api/v1/faults/**", "/api/v1/analytics/**")
+                        .filters(f -> f.filter(filter))
+                        .uri("lb://transformer-service"))
+
+                // WhatsApp bot / USSD gateway / mobile bridges: no JWT; each call carries the channel bridge key
+                // and the caller's phone number, which transformer-service maps to a registered user.
+                .route("transformer-channels", r -> r.path("/api/v1/channels/**")
                         .uri("lb://transformer-service"))
 
                 // Crew response links: no JWT (crews are not system users); each URL carries
