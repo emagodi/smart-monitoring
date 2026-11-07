@@ -297,6 +297,9 @@ export default function GatewaysIndex() {
   const [selectedOperator, setSelectedOperator] = useState<string>("ALL");
   const [hasLocationFilter, setHasLocationFilter] = useState<"ALL" | "YES" | "NO">("ALL");
   const [hasSimFilter, setHasSimFilter] = useState<"ALL" | "YES" | "NO">("ALL");
+  /** YES: gateways that have relayed transformer uplinks; NO: never relayed any. */
+  const [relayFilter, setRelayFilter] = useState<"ALL" | "YES" | "NO">("ALL");
+  const [relayCounts, setRelayCounts] = useState<Record<string, { transformers: number; lastHeardAt?: string | null }> | null>(null);
   const [lastSeenFrom, setLastSeenFrom] = useState<string>("");
   const [lastSeenTo, setLastSeenTo] = useState<string>("");
   const [page, setPage] = useState(0);
@@ -367,6 +370,7 @@ export default function GatewaysIndex() {
       if (selectedOperator !== "ALL") params.operator = selectedOperator;
       if (hasLocationFilter !== "ALL") params.hasLocation = hasLocationFilter === "YES";
       if (hasSimFilter !== "ALL") params.hasSim = hasSimFilter === "YES";
+      if (relayFilter !== "ALL") params.relaying = relayFilter === "YES";
       if (lastSeenFrom) params.lastSeenFrom = lastSeenFrom;
       if (lastSeenTo) params.lastSeenTo = lastSeenTo;
       if (search.trim()) params.search = search.trim();
@@ -382,7 +386,26 @@ export default function GatewaysIndex() {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers, token, page, pageSize, statusFilter, selectedRegion, selectedDepot, selectedNetwork, selectedModel, selectedOperator, hasLocationFilter, hasSimFilter, lastSeenFrom, lastSeenTo, search]);
+  }, [API_BASE_URL, headers, token, page, pageSize, statusFilter, selectedRegion, selectedDepot, selectedNetwork, selectedModel, selectedOperator, hasLocationFilter, hasSimFilter, relayFilter, lastSeenFrom, lastSeenTo, search]);
+
+  // How many transformers each gateway relays (learnt from uplinks): drives the relay filter and the badge on the action.
+  const fetchRelayCounts = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API_BASE_URL}/api/v1/gateways/links/counts`, { headers });
+      setRelayCounts(r.data && typeof r.data === "object" ? (r.data as Record<string, { transformers: number; lastHeardAt?: string | null }>) : {});
+    } catch {
+      setRelayCounts(null);
+    }
+  }, [API_BASE_URL, headers]);
+
+  useEffect(() => {
+    if (!token) return;
+    void fetchRelayCounts();
+    const t = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchRelayCounts();
+    }, 60_000);
+    return () => window.clearInterval(t);
+  }, [fetchRelayCounts, token]);
 
   useEffect(() => {
     if (token) {
@@ -498,6 +521,11 @@ export default function GatewaysIndex() {
         if (!missing) return false;
       }
 
+      if (relayFilter !== "ALL" && relayCounts) {
+        const relays = (relayCounts[String(item.id)]?.transformers ?? 0) > 0;
+        if (relayFilter === "YES" ? !relays : relays) return false;
+      }
+
       if (q) {
         const haystack = [
           item.name,
@@ -528,6 +556,8 @@ export default function GatewaysIndex() {
     selectedOperator,
     hasLocationFilter,
     hasSimFilter,
+    relayFilter,
+    relayCounts,
     search,
   ]);
 
@@ -796,6 +826,40 @@ export default function GatewaysIndex() {
                   }`}
                 >
                   Missing SIM
+                </button>
+              </div>
+              <span className="h-6 w-px shrink-0 bg-slate-200 dark:bg-slate-700" />
+              <div className="flex shrink-0 flex-nowrap gap-2 whitespace-nowrap">
+                <button
+                  type="button"
+                  title="Gateways that have received data from at least one transformer sensor"
+                  onClick={() => {
+                    setRelayFilter(relayFilter === "YES" ? "ALL" : "YES");
+                    setPage(0);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                    relayFilter === "YES"
+                      ? "border-violet-200 bg-violet-600 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  }`}
+                >
+                  <Zap className="h-3 w-3" /> Receiving transformers
+                  {relayCounts ? <span className="opacity-70">{Object.keys(relayCounts).length}</span> : null}
+                </button>
+                <button
+                  type="button"
+                  title="Gateways that have never received data from any transformer sensor"
+                  onClick={() => {
+                    setRelayFilter(relayFilter === "NO" ? "ALL" : "NO");
+                    setPage(0);
+                  }}
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                    relayFilter === "NO"
+                      ? "border-slate-300 bg-slate-700 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  }`}
+                >
+                  Never received
                 </button>
               </div>
             </div>
@@ -1073,14 +1137,28 @@ export default function GatewaysIndex() {
                     </Td>
                     <Td className="text-right">
                       <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setTransformersOf({ id: item.id, name: item.name })}
-                          title="Transformers on this gateway"
-                          className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-violet-200 bg-violet-50 text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
-                        >
-                          <Zap className="h-3.5 w-3.5" />
-                        </button>
+                        {(() => {
+                          const n = relayCounts?.[String(item.id)]?.transformers ?? 0;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setTransformersOf({ id: item.id, name: item.name })}
+                              title={n ? `${n} transformer${n === 1 ? "" : "s"} report through this gateway` : "No transformer has been heard through this gateway yet"}
+                              className={`relative inline-flex items-center justify-center h-7 w-7 rounded-full border transition ${
+                                n
+                                  ? "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
+                                  : "border-slate-200 bg-white text-slate-300 hover:text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600"
+                              }`}
+                            >
+                              <Zap className="h-3.5 w-3.5" />
+                              {n ? (
+                                <span className="absolute -right-1.5 -top-1.5 min-w-[16px] rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white ring-2 ring-white dark:ring-slate-900">
+                                  {n > 99 ? "99+" : n}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })()}
                         <button
                           type="button"
                           onClick={() => void openDetailModal(item)}

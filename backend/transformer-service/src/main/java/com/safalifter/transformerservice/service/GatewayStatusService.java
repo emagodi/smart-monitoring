@@ -34,6 +34,13 @@ public class GatewayStatusService {
     @Value("${gateway.uplink-freshness-ms:7200000}")
     private long uplinkFreshnessMs;
 
+    /**
+     * A gateway that relayed an uplink within this window is online, whatever LORIOT's last verdict says: it is
+     * demonstrably forwarding packets (LORIOT's online flag can lag, or refer to a stale registration).
+     */
+    @Value("${gateway.traffic-online-ms:600000}")
+    private long trafficOnlineMs;
+
     /** When LORIOT gives only a "last seen" time, a gateway heard within this window counts as online. */
     @Value("${gateway.lastseen-online-ms:600000}")
     private long lastSeenOnlineMs;
@@ -119,12 +126,35 @@ public class GatewayStatusService {
         computeAndApplyEffectiveStatus(gateway, GatewayStatusSource.UPLINK_TRAFFIC);
     }
 
+    /**
+     * A sensor uplink arrived through this gateway (from any feed: LORIOT WebSocket, partner HTTP push...). Runs in its
+     * own transaction so a failure here can never roll back the reading being stored.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void registerRelayedUplink(String normalizedEui, Instant ts) {
+        if (normalizedEui == null || normalizedEui.isBlank()) return;
+        Gateway gateway = gatewayRepository.findByNormalizedGatewayEui(normalizedEui).orElse(null);
+        if (gateway == null) return;
+        Instant stamp = ts != null && !ts.isAfter(Instant.now()) ? ts : Instant.now();
+        if (gateway.getLastTrafficSeenAt() == null || stamp.isAfter(gateway.getLastTrafficSeenAt())) {
+            gateway.setLastTrafficSeenAt(stamp);
+        }
+        String reason = gateway.getLoriotReportedStatus() == GatewayStatus.OFFLINE
+                ? "Relaying sensor uplinks although LORIOT last reported it offline"
+                : "Relaying sensor uplinks";
+        computeAndApplyEffectiveStatus(gateway, GatewayStatusSource.UPLINK_TRAFFIC, reason);
+    }
+
     public GatewayStatus computeEffectiveStatusNow(Gateway gateway) {
         if (gateway == null) return GatewayStatus.UNKNOWN;
         if (Boolean.TRUE.equals(gateway.getDecommissioned())) {
             return GatewayStatus.NEVER_SEEN;
         }
         Instant now = Instant.now();
+        Instant relayed = gateway.getLastTrafficSeenAt();
+        if (relayed != null && !relayed.isAfter(now.plusSeconds(300)) && Duration.between(relayed, now).toMillis() <= trafficOnlineMs) {
+            return GatewayStatus.ONLINE;
+        }
         if (gateway.getLoriotReportedStatus() != null) {
             Instant lastSeen = gateway.getLastLoriotSeenAt();
             boolean fresh = lastSeen != null && Duration.between(lastSeen, now).toMillis() <= loriotFreshnessMs;

@@ -44,6 +44,7 @@ public class GatewayService {
     private final AccessScopeService accessScopeService;
     private final LoriotGatewaySyncService syncService;
     private final GatewayStatusService statusService;
+    private final com.safalifter.transformerservice.reaction.GatewayLinkService gatewayLinkService;
 
     @Transactional(readOnly = true)
     public GatewaySummaryResponse getSummary() {
@@ -126,6 +127,8 @@ public class GatewayService {
                 filter.getRegionName(),
                 filter.getDepotName(),
                 filter.getNetworkName(),
+                filter.getRelaying(),
+                filter.getRelaying() != null ? gatewayLinkService.heardGatewayEuis() : List.of("-"),
                 pageable
         ).map(this::toResponse);
     }
