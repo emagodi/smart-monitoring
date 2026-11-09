@@ -75,7 +75,7 @@ public class GatewayConfig {
                         .uri("lb://transformer-service"))
 
                 // Installation green light, commissioning (PAT), duty roster, fault alarms and analytics
-                .route("transformer-lifecycle", r -> r.path("/api/v1/lifecycle/**", "/api/v1/duty/**", "/api/v1/faults/**", "/api/v1/analytics/**")
+                .route("transformer-lifecycle", r -> r.path("/api/v1/lifecycle/**", "/api/v1/duty/**", "/api/v1/faults/**", "/api/v1/analytics/**", "/api/v1/mobile/**")
                         .filters(f -> f.filter(filter))
                         .uri("lb://transformer-service"))
 
