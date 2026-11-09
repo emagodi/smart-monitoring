@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -10,6 +10,10 @@ import { storage } from './storage';
 export type PushState = { status: 'ok' | 'denied' | 'unsupported' | 'error'; detail?: string };
 
 let configured = false;
+
+/** Expo Go has no custom sounds and no remote push on Android: use defaults there and skip push registration. */
+export const inExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+const SIREN = inExpoGo ? 'default' : 'siren.wav';
 
 /** Alerts arrive on the "alerts" channel: maximum importance, siren sound, strong vibration, shown on the lock screen. */
 export async function configureNotifications() {
@@ -24,27 +28,32 @@ export async function configureNotifications() {
     }),
   });
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('alerts', {
-      name: 'Intrusion alerts',
-      description: 'New alerts for your depot. Plays the siren.',
-      importance: Notifications.AndroidImportance.MAX,
-      sound: 'siren.wav',
-      vibrationPattern: [0, 600, 300, 600, 300, 600],
-      lightColor: '#E63B3F',
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      bypassDnd: true,
-      enableVibrate: true,
-    });
-    await Notifications.setNotificationChannelAsync('general', {
-      name: 'Updates',
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
+    try {
+      await Notifications.setNotificationChannelAsync('alerts', {
+        name: 'Intrusion alerts',
+        description: 'New alerts for your depot. Plays the siren.',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: SIREN,
+        vibrationPattern: [0, 600, 300, 600, 300, 600],
+        lightColor: '#E63B3F',
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+        enableVibrate: true,
+      });
+      await Notifications.setNotificationChannelAsync('general', {
+        name: 'Updates',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    } catch {
+      /* channel set-up is not available here (e.g. Expo Go); notifications use the default channel */
+    }
   }
 }
 
 /** Ask for permission, get this phone's Expo push token and register it for the signed-in user. */
 export async function registerPush(): Promise<PushState> {
   if (Platform.OS === 'web') return { status: 'unsupported', detail: 'Push alerts work on the phone app only.' };
+  if (inExpoGo) return { status: 'unsupported', detail: 'Push alerts need the TIAS app build (EAS). In Expo Go only the in-app siren works.' };
   if (!Device.isDevice) return { status: 'unsupported', detail: 'Push alerts need a real phone (not an emulator).' };
   try {
     await configureNotifications();
@@ -78,12 +87,12 @@ export async function unregisterPush() {
 /** A local test of the alert sound and banner, so the team can check their phone is set up. */
 export async function testAlertNotification() {
   if (Platform.OS === 'web') return;
-  await configureNotifications();
+  await configureNotifications().catch(() => undefined);
   await Notifications.scheduleNotificationAsync({
     content: {
       title: 'TIAS test alert',
       body: 'This is how an intrusion alert will sound and look on this phone.',
-      sound: 'siren.wav',
+      sound: SIREN,
       data: { type: 'TEST' },
     },
     trigger: Platform.OS === 'android' ? { channelId: 'alerts', seconds: 1, type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL } : null,

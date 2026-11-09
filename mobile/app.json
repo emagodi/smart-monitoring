@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TIAS",
-    "slug": "tias-mobile",
+    "slug": "powertel",
     "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -13,8 +13,12 @@
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true },
-        "UIBackgroundModes": ["remote-notification"],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -27,7 +31,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": ["android.permission.VIBRATE", "android.permission.POST_NOTIFICATIONS"],
+      "permissions": [
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -51,24 +58,36 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#0B4FC4",
           "defaultChannel": "alerts",
-          "sounds": ["./assets/sounds/siren.wav"]
+          "sounds": [
+            "./assets/sounds/siren.wav"
+          ]
         }
       ],
       "expo-audio",
       [
         "expo-build-properties",
         {
-          "android": { "usesCleartextTraffic": true }
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],
     "extra": {
       "apiUrl": "http://154.73.80.22",
-      "eas": {}
+      "eas": {
+        "projectId": "48a040b3-3042-414a-aa8a-bdb28adddf00"
+      },
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      }
     },
     "experiments": {
       "typedRoutes": false,
       "reactCompiler": true
-    }
+    },
+    "owner": "powertel-private-limited"
   }
 }
