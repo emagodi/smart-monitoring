@@ -29,8 +29,8 @@ function Shell() {
   // Register this phone for push alerts once signed in.
   useEffect(() => {
     if (!user || Platform.OS === 'web') return;
-    void configureNotifications();
-    void registerPush();
+    void configureNotifications().catch(() => undefined);
+    void registerPush().catch(() => undefined);
   }, [user]);
 
   // Tapping an alert notification opens that incident.
