@@ -23,12 +23,19 @@ public class DutyNotifier {
 
     private final DutyService dutyService;
     private final NotificationClient notificationClient;
+    private final MobilePushService mobilePushService;
 
     @Value("${app.public-base-url:http://154.73.80.22}")
     private String publicBaseUrl;
 
     @Async
     public void pageOnDuty(Long alertId, Long depotId, String transformerName, String what, String location, List<String> whatsappTemplateParameters, boolean repeat, int occurrences) {
+        // Phones with the TIAS app ring with the siren sound (independent of SMS / WhatsApp paging below).
+        try {
+            mobilePushService.pushAlert(alertId, depotId, transformerName, what, repeat, occurrences);
+        } catch (Exception e) {
+            log.debug("Mobile push skipped for alert {}: {}", alertId, e.getMessage());
+        }
         List<Map<String, Object>> people = dutyService.onDutyFor(depotId);
         if (people.isEmpty()) {
             log.debug("No Loss Control staff on duty for depot {}; alert {} goes to the Response Desk only", depotId, alertId);

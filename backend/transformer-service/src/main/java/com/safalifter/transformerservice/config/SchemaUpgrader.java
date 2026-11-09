@@ -475,6 +475,25 @@ public class SchemaUpgrader implements ApplicationRunner, org.springframework.be
                 c += addColumn("transformer_faults", "alerts_closed", "INT NOT NULL DEFAULT 0");
                 return c;
             });
+            changes += step("mobile app push devices", () -> createTable("mobile_devices", """
+                    CREATE TABLE IF NOT EXISTS mobile_devices (
+                        id BIGINT NOT NULL AUTO_INCREMENT,
+                        expo_token VARCHAR(255) NOT NULL,
+                        user_email VARCHAR(255) NOT NULL,
+                        depot_id BIGINT NULL,
+                        supplier_code VARCHAR(64) NULL,
+                        can_ack TINYINT(1) NOT NULL DEFAULT 0,
+                        platform VARCHAR(16) NULL,
+                        app_version VARCHAR(32) NULL,
+                        device_name VARCHAR(128) NULL,
+                        enabled TINYINT(1) NOT NULL DEFAULT 1,
+                        created_at DATETIME(6) NULL,
+                        last_seen_at DATETIME(6) NULL,
+                        PRIMARY KEY (id),
+                        UNIQUE KEY uq_mobile_token (expo_token),
+                        KEY idx_mobile_user (user_email)
+                    ) ENGINE = InnoDB
+                    """));
             changes += step("gateways: drop LORIOT placeholder positions", () -> {
                 if (!tableExists("gateways")) return 0;
                 // LORIOT reports a default point in Switzerland for gateways whose location was never set there.
