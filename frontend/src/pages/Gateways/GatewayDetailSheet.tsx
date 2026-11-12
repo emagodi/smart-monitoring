@@ -240,7 +240,7 @@ export function GatewayDetailSheet({
                 </HChip>
                 <HChip className={current ? "bg-emerald-400/15 text-emerald-100 ring-emerald-300/40" : "bg-amber-400/15 text-amber-100 ring-amber-300/40"}>
                   <CardSim className="h-3 w-3" />
-                  {current ? `SIM •••• ${tail4(current.simIccid || current.iccid)}` : "No SIM"}
+                  {current ? (current.simMsisdn ? `SIM ${current.simMsisdn}` : `SIM •••• ${tail4(current.simIccid || current.iccid)}`) : "No SIM"}
                 </HChip>
                 {g.model ? (
                   <HChip>
@@ -369,7 +369,7 @@ export function GatewayDetailSheet({
                     empty="No SIM recorded"
                     action={canEdit ? <LinkBtn onClick={() => setTab("sim")}>{current ? "Manage" : "Assign"}</LinkBtn> : null}
                   />
-                  <Row label="SIM number" value={current?.simMsisdn ? `••• ${tail4(current.simMsisdn)}` : null} mono />
+                  <Row label="SIM number" value={current?.simMsisdn || null} mono />
                 </Card>
 
                 <Card icon={<CalendarClock className="h-4 w-4" />} title="Activity" tone="red">
@@ -422,7 +422,7 @@ export function GatewayDetailSheet({
                     <div className="space-y-2">
                       <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-50">SIM in this gateway</h4>
                       <Row label="ICCID" value={`•••• •••• ${tail4(current.simIccid || current.iccid)}`} mono />
-                      <Row label="Number" value={current.simMsisdn ? `••• ${tail4(current.simMsisdn)}` : null} mono />
+                      <Row label="Number" value={current.simMsisdn || null} mono />
                       <Row label="Slot" value={`Slot ${current.slotNumber}`} />
                       <Row label="Put in" value={when(current.assignedAt)} />
                       <Row label="By" value={who(current.assignedBy)} />
@@ -492,7 +492,7 @@ export function GatewayDetailSheet({
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-100">
-                            •••• {tail4(a.simIccid || a.iccid)} <span className="font-sans font-normal text-slate-400">· slot {a.slotNumber}</span>
+                            {a.simMsisdn || `•••• ${tail4(a.simIccid || a.iccid)}`} <span className="font-sans font-normal text-slate-400">· slot {a.slotNumber}</span>
                           </p>
                           <p className="text-[11px] text-slate-500">
                             {when(a.assignedAt) ?? "—"} → {when(a.unassignedAt) ?? "—"}
@@ -615,7 +615,7 @@ function SimCardVisual({ a }: { a: DetailSim }) {
           <p className="font-mono text-lg tracking-[0.18em] sm:text-xl">•••• •••• •••• {tail4(a.simIccid || a.iccid)}</p>
           <div className="mt-2 flex items-end justify-between text-[11px] text-blue-100/80">
             <span className="inline-flex items-center gap-1">
-              <Phone className="h-3 w-3" /> {a.simMsisdn ? `••• ${tail4(a.simMsisdn)}` : "no number"}
+              <Phone className="h-3 w-3" /> {a.simMsisdn || "no number"}
             </span>
             <span>since {ago(a.assignedAt) ?? "—"}</span>
           </div>

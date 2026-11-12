@@ -101,7 +101,6 @@ const tail = (v?: string | null, keep = 4) => {
   return digits.slice(-keep);
 };
 const maskedIccid = (v?: string | null) => (v ? `•••• •••• ${tail(v) ?? ""}` : "—");
-const maskedNumber = (v?: string | null) => (v ? `••• ${tail(v) ?? ""}` : "—");
 const groupDigits = (v: string) => v.replace(/(.{4})/g, "$1 ").trim();
 const errMsg = (e: unknown, fallback: string) => {
   const ax = e as { response?: { data?: { message?: string } | string } };
@@ -497,13 +496,7 @@ export default function SimsIndex() {
                       </td>
                       <td className="px-4 py-2.5">
                         {sim.msisdn ? (
-                          <Secret
-                            value={r && isShown(sim.id, "msisdn") ? r.msisdn || "—" : maskedNumber(sim.msisdn)}
-                            shown={isShown(sim.id, "msisdn")}
-                            canReveal={canViewSensitive}
-                            busy={revealing === sim.id}
-                            onToggle={() => void toggle(sim, "msisdn")}
-                          />
+                          <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{sim.msisdn}</span>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}

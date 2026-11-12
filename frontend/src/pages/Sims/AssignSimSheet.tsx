@@ -9,7 +9,7 @@ import { PinPukFields, pinPukError, type PinPuk } from "./PinPukFields";
  */
 
 export type AssignGateway = { id: number; name: string; regionName?: string | null; depotName?: string | null; effectiveStatus?: string | null };
-export type AssignSim = { id: number; iccid: string; operator?: string | null; hasPin?: boolean | null; hasPuk?: boolean | null; slotNumber?: number | null };
+export type AssignSim = { id: number; iccid: string; msisdn?: string | null; operator?: string | null; hasPin?: boolean | null; hasPuk?: boolean | null; slotNumber?: number | null };
 export type AssignPayload = { gatewayId: number; slot: number; reason: string; codes: PinPuk };
 
 const tail = (v?: string | null) => (v ? v.replace(/\*/g, "").slice(-4) : "");
@@ -108,7 +108,7 @@ export function AssignSimSheet({
               <h3 className="text-lg font-semibold">Put this SIM in a gateway</h3>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Chip>
-                  <span className="font-mono tracking-wide">•••• {tail(sim.iccid)}</span>
+                  <span className="font-mono tracking-wide">{sim.msisdn || `•••• ${tail(sim.iccid)}`}</span>
                 </Chip>
                 {sim.operator ? (
                   <Chip>

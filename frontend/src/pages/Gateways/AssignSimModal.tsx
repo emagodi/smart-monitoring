@@ -157,7 +157,7 @@ export function AssignSimModal({
           ) : null}
 
           <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-            <Step n={1} title="Choose the SIM" hint={selected ? `Selected: •••• ${tail(selected.iccid)}` : "Type the last digits printed on the SIM card"} done={Boolean(selected)} />
+            <Step n={1} title="Choose the SIM" hint={selected ? `Selected: ${selected.msisdn || `•••• ${tail(selected.iccid)}`}` : "Type the last digits printed on the SIM card"} done={Boolean(selected)} />
             <label className="relative flex items-center">
               <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
               <input
@@ -200,11 +200,11 @@ export function AssignSimModal({
                         <span className="h-3 w-4 rounded-sm bg-gradient-to-br from-amber-200 to-amber-400" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block font-mono text-sm font-semibold tracking-wide text-slate-900 dark:text-slate-50">•••• {tail(s.iccid)}</span>
+                        <span className="block truncate font-mono text-sm font-semibold tracking-wide text-slate-900 dark:text-slate-50">{s.msisdn || `•••• ${tail(s.iccid)}`}</span>
                         <span className="flex items-center gap-1 truncate text-[11px] text-slate-500">
                           <Signal className="h-3 w-3 shrink-0" />
                           {s.operator || "No operator"}
-                          {s.msisdn ? ` · ••• ${tail(s.msisdn)}` : ""}
+                          {s.msisdn ? ` · ICCID •••• ${tail(s.iccid)}` : ""}
                         </span>
                       </span>
                       <span className="flex shrink-0 flex-col items-end gap-0.5">

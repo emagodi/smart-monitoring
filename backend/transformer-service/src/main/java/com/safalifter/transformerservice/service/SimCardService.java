@@ -541,11 +541,9 @@ public class SimCardService {
                 .build();
     }
 
+    /** Phone numbers (MSISDN) are shown in full — they are not secret like PIN/PUK/Ki. */
     private static String maskMsisdn(String msisdn) {
-        if (msisdn == null) return null;
-        String t = msisdn.trim();
-        if (t.length() <= 4) return "*".repeat(t.length());
-        return "*".repeat(t.length() - 4) + t.substring(t.length() - 4);
+        return msisdn == null ? null : msisdn.trim();
     }
 
     public static String maskIccid(String iccid, String normalized) {
