@@ -410,10 +410,9 @@ public class GatewayService {
         return a.isAfter(b) ? a : b;
     }
 
+    /** Phone numbers (MSISDN) are shown in full — they are not secret like PIN/PUK/Ki. */
     private static String maskMsisdn(String msisdn) {
-        if (msisdn == null || msisdn.length() < 4) return msisdn;
-        int keep = Math.min(4, msisdn.length());
-        return "*".repeat(msisdn.length() - keep) + msisdn.substring(msisdn.length() - keep);
+        return msisdn == null ? null : msisdn.trim();
     }
 
     private void forbidSupplier() {
