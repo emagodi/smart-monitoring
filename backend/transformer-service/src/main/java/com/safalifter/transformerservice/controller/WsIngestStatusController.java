@@ -30,7 +30,7 @@ public class WsIngestStatusController {
 
     @GetMapping("/status")
     @Operation(summary = "Get WebSocket ingestion connection liveness status")
-    @PreAuthorize("hasAuthority('READ_PRIVILEGE') and hasAnyRole('ADMIN','DEPOT_FOREMAN','MANAGINGDIRECTOR','DISTRICTMANAGER','TECHNICALDIRECTOR','FINANCEDIRECTOR','COMMERCIALDIRECTOR','BUSINESSMANAGER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, Object>> getStatus() {
         Map<String, Object> body = new LinkedHashMap<>();
         List<Map<String, Object>> ingestors = new ArrayList<>();
@@ -59,6 +59,9 @@ public class WsIngestStatusController {
         body.put("overallConnected", ingestors.stream()
                 .filter(i -> Boolean.TRUE.equals(i.get("enabled")))
                 .allMatch(i -> Boolean.TRUE.equals(i.get("connected"))));
+        body.put("overallHealthy", ingestors.stream()
+                .filter(i -> Boolean.TRUE.equals(i.get("enabled")) && i.containsKey("healthy"))
+                .allMatch(i -> Boolean.TRUE.equals(i.get("healthy"))));
         body.put("timestamp", java.time.Instant.now().toString());
 
         return ResponseEntity.ok(body);

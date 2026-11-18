@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import FeedStatus from "../../components/reaction/FeedStatus";
 import type { ReactNode } from "react";
 import axios from "axios";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
@@ -400,6 +401,9 @@ export default function TransformerRegistry() {
                   {STATUS[s].label} <b className="font-semibold">{counts[s]}</b>
                 </span>
               ))}
+            </div>
+            <div className="mt-2.5">
+              <FeedStatus token={token} />
             </div>
           </div>
           {showUnmatched ? (

@@ -1,0 +1,53 @@
+# Keeps `main` and `edwin` pointing at the same commit.
+#
+# - A push to `edwin` fast-forwards `main` to it.
+# - A push to `main` (e.g. a merged pull request from another branch) fast-forwards `edwin` to it.
+#
+# Only fast-forwards are ever made, never a force-push, so no commit can be lost. If the two branches have
+# diverged (each has commits the other lacks) the job fails with a clear message and nothing is changed:
+# merge one into the other (or open a pull request) and push again.
+name: Keep main and edwin in sync
+
+on:
+  push:
+    branches: [main, edwin]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keep-main-and-edwin-in-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward the other branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main edwin
+          MAIN=$(git rev-parse origin/main)
+          EDWIN=$(git rev-parse origin/edwin)
+          echo "main  = $MAIN"
+          echo "edwin = $EDWIN"
+          if [ "$MAIN" = "$EDWIN" ]; then
+            echo "Already in sync."
+            exit 0
+          fi
+          if git merge-base --is-ancestor "$MAIN" "$EDWIN"; then
+            echo "main is behind edwin: fast-forwarding main."
+            git push origin "$EDWIN:refs/heads/main"
+          elif git merge-base --is-ancestor "$EDWIN" "$MAIN"; then
+            echo "edwin is behind main: fast-forwarding edwin."
+            git push origin "$MAIN:refs/heads/edwin"
+          else
+            echo "::error::main and edwin have diverged. Merge main into edwin (git pull origin main) and push edwin; the branches will then be synced."
+            exit 1
+          fi
