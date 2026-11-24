@@ -45,6 +45,8 @@ public class GatewayService {
     private final LoriotGatewaySyncService syncService;
     private final GatewayStatusService statusService;
     private final com.safalifter.transformerservice.reaction.GatewayLinkService gatewayLinkService;
+    private final GatewayChangeLogService changeLog;
+    private final GatewayMaintenanceService maintenance;
 
     @Transactional(readOnly = true)
     public GatewaySummaryResponse getSummary() {
@@ -191,6 +193,7 @@ public class GatewayService {
         g.setEffectiveStatus(GatewayStatus.NEVER_SEEN);
         g.setCreatedBy(accessScopeService.getCurrentUserEmail());
         Gateway saved = gatewayRepository.save(g);
+        changeLog.record(saved, "CREATE", GatewayChangeLogService.SRC_USER, accessScopeService.getCurrentUserEmail(), "Added by hand");
         log.info("Created gateway id={} name={} by={}", saved.getId(), saved.getName(), accessScopeService.getCurrentUserEmail());
         return toResponse(saved);
     }
@@ -200,6 +203,7 @@ public class GatewayService {
         forbidSupplierCrud();
         Gateway g = inScope(gatewayRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found")));
+        Map<String, String> before = changeLog.snapshot(g);
         g.setName(request.getName());
         g.setDescription(trimToNull(request.getDescription()));
         g.setAddress(trimToNull(request.getAddress()));
@@ -231,6 +235,7 @@ public class GatewayService {
         }
         g.setUpdatedBy(accessScopeService.getCurrentUserEmail());
         Gateway saved = gatewayRepository.save(g);
+        changeLog.recordDiff(saved, before, GatewayChangeLogService.SRC_USER, accessScopeService.getCurrentUserEmail(), "Edited");
         return toResponse(saved);
     }
 
@@ -257,6 +262,8 @@ public class GatewayService {
                 .observedAt(Instant.now())
                 .build());
         gatewayRepository.save(g);
+        changeLog.record(g, "DECOMMISSION", GatewayChangeLogService.SRC_USER, accessScopeService.getCurrentUserEmail(),
+                "Decommissioned: " + trimToNull(request.getReason()));
         log.info("Gateway id={} decommissioned by={}", id, accessScopeService.getCurrentUserEmail());
     }
 
@@ -369,6 +376,7 @@ public class GatewayService {
                 .assignedMsisdn(maskMsisdn(simMsisdn))
                 .assignedSimIccid(simIccidMasked)
                 .simAssigned(activeSimId != null)
+                .inLoriot(maintenance.inLoriot(g))
                 .createdBy(g.getCreatedBy())
                 .createdAt(g.getCreatedAt())
                 .updatedBy(g.getUpdatedBy())

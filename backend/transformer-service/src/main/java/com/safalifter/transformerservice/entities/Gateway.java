@@ -97,6 +97,16 @@ public class Gateway {
     @Column(name = "last_health_check_at")
     private Instant lastHealthCheckAt;
 
+    /** Read-only, for sorting the gateway list by SIM: number of active SIM assignments. */
+    @org.hibernate.annotations.Formula("(SELECT COUNT(*) FROM gateway_sim_assignments a WHERE a.gateway_id = id AND a.active = 1)")
+    @lombok.Builder.Default
+    private Integer activeSimCount = null;
+
+    /** Read-only, for sorting by "last seen": the later of traffic and LORIOT. */
+    @org.hibernate.annotations.Formula("GREATEST(COALESCE(last_traffic_seen_at, last_loriot_seen_at), COALESCE(last_loriot_seen_at, last_traffic_seen_at))")
+    @lombok.Builder.Default
+    private Instant lastSeenSort = null;
+
     @Column(name = "status_changed_at")
     private Instant statusChangedAt;
 

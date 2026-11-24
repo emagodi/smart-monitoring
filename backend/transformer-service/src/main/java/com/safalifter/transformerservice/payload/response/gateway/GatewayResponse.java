@@ -64,6 +64,8 @@ public class GatewayResponse {
     private String assignedMsisdn;
     private String assignedSimIccid;
     private boolean simAssigned;
+    /** LORIOT listed this gateway at the last sync (false: removed / re-registered there, or added by hand). */
+    private Boolean inLoriot;
     private String createdBy;
     private LocalDateTime createdAt;
     private String updatedBy;

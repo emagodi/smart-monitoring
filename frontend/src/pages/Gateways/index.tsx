@@ -4,7 +4,12 @@ import axios from "axios";
 import { HeroButton, HeroStat, HeroStats, MobileFilters, PageHero } from "../../components/ui/page";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowDownUp,
+  ArrowUp,
   CloudDownload,
+  GitMerge,
+  Trash2,
   CloudOff,
   Eye,
   Loader2,
@@ -28,6 +33,7 @@ import { EditGatewayModal } from "./EditGatewayModal";
 import { AssignSimModal } from "./AssignSimModal";
 import { GatewayDetailSheet } from "./GatewayDetailSheet";
 import GatewayTransformersDialog from "./GatewayTransformersDialog";
+import { DeleteGatewayDialog, DuplicatesDialog, type DuplicatePair } from "./GatewayCleanup";
 
 type GatewayStatus = "ONLINE" | "OFFLINE" | "DEGRADED" | "NEVER_SEEN" | "UNKNOWN";
 
@@ -69,6 +75,8 @@ interface GatewayItem {
   address?: string | null;
   locationSource?: string | null;
   simAssigned?: boolean;
+  /** LORIOT listed this gateway at the last sync. */
+  inLoriot?: boolean | null;
   activeSimId?: number | null;
   assignedSimId?: number | null;
   assignedSimIccid?: string | null;
@@ -226,10 +234,41 @@ const STATUS_FILTERS: Array<{ value: GatewayStatus | "ALL"; label: string }> = [
 
 
 
-function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
+type GatewaySort = { key: string; dir: "asc" | "desc" } | null;
+
+function Th({
+  children,
+  className = "",
+  sortKey,
+  sort,
+  onSort,
+}: {
+  children: ReactNode;
+  className?: string;
+  sortKey?: string;
+  sort?: GatewaySort;
+  onSort?: (key: string) => void;
+}) {
+  const active = !!sortKey && sort?.key === sortKey;
   return (
     <th className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500 ${className}`}>
-      {children}
+      {sortKey && onSort ? (
+        <button
+          type="button"
+          onClick={() => onSort(sortKey)}
+          title="Sort"
+          className={`inline-flex items-center gap-1 uppercase tracking-[0.18em] transition hover:text-blue-700 dark:hover:text-blue-300 ${active ? "text-blue-700 dark:text-blue-300" : ""}`}
+        >
+          {children}
+          {active ? (
+            sort!.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+          ) : (
+            <ArrowDownUp className="h-3 w-3 opacity-50" />
+          )}
+        </button>
+      ) : (
+        children
+      )}
     </th>
   );
 }
@@ -315,10 +354,26 @@ export default function GatewaysIndex() {
 
   const [assignSimModalOpen, setAssignSimModalOpen] = useState(false);
   const [transformersOf, setTransformersOf] = useState<{ id: number; name: string } | null>(null);
+  const [sort, setSort] = useState<GatewaySort>(null);
+  const [duplicates, setDuplicates] = useState<DuplicatePair[]>([]);
+  const [dupOpen, setDupOpen] = useState(false);
+  const [deleting, setDeleting] = useState<GatewayItem | null>(null);
+  const [cleanupNotice, setCleanupNotice] = useState<string | null>(null);
   const [assignSimTargetGatewayId, setAssignSimTargetGatewayId] = useState<number | null>(null);
 
   const canSync = hasPermission("gateways.sync");
   const canEdit = hasPermission("gateways.edit");
+  const canDelete = hasPermission("gateways.delete") || hasPermission("DELETE_PRIVILEGE");
+  const onSort = (key: string) => {
+    // First click: ascending (dates: newest first); second: the other way; third: back to the default order.
+    setSort((cur) => {
+      const first: "asc" | "desc" = key === "lastSeenSort" || key === "activeSimCount" ? "desc" : "asc";
+      if (!cur || cur.key !== key) return { key, dir: first };
+      if (cur.dir === first) return { key, dir: first === "asc" ? "desc" : "asc" };
+      return null;
+    });
+    setPage(0);
+  };
 
   const headers = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
@@ -353,6 +408,7 @@ export default function GatewaysIndex() {
       if (!silent) setLoading(true);
       setError(null);
       const params: Record<string, unknown> = { page, size: pageSize };
+      if (sort) params.sort = `${sort.key},${sort.dir}`;
       if (statusFilter !== "ALL") params.status = statusFilter;
       if (selectedRegion !== "ALL") {
         if (!Number.isNaN(Number(selectedRegion))) params.regionId = Number(selectedRegion);
@@ -386,7 +442,39 @@ export default function GatewaysIndex() {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, headers, token, page, pageSize, statusFilter, selectedRegion, selectedDepot, selectedNetwork, selectedModel, selectedOperator, hasLocationFilter, hasSimFilter, relayFilter, lastSeenFrom, lastSeenTo, search]);
+  }, [API_BASE_URL, headers, token, page, pageSize, statusFilter, selectedRegion, selectedDepot, selectedNetwork, selectedModel, selectedOperator, hasLocationFilter, hasSimFilter, relayFilter, lastSeenFrom, lastSeenTo, search, sort]);
+
+  // Records that are probably the same physical gateway (re-registered in LORIOT, typo in the EUI, ...).
+  const fetchDuplicates = useCallback(async () => {
+    if (!token) return;
+    try {
+      const r = await axios.get(`${API_BASE_URL}/api/v1/gateways/duplicates`, { headers });
+      setDuplicates(Array.isArray(r.data) ? r.data : []);
+    } catch {
+      setDuplicates([]);
+    }
+  }, [API_BASE_URL, headers, token]);
+
+  useEffect(() => {
+    void fetchDuplicates();
+  }, [fetchDuplicates]);
+
+  const duplicateIds = useMemo(() => {
+    const ids = new Set<number>();
+    duplicates.forEach((d) => {
+      ids.add(d.keep.id);
+      ids.add(d.remove.id);
+    });
+    return ids;
+  }, [duplicates]);
+
+  const afterCleanup = (message: string) => {
+    setCleanupNotice(message);
+    setDeleting(null);
+    void fetchDuplicates();
+    void fetchSummary();
+    void fetchGateways(true);
+  };
 
   // How many transformers each gateway relays (learnt from uplinks): drives the relay filter and the badge on the action.
   const fetchRelayCounts = useCallback(async () => {
@@ -1039,15 +1127,34 @@ export default function GatewaysIndex() {
           </div>
         ) : (
           <div className="w-full col-span-full overflow-x-auto">
+            {cleanupNotice ? (
+              <div className="flex items-center justify-between gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                <span>{cleanupNotice}</span>
+                <button type="button" onClick={() => setCleanupNotice(null)} className="font-semibold">Dismiss</button>
+              </div>
+            ) : null}
+            {duplicates.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setDupOpen(true)}
+                className="flex w-full items-center gap-2 border-b border-violet-200 bg-violet-50 px-4 py-2 text-left text-xs text-violet-800 hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-200"
+              >
+                <GitMerge className="h-4 w-4 shrink-0" />
+                <span className="flex-1">
+                  <b>{duplicates.length} possible duplicate gateway{duplicates.length === 1 ? "" : "s"}</b> (same MAC, EUI one character apart or same name), often after re-registering in LORIOT.
+                </span>
+                <span className="font-semibold underline">Review &amp; merge</span>
+              </button>
+            ) : null}
             <table className="min-w-[920px] w-full">
               <thead className="bg-gradient-to-r from-blue-50/80 via-white to-red-50/70 dark:from-blue-500/10 dark:via-slate-900 dark:to-red-500/10">
                 <tr className="text-left">
-                  <Th>Status</Th>
-                  <Th>Gateway</Th>
-                  <Th>Depot</Th>
-                  <Th>Network / Operator</Th>
-                  <Th>SIM</Th>
-                  <Th>Last Seen</Th>
+                  <Th sortKey="effectiveStatus" sort={sort} onSort={onSort}>Status</Th>
+                  <Th sortKey="name" sort={sort} onSort={onSort}>Gateway</Th>
+                  <Th sortKey="depotName" sort={sort} onSort={onSort}>Depot</Th>
+                  <Th sortKey="networkName" sort={sort} onSort={onSort}>Network / Operator</Th>
+                  <Th sortKey="activeSimCount" sort={sort} onSort={onSort}>SIM</Th>
+                  <Th sortKey="lastSeenSort" sort={sort} onSort={onSort}>Last Seen</Th>
                   <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
@@ -1065,10 +1172,31 @@ export default function GatewaysIndex() {
                     <Td>
                       <div className="max-w-[260px]">
                         <p className="font-semibold text-slate-900 dark:text-slate-100">{item.name || "Unnamed Gateway"}</p>
-                        {item.loriotGatewayId ? (
+                        {item.gatewayEui || item.loriotGatewayId ? (
                           <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                          {item.loriotGatewayId}
+                          {item.gatewayEui || item.loriotGatewayId}
                         </p>
+                        ) : null}
+                        {item.inLoriot === false || duplicateIds.has(item.id) ? (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {item.inLoriot === false ? (
+                              <span
+                                title={item.loriotGatewayId ? "LORIOT no longer lists this gateway (deleted or re-registered there)" : "Added by hand, not from LORIOT"}
+                                className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"
+                              >
+                                <CloudOff className="h-3 w-3" /> {item.loriotGatewayId ? "Not in LORIOT" : "Manual"}
+                              </span>
+                            ) : null}
+                            {duplicateIds.has(item.id) ? (
+                              <button
+                                type="button"
+                                onClick={() => setDupOpen(true)}
+                                className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/30"
+                              >
+                                <GitMerge className="h-3 w-3" /> Possible duplicate
+                              </button>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
                     </Td>
@@ -1176,6 +1304,16 @@ export default function GatewaysIndex() {
                             className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
                           >
                             <RefreshCw className={`h-3.5 w-3.5 ${syncingId === item.id ? "animate-spin" : ""}`} />
+                          </button>
+                        ) : null}
+                        {canDelete ? (
+                          <button
+                            type="button"
+                            onClick={() => setDeleting(item)}
+                            title={item.inLoriot ? "Delete (LORIOT still lists it: delete it there first)" : "Delete this gateway record"}
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         ) : null}
                       </div>
@@ -1302,6 +1440,14 @@ export default function GatewaysIndex() {
         />
       ) : null}
       <GatewayTransformersDialog gateway={transformersOf} token={token} onClose={() => setTransformersOf(null)} />
+      <DuplicatesDialog open={dupOpen} onClose={() => setDupOpen(false)} pairs={duplicates} headers={headers ?? {}} canMerge={canDelete || canEdit} onChanged={(m) => afterCleanup(m)} />
+      <DeleteGatewayDialog
+        gateway={deleting}
+        onClose={() => setDeleting(null)}
+        headers={headers ?? {}}
+        canForce={hasPermission("DELETE_PRIVILEGE") || hasPermission("gateways.delete")}
+        onDeleted={(m) => afterCleanup(m)}
+      />
     </div>
   );
 }

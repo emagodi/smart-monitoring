@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import GatewayChangeHistory from "./GatewayChangeHistory";
 import {
   Activity,
   AlertTriangle,
@@ -31,7 +32,7 @@ import {
 
 /**
  * Gateway detail (view mode). A bottom sheet on phones and a wide window on desktops, in the app's blue/red style:
- * a gradient header with live health, then Overview · Status history · SIM card · Sync log · Audit.
+ * a gradient header with live health, then Overview · Status history · SIM card · Sync log · Change history.
  */
 
 export type GwStatus = "ONLINE" | "OFFLINE" | "DEGRADED" | "NEVER_SEEN" | "UNKNOWN" | string;
@@ -517,8 +518,8 @@ export function GatewayDetailSheet({
               </p>
             </Card>
           ) : (
-            <Card icon={<ClipboardList className="h-4 w-4" />} title="Audit trail">
-              <Empty icon={<ClipboardList className="h-7 w-7" />} title="Not recorded yet" text="Edits, syncs and SIM changes will be listed here once the audit log is switched on for gateways. SIM changes already show who did them on the SIM card tab." />
+            <Card icon={<ClipboardList className="h-4 w-4" />} title="Change history" hint="from LORIOT and users">
+              <GatewayChangeHistory gatewayId={g.id} />
             </Card>
           )}
         </div>

@@ -43,6 +43,7 @@ public class LoriotGatewaySyncService {
     private final GatewayStatusService gatewayStatusService;
     private final AccessScopeService accessScopeService;
     private final LoriotProperties properties;
+    private final GatewayChangeLogService changeLog;
 
     private final AtomicBoolean inProgress = new AtomicBoolean(false);
     /** When the running sync started; used to recover if a run ever hangs, so syncing can never stop for good. */
@@ -316,6 +317,8 @@ public class LoriotGatewaySyncService {
         g.setLastSyncAt(Instant.now());
         g.setEffectiveStatus(com.safalifter.transformerservice.enums.GatewayStatus.UNKNOWN);
         g = gatewayRepository.save(g);
+        changeLog.record(g, "CREATE", GatewayChangeLogService.SRC_LORIOT, "LORIOT sync",
+                "Added from LORIOT (LORIOT id " + g.getLoriotGatewayId() + ", EUI " + g.getGatewayEui() + ", MAC " + g.getMacAddress() + ")");
         try {
             gatewayStatusService.updateFromLoriotApi(g, dto);
         } catch (Exception e) {
@@ -327,7 +330,12 @@ public class LoriotGatewaySyncService {
     @Transactional
     public boolean mergeFromDto(Gateway g, LoriotGateway dto, Long runId) {
         boolean changed = false;
+        Map<String, String> before = changeLog.snapshot(g);
+        if ("REMOVED_IN_LORIOT".equals(changeLog.lastAction(g.getId()))) {
+            changeLog.record(g, "BACK_IN_LORIOT", GatewayChangeLogService.SRC_LORIOT, "LORIOT sync", "Listed in LORIOT again");
+        }
         String incomingLoriotId = trimToNull(dto.getId());
+        boolean reRegistered = incomingLoriotId != null && g.getLoriotGatewayId() != null && !Objects.equals(g.getLoriotGatewayId(), incomingLoriotId);
         if (incomingLoriotId != null && !Objects.equals(g.getLoriotGatewayId(), incomingLoriotId)) {
             g.setLoriotGatewayId(incomingLoriotId);
             changed = true;
@@ -430,6 +438,8 @@ public class LoriotGatewaySyncService {
         g.setLastSyncAt(Instant.now());
         if (changed) {
             gatewayRepository.save(g);
+            changeLog.recordDiff(g, before, GatewayChangeLogService.SRC_LORIOT, "LORIOT sync",
+                    reRegistered ? "Re-registered in LORIOT: matched to this gateway by its EUI / MAC and updated" : "Changed in LORIOT");
         }
         try {
             gatewayStatusService.updateFromLoriotApi(g, dto);
@@ -459,6 +469,10 @@ public class LoriotGatewaySyncService {
                     || (g.getNormalizedGatewayEui() != null && euis.contains(g.getNormalizedGatewayEui()));
             if (present) continue;
             try {
+                if (!"REMOVED_IN_LORIOT".equals(changeLog.lastAction(g.getId()))) {
+                    changeLog.record(g, "REMOVED_IN_LORIOT", GatewayChangeLogService.SRC_LORIOT, "LORIOT sync",
+                            "No longer listed in LORIOT (deleted or re-registered there). Merge it into its new entry or delete it here.");
+                }
                 gatewayStatusService.markNotInLoriot(g);
                 n++;
             } catch (Exception e) {

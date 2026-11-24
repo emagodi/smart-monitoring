@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 import axios from "axios";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
+  ArrowDown,
   ArrowDownUp,
+  ArrowUp,
   ChevronDown,
   Cpu,
   Download,
@@ -98,7 +100,7 @@ export const ago = (minutes?: number | null, iso?: string | null) => {
   return `${Math.floor(m / 1440)} d ago`;
 };
 
-type SortKey = "name" | "region" | "depot" | "partner" | "status" | "alerts" | "signal";
+type SortKey = "name" | "region" | "depot" | "partner" | "status" | "alerts" | "signal" | "devices" | "gateway" | "arm";
 
 export default function TransformerRegistry() {
   const { token, hasPermission, user } = useAuth();
@@ -567,14 +569,14 @@ export default function TransformerRegistry() {
                 <table className="w-full min-w-[1220px] text-left text-xs">
                   <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:bg-slate-900/60">
                     <tr>
-                      <Th onClick={() => sortBy("name")} active={sort.key === "name"}>Transformer</Th>
-                      <Th onClick={() => sortBy("region")} active={sort.key === "region"}>Region › District › Depot</Th>
-                      <Th onClick={() => sortBy("partner")} active={sort.key === "partner"}>Partner</Th>
-                      <Th>Devices</Th>
-                      <Th>Gateway</Th>
-                      <Th onClick={() => sortBy("status")} active={sort.key === "status"}>Status</Th>
-                      <Th>Arm state</Th>
-                      <Th onClick={() => sortBy("alerts")} active={sort.key === "alerts"}>Alerts</Th>
+                      <Th onClick={() => sortBy("name")} active={sort.key === "name"} dir={sort.dir}>Transformer</Th>
+                      <Th onClick={() => sortBy("region")} active={sort.key === "region"} dir={sort.dir}>Region › District › Depot</Th>
+                      <Th onClick={() => sortBy("partner")} active={sort.key === "partner"} dir={sort.dir}>Partner</Th>
+                      <Th onClick={() => sortBy("devices")} active={sort.key === "devices"} dir={sort.dir}>Devices</Th>
+                      <Th onClick={() => sortBy("gateway")} active={sort.key === "gateway"} dir={sort.dir}>Gateway</Th>
+                      <Th onClick={() => sortBy("status")} active={sort.key === "status"} dir={sort.dir}>Status</Th>
+                      <Th onClick={() => sortBy("arm")} active={sort.key === "arm"} dir={sort.dir}>Arm state</Th>
+                      <Th onClick={() => sortBy("alerts")} active={sort.key === "alerts"} dir={sort.dir}>Alerts</Th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -969,13 +971,13 @@ function Select({ value, onChange, placeholder, options, icon }: { value: string
   );
 }
 
-function Th({ children, onClick, active }: { children: ReactNode; onClick?: () => void; active?: boolean }) {
+function Th({ children, onClick, active, dir }: { children: ReactNode; onClick?: () => void; active?: boolean; dir?: 1 | -1 }) {
   return (
     <th className="px-4 py-3 font-semibold">
       {onClick ? (
-        <button type="button" onClick={onClick} className={`inline-flex items-center gap-1 uppercase ${active ? "text-blue-700 dark:text-blue-300" : ""}`}>
+        <button type="button" onClick={onClick} title="Sort" className={`inline-flex items-center gap-1 text-left uppercase transition hover:text-blue-700 dark:hover:text-blue-300 ${active ? "text-blue-700 dark:text-blue-300" : ""}`}>
           {children}
-          <ArrowDownUp className="h-3 w-3 opacity-60" />
+          {active ? (dir === -1 ? <ArrowDown className="h-3 w-3 shrink-0" /> : <ArrowUp className="h-3 w-3 shrink-0" />) : <ArrowDownUp className="h-3 w-3 shrink-0 opacity-50" />}
         </button>
       ) : (
         children

@@ -39,6 +39,8 @@ public class GatewayController {
     private final GatewaySyncRunRepository syncRunRepository;
     private final com.safalifter.transformerservice.integration.loriot.LoriotClientAdapter loriotClientAdapter;
     private final SimCardService simCardService;
+    private final com.safalifter.transformerservice.service.GatewayMaintenanceService maintenanceService;
+    private final com.safalifter.transformerservice.service.GatewayChangeLogService changeLogService;
 
     @GetMapping("/summary")
     @Operation(summary = "Gateway summary counts")
@@ -92,6 +94,38 @@ public class GatewayController {
         filter.setDepotName(depotName);
         filter.setNetworkName(networkName);
         return ResponseEntity.ok(gatewayService.findPage(filter, pageable));
+    }
+
+    @GetMapping("/duplicates")
+    @Operation(summary = "Gateway records that are probably the same device (same MAC / serial / IMEI, EUI one character apart, same name)")
+    @PreAuthorize("hasAuthority('gateways.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
+    public ResponseEntity<List<java.util.Map<String, Object>>> duplicates() {
+        return ResponseEntity.ok(maintenanceService.duplicates());
+    }
+
+    @GetMapping("/{id}/changes")
+    @Operation(summary = "Audit trail: name / EUI / MAC / LORIOT id / location / assignment changes, from LORIOT or users")
+    @PreAuthorize("(hasAuthority('gateways.audit_view') OR hasAuthority('gateways.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN'))")
+    public ResponseEntity<java.util.Map<String, Object>> changes(@PathVariable Long id,
+                                                                 @RequestParam(defaultValue = "0") int page,
+                                                                 @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(changeLogService.history(id, page, size));
+    }
+
+    @PostMapping("/{id}/merge")
+    @Operation(summary = "Merge this (duplicate) gateway into another: SIM, location, depot and links move to the kept one; this record is removed")
+    @PreAuthorize("(hasAuthority('gateways.delete') OR hasAuthority('gateways.edit') OR hasAuthority('DELETE_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN'))")
+    public ResponseEntity<java.util.Map<String, Object>> merge(@PathVariable Long id, @RequestBody com.safalifter.transformerservice.service.GatewayMaintenanceService.MergeRequest request) {
+        return ResponseEntity.ok(maintenanceService.merge(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a gateway record (refused while LORIOT still lists it unless force=true); its SIM is released and the deletion is audited")
+    @PreAuthorize("(hasAuthority('gateways.delete') OR hasAuthority('DELETE_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN'))")
+    public ResponseEntity<java.util.Map<String, Object>> delete(@PathVariable Long id,
+                                                                @RequestParam(defaultValue = "false") boolean force,
+                                                                @RequestBody(required = false) com.safalifter.transformerservice.service.GatewayMaintenanceService.DeleteRequest request) {
+        return ResponseEntity.ok(maintenanceService.delete(id, force, request));
     }
 
     @GetMapping("/{id}")

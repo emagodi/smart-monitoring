@@ -51,6 +51,7 @@ public class RegistryService {
     private final TransformerService transformerService;
     private final AccessScopeService accessScopeService;
     private final AlertStateService alertStateService;
+    private final org.springframework.beans.factory.ObjectProvider<com.safalifter.transformerservice.reaction.GatewayLinkService> gatewayLinks;
 
     /** Registry rows per scope, kept 20 s: dashboards, map, insights and the registry share one query. */
     private final TtlCache<List<RegistryRow>> rowsCache = TtlCache.shared(20_000, 512, "registry-rows", new com.fasterxml.jackson.core.type.TypeReference<List<RegistryRow>>() {});
@@ -196,6 +197,25 @@ public class RegistryService {
             case "partner" -> java.util.Comparator.<RegistryRow, String>comparing(r -> String.valueOf(r.getSupplierName())).thenComparing(byName);
             case "depot", "region" -> java.util.Comparator.<RegistryRow, Long>comparing(r -> r.getDepotId() == null ? Long.MAX_VALUE : r.getDepotId()).thenComparing(byName);
             case "signal" -> java.util.Comparator.<RegistryRow, Long>comparing(r -> r.getMinutesSinceSignal() == null ? Long.MAX_VALUE : r.getMinutesSinceSignal()).thenComparing(byName);
+            case "devices" -> java.util.Comparator.<RegistryRow>comparingInt(RegistryRow::getControllerCount)
+                    .thenComparing(r -> r.getControllerEuis() == null || r.getControllerEuis().isEmpty() ? "~" : String.valueOf(r.getControllerEuis().get(0)))
+                    .thenComparing(byName);
+            case "arm" -> java.util.Comparator.<RegistryRow>comparingInt(r -> "ARMED".equals(r.getReportedArmState()) ? 0 : "DISARMED".equals(r.getReportedArmState()) ? 1 : 2)
+                    .thenComparing(byName);
+            case "gateway" -> {
+                Map<Long, Map<String, Object>> gw = Map.of();
+                try {
+                    var links = gatewayLinks.getIfAvailable();
+                    if (links != null) gw = links.gatewayByTransformer();
+                } catch (Exception ignored) {
+                    // links unavailable: fall back to name order
+                }
+                final Map<Long, Map<String, Object>> byT = gw;
+                yield java.util.Comparator.<RegistryRow, String>comparing(r -> {
+                    Map<String, Object> g = byT.get(r.getId());
+                    return g == null || g.get("name") == null ? "\uffff" : String.valueOf(g.get("name")).toLowerCase(Locale.ROOT);
+                }).thenComparing(byName);
+            }
             default -> byName;
         };
         if ("desc".equalsIgnoreCase(dir)) cmp = cmp.reversed();

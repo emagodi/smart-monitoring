@@ -494,6 +494,25 @@ public class SchemaUpgrader implements ApplicationRunner, org.springframework.be
                         KEY idx_mobile_user (user_email)
                     ) ENGINE = InnoDB
                     """));
+            changes += step("gateway change log (audit trail)", () -> createTable("gateway_change_log", """
+                    CREATE TABLE IF NOT EXISTS gateway_change_log (
+                        id BIGINT NOT NULL AUTO_INCREMENT,
+                        gateway_id BIGINT NULL,
+                        gateway_name VARCHAR(255) NULL,
+                        gateway_eui VARCHAR(64) NULL,
+                        action VARCHAR(32) NOT NULL,
+                        field VARCHAR(64) NULL,
+                        old_value VARCHAR(1000) NULL,
+                        new_value VARCHAR(1000) NULL,
+                        source VARCHAR(32) NOT NULL,
+                        actor VARCHAR(255) NULL,
+                        note VARCHAR(2000) NULL,
+                        changed_at DATETIME(6) NOT NULL,
+                        PRIMARY KEY (id),
+                        KEY idx_gcl_gateway (gateway_id, changed_at),
+                        KEY idx_gcl_changed (changed_at)
+                    ) ENGINE = InnoDB
+                    """));
             changes += step("gateways: drop LORIOT placeholder positions", () -> {
                 if (!tableExists("gateways")) return 0;
                 // LORIOT reports a default point in Switzerland for gateways whose location was never set there.
