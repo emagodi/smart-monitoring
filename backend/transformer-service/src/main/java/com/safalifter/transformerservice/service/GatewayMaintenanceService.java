@@ -25,15 +25,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * Keeping the gateway list clean when gateways are deleted / re-registered in LORIOT:
  * <ul>
- *   <li>{@link #duplicates()} finds records that are probably the same physical gateway (same MAC / serial / IMEI,
- *       EUI one character apart, same name), and suggests which one to keep.</li>
+ *   <li>{@link #duplicates()} finds records of the same physical gateway: exactly the same MAC or the same EUI
+ *       (for example after it was deleted and registered again in LORIOT), and suggests which one to keep.</li>
  *   <li>{@link #merge} moves the SIM, location, depot assignment and transformer coverage of one record into the other,
  *       then removes it, with the move recorded in the audit trail.</li>
  *   <li>{@link #delete} removes a gateway record (refused while LORIOT still lists it, because the next sync would
@@ -109,12 +108,10 @@ public class GatewayMaintenanceService {
 
     private List<String> reasons(Gateway a, Gateway b) {
         List<String> r = new ArrayList<>();
+        // Only an exact match of the device identity counts. Neighbouring EUIs / MACs (last digit different) are
+        // normal vendor numbering, and two gateways may share a name, so neither is treated as a duplicate.
         if (eq(a.getNormalizedMac(), b.getNormalizedMac())) r.add("Same MAC address");
         if (eq(a.getNormalizedGatewayEui(), b.getNormalizedGatewayEui())) r.add("Same gateway EUI");
-        else if (oneApart(a.getNormalizedGatewayEui(), b.getNormalizedGatewayEui())) r.add("Gateway EUI differs by one character (likely a typo when registering)");
-        if (eq(norm(a.getSerialNumber()), norm(b.getSerialNumber()))) r.add("Same serial number");
-        if (eq(norm(a.getImei()), norm(b.getImei()))) r.add("Same IMEI");
-        if (eq(nameKey(a.getName()), nameKey(b.getName()))) r.add("Same name");
         return r;
     }
 
@@ -338,25 +335,6 @@ public class GatewayMaintenanceService {
 
     private static boolean eq(String a, String b) {
         return a != null && !a.isBlank() && a.equals(b);
-    }
-
-    private static boolean oneApart(String a, String b) {
-        if (a == null || b == null || a.length() != b.length() || a.length() < 8) return false;
-        int d = 0;
-        for (int i = 0; i < a.length(); i++) if (a.charAt(i) != b.charAt(i) && ++d > 1) return false;
-        return d == 1;
-    }
-
-    private static String norm(String s) {
-        if (s == null) return null;
-        String t = s.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
-        return t.isEmpty() ? null : t;
-    }
-
-    private static String nameKey(String s) {
-        if (s == null) return null;
-        String t = s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-        return t.length() < 3 ? null : t;
     }
 
     private static boolean blank(String s) {

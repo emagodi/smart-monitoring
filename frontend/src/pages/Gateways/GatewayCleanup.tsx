@@ -130,8 +130,8 @@ export function DuplicatesDialog({
       onClose={onClose}
       width="max-w-3xl"
       icon={<GitMerge className="h-5 w-5" />}
-      title="Possible duplicate gateways"
-      subtitle="Usually a gateway deleted in LORIOT and registered again. Merging moves its SIM, location, depot and transformer links to the one you keep, then removes the old record. Everything is kept in the change history."
+      title="Duplicate gateway records"
+      subtitle="Records with exactly the same MAC or EUI: the same device, usually deleted in LORIOT and registered again. Merging moves its SIM, location, depot and transformer links to the one you keep, then removes the old record. Everything is kept in the change history."
     >
       {error ? <Notice>{error}</Notice> : null}
       {pairs.length === 0 ? (
@@ -264,7 +264,7 @@ export function DeleteGatewayDialog({
         <p className="text-slate-600 dark:text-slate-300">
           The record is removed from TIAS{gateway.simAssigned ? " and its SIM card is released (marked available)" : ""}. Its status history goes with it; the deletion and the record's last details are kept in the change log.
         </p>
-        <p className="text-xs text-slate-500">If this is a duplicate of a re-registered gateway, use <b>Possible duplicates → Merge</b> instead, so its SIM, location and depot move to the live record.</p>
+        <p className="text-xs text-slate-500">If this is a duplicate of a re-registered gateway, use <b>Duplicates → Merge</b> instead, so its SIM, location and depot move to the live record.</p>
         {stillInLoriot ? (
           <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

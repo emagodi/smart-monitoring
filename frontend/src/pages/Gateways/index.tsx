@@ -1141,7 +1141,7 @@ export default function GatewaysIndex() {
               >
                 <GitMerge className="h-4 w-4 shrink-0" />
                 <span className="flex-1">
-                  <b>{duplicates.length} possible duplicate gateway{duplicates.length === 1 ? "" : "s"}</b> (same MAC, EUI one character apart or same name), often after re-registering in LORIOT.
+                  <b>{duplicates.length} duplicate gateway record{duplicates.length === 1 ? "" : "s"}</b>: exactly the same MAC or EUI, usually after re-registering in LORIOT.
                 </span>
                 <span className="font-semibold underline">Review &amp; merge</span>
               </button>
@@ -1193,7 +1193,7 @@ export default function GatewaysIndex() {
                                 onClick={() => setDupOpen(true)}
                                 className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/30"
                               >
-                                <GitMerge className="h-3 w-3" /> Possible duplicate
+                                <GitMerge className="h-3 w-3" /> Duplicate
                               </button>
                             ) : null}
                           </div>

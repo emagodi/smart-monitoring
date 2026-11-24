@@ -97,7 +97,7 @@ public class GatewayController {
     }
 
     @GetMapping("/duplicates")
-    @Operation(summary = "Gateway records that are probably the same device (same MAC / serial / IMEI, EUI one character apart, same name)")
+    @Operation(summary = "Gateway records of the same device: exactly the same MAC or the same EUI")
     @PreAuthorize("hasAuthority('gateways.view') OR hasAuthority('READ_PRIVILEGE') OR hasRole('ADMINISTRATOR') OR hasRole('ADMIN')")
     public ResponseEntity<List<java.util.Map<String, Object>>> duplicates() {
         return ResponseEntity.ok(maintenanceService.duplicates());
