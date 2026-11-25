@@ -325,7 +325,7 @@ export default function GatewaysIndex() {
   const [syncingId, setSyncingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [statusFilter, setStatusFilter] = useState<GatewayStatus | "ALL">(
     () => (searchParams.get("status") as GatewayStatus) || "ALL"
   );

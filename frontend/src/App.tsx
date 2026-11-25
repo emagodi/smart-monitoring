@@ -30,6 +30,7 @@ const PartnerDetail = lazyPage(() => import("./pages/Partners/PartnerDetail"));
 const NotificationCenter = lazyPage(() => import("./pages/NotificationCenter"));
 const GatewaysIndex = lazyPage(() => import("./pages/Gateways"));
 const GatewaysMapIndex = lazyPage(() => import("./pages/Gateways/Map"));
+const NetworkGraphPage = lazyPage(() => import("./pages/NetworkGraph"));
 const SimsIndex = lazyPage(() => import("./pages/Sims"));
 const ResponseDesk = lazyPage(() => import("./pages/Response"));
 const FleetPage = lazyPage(() => import("./pages/Response/Fleet"));
@@ -150,6 +151,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute scopes={["NATIONAL", "DEPOT"]} depotAnyOf={["gateways.view", "transformers.read"]} permission="gateways.view" disallowSupplier>
               <GatewaysMapIndex />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="network-graph"
+          element={
+            <ProtectedRoute scopes={["NATIONAL", "DEPOT"]} depotAnyOf={["gateways.view", "transformers.read"]} permission="gateways.view" disallowSupplier>
+              <NetworkGraphPage />
             </ProtectedRoute>
           }
         />

@@ -164,7 +164,7 @@ public class GatewayLinkService {
         if (!scope.hasPermission("gateways.view") && !scope.hasPermission("transformers.read")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot view gateways");
         }
-        List<Map<String, Object>> g = jdbc.queryForList("SELECT id, name, normalized_gateway_eui, effective_status, depot_id FROM gateways WHERE id = :id", Map.of("id", gatewayId));
+        List<Map<String, Object>> g = jdbc.queryForList("SELECT id, name, normalized_gateway_eui, effective_status, depot_id, latitude, longitude FROM gateways WHERE id = :id", Map.of("id", gatewayId));
         if (g.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Gateway not found");
         String eui = (String) g.get(0).get("normalized_gateway_eui");
         MapSqlParameterSource p = new MapSqlParameterSource("eui", eui == null ? "-" : eui).addValue("gid", gatewayId)
@@ -173,7 +173,7 @@ public class GatewayLinkService {
         if (scope.getCurrentDepotId() != null) { w.append(" AND t.depot_id = :scopeDepot"); p.addValue("scopeDepot", scope.getCurrentDepotId()); }
         if (scope.isSupplierScoped()) { w.append(" AND (LOWER(t.supplier_code) = LOWER(:scopeSup) OR LOWER(c.supplier_code) = LOWER(:scopeSup))"); p.addValue("scopeSup", scope.getCurrentSupplierCode()); }
         List<Map<String, Object>> heard = jdbc.queryForList("""
-                SELECT t.id AS transformer_id, t.name AS transformer_name, t.transformer_number, t.depot_id, t.last_telemetry_at,
+                SELECT t.id AS transformer_id, t.name AS transformer_name, t.transformer_number, t.depot_id, t.last_telemetry_at, t.lat, t.lng,
                        COALESCE(t.supplier_name, c.supplier_name) AS supplier_name, c.dev_eui, l.last_heard_at, l.first_heard_at, l.last_rssi, l.last_snr, l.uplinks,
                        (SELECT COUNT(*) FROM controller_gateway_links o WHERE o.controller_id = l.controller_id AND o.last_heard_at >= :recent) AS gateways_hearing,
                        'UPLINK' AS source
@@ -186,7 +186,7 @@ public class GatewayLinkService {
         out.forEach(r -> ids.add(r.get("transformerId")));
         try {
             jdbc.queryForList("""
-                    SELECT t.id AS transformer_id, t.name AS transformer_name, t.transformer_number, t.depot_id, t.last_telemetry_at,
+                    SELECT t.id AS transformer_id, t.name AS transformer_name, t.transformer_number, t.depot_id, t.last_telemetry_at, t.lat, t.lng,
                            t.supplier_name, cv.notes, 'MANUAL' AS source
                       FROM gateway_transformer_coverage cv JOIN transformers t ON t.id = cv.transformer_id
                       LEFT JOIN controllers c ON c.transformer_id = t.id

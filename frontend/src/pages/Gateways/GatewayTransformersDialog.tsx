@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Loader2, Radio, Signal, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, Loader2, MapPin, Radio, Ruler, Signal, Zap } from "lucide-react";
 import { Dialog, Notice, timeAgo } from "../../components/ui/page";
 import { cachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { useGeography } from "../Registry/geo";
 import { apiError } from "../Response/shared";
+import { distanceKm, fmtCoord, fmtDistance, toLatLng, type LatLng } from "../../lib/distance";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -25,7 +26,12 @@ type Row = {
   lastTelemetryAt?: string | null;
   source: "UPLINK" | "MANUAL";
   notes?: string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
 };
+
+type GatewayInfo = { id: number; name: string; latitude?: number | string | null; longitude?: number | string | null };
+type SortKey = "heard" | "distance" | "signal" | "name";
 
 /** Signal quality from RSSI (dBm): what a field technician would call it. */
 const quality = (rssi?: number | null) => {
@@ -58,22 +64,61 @@ export default function GatewayTransformersDialog({
 }) {
   const geo = useGeography(token ?? null);
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [gw, setGw] = useState<GatewayInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "heard", dir: -1 });
 
   useEffect(() => {
     if (!gateway || !token) return;
     setRows(null);
+    setGw(null);
     setError(null);
-    cachedGet<{ transformers: Row[] }>(`${API}/api/v1/gateways/${gateway.id}/transformers`, token, 20_000, true)
-      .then((r) => setRows(r?.transformers ?? []))
+    cachedGet<{ gateway?: GatewayInfo; transformers: Row[] }>(`${API}/api/v1/gateways/${gateway.id}/transformers`, token, 20_000, true)
+      .then((r) => {
+        setGw(r?.gateway ?? null);
+        setRows(r?.transformers ?? []);
+      })
       .catch((e) => setError(apiError(e, "Could not load the transformers on this gateway.")));
   }, [gateway, token]);
 
+  const gwPoint: LatLng | null = gw ? toLatLng(gw.latitude, gw.longitude) : null;
+  const view = useMemo(() => {
+    const withKm = (rows ?? []).map((r) => {
+      const p = toLatLng(r.lat, r.lng);
+      return { r, p, km: p && gwPoint ? distanceKm(gwPoint, p) : null };
+    });
+    const val = (x: (typeof withKm)[number]): number | string | null => {
+      switch (sort.key) {
+        case "distance": return x.km;
+        case "signal": return x.r.lastRssi ?? null;
+        case "name": return (x.r.transformerName || "").toLowerCase();
+        default: return x.r.lastHeardAt ? new Date(x.r.lastHeardAt).getTime() : null;
+      }
+    };
+    return withKm.sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1; // blanks always last
+      if (vb == null) return -1;
+      return (va < vb ? -1 : va > vb ? 1 : 0) * sort.dir;
+    });
+  }, [rows, gwPoint?.lat, gwPoint?.lng, sort.key, sort.dir]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!gateway) return null;
+  const kms = view.map((v) => v.km).filter((k): k is number => k != null);
+  const farthest = kms.length ? Math.max(...kms) : null;
+  const avg = kms.length ? kms.reduce((a, b) => a + b, 0) / kms.length : null;
+  const toggle = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: key === "name" || key === "distance" ? 1 : -1 }));
+  const SortBtn = ({ k, children, className = "" }: { k: SortKey; children: string; className?: string }) => (
+    <button type="button" onClick={() => toggle(k)} className={`inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-200 ${sort.key === k ? "text-slate-800 dark:text-slate-100" : ""} ${className}`}>
+      {children}
+      {sort.key === k ? sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : null}
+    </button>
+  );
   const recent = (rows ?? []).filter((r) => r.lastHeardAt && Date.now() - new Date(r.lastHeardAt).getTime() < 24 * 3600_000).length;
 
   return (
-    <Dialog open onClose={onClose} width="max-w-3xl" icon={<Radio className="h-5 w-5" />} title={`Transformers on ${gateway.name}`} subtitle="Devices whose uplinks this gateway received, with the signal it last heard them at. Learnt automatically from every message.">
+    <Dialog open onClose={onClose} width="max-w-6xl" icon={<Radio className="h-5 w-5" />} title={`Transformers on ${gateway.name}`} subtitle="Devices whose uplinks this gateway received, with the signal it last heard them at. Learnt automatically from every message.">
       {error ? <Notice>{error}</Notice> : null}
       {!rows && !error ? (
         <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
@@ -87,20 +132,29 @@ export default function GatewayTransformersDialog({
         </div>
       ) : rows ? (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               ["Transformers", rows.length],
               ["Heard in last 24 h", recent],
               ["Also heard by other gateways", rows.filter((r) => (r.gatewaysHearing ?? 0) > 1).length],
+              ["Distance (avg · farthest)", gwPoint ? (kms.length ? `${fmtDistance(avg)} · ${fmtDistance(farthest)}` : "No transformer coordinates") : "Gateway has no coordinates"],
             ].map(([k, v]) => (
               <div key={String(k)} className="rounded-2xl bg-slate-50 px-3 py-2 dark:bg-slate-900">
                 <p className="text-[11px] text-slate-500">{k}</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{v}</p>
+                <p className={`font-semibold text-slate-900 dark:text-slate-100 ${typeof v === "number" ? "text-lg" : "truncate pt-1 text-sm"}`}>{v}</p>
               </div>
             ))}
           </div>
+          <div className="hidden items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:flex">
+            <span className="w-9" />
+            <SortBtn k="name" className="flex-1">Transformer</SortBtn>
+            <SortBtn k="distance" className="w-40">Distance from gateway</SortBtn>
+            <SortBtn k="signal" className="w-24">Signal</SortBtn>
+            <SortBtn k="heard" className="w-28 justify-end">Last heard</SortBtn>
+            <span className="w-7" />
+          </div>
           <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-            {rows.map((r) => {
+            {view.map(({ r, p, km }) => {
               const q = quality(r.lastRssi);
               const stale = !r.lastHeardAt || Date.now() - new Date(r.lastHeardAt).getTime() > 24 * 3600_000;
               return (
@@ -119,6 +173,20 @@ export default function GatewayTransformersDialog({
                       {r.devEui ? ` · ${r.devEui}` : ""}
                       {r.source === "MANUAL" ? " · linked by hand" : ""}
                     </p>
+                  </div>
+                  <div className="w-40 text-xs" title={p ? `Transformer at ${fmtCoord(p)}${gwPoint ? `\nGateway at ${fmtCoord(gwPoint)}` : ""}` : undefined}>
+                    {km != null ? (
+                      <>
+                        <span className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-100">
+                          <Ruler className="h-3.5 w-3.5 text-slate-400" /> {fmtDistance(km)}
+                        </span>
+                        <span className="text-[10px] text-slate-500">straight line</span>
+                      </>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-slate-400">
+                        <MapPin className="h-3.5 w-3.5" /> {!gwPoint ? "Gateway has no coordinates" : "No coordinates"}
+                      </span>
+                    )}
                   </div>
                   <div className={`w-24 text-xs ${q.tone}`}>
                     <span className="flex items-center gap-1.5 font-semibold">
@@ -144,7 +212,7 @@ export default function GatewayTransformersDialog({
             })}
           </ul>
           <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
-            <Signal className="h-3.5 w-3.5" /> Signal: strong ≥ −90 dBm · good ≥ −105 · weak ≥ −115. A transformer heard by several gateways keeps reporting if one goes offline.
+            <Signal className="h-3.5 w-3.5" /> Signal: strong ≥ −90 dBm · good ≥ −105 · weak ≥ −115. A transformer heard by several gateways keeps reporting if one goes offline. Distance is the straight line between the saved coordinates.
           </p>
         </div>
       ) : null}

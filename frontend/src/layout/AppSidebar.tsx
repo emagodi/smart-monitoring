@@ -8,6 +8,7 @@ import { useScope, type Scope } from "../lib/scope";
 import {
   Grid,
   Map as MapIcon,
+  Waypoints,
   MapPinned,
   Warehouse,
   Zap,
@@ -143,6 +144,15 @@ const navGroups: NavGroup[] = [
         icon: <MapIcon className="w-5 h-5" />,
         name: "Gateway Map",
         path: "/gateways-map",
+        scopes: ["NATIONAL", "DEPOT"],
+        permission: "gateways.view",
+        depotAnyOf: ["gateways.view", "transformers.read"],
+        hideForSupplier: true,
+      },
+      {
+        icon: <Waypoints className="w-5 h-5" />,
+        name: "Network Graph",
+        path: "/network-graph",
         scopes: ["NATIONAL", "DEPOT"],
         permission: "gateways.view",
         depotAnyOf: ["gateways.view", "transformers.read"],
