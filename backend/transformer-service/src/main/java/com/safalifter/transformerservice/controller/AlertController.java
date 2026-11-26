@@ -52,10 +52,13 @@ public class AlertController {
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long transformerId,
-            @RequestParam(required = false, name = "q") String query
+            @RequestParam(required = false, name = "q") String query,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String dir
     ) {
         // status: all | open | unassigned | NEW | ACKNOWLEDGED | DISPATCHED | RESOLVED | FALSE_ALARM
-        return ResponseEntity.ok(alertService.search(page, size, status, transformerId, query));
+        // sort: status | transformer | depot | supplier | detected | lastSeen | assigned; dir: asc | desc
+        return ResponseEntity.ok(alertService.search(page, size, status, transformerId, query, sort, dir));
     }
 
     @GetMapping("/summary")

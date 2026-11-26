@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTableSort, SortHeader } from "../../components/ui/page";
 import axios from "axios";
 import { Loader2, Plus, RefreshCw, Search, Shield, Trash2, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -93,6 +94,13 @@ export default function RolesPage() {
       );
     });
   }, [roles, search]);
+  const { sorted: sortedRoles, sort, onSort } = useTableSort(filteredRoles, {
+    name: (r) => r.name,
+    description: (r) => r.description,
+    assigned: (r) => r.usersAssigned,
+    perms: (r) => r.permissionsCount,
+    status: (r) => r.status || "ACTIVE",
+  });
 
   const activeRolesCount = useMemo(
     () => roles.filter((role) => (role.status || "ACTIVE") === "ACTIVE").length,
@@ -305,16 +313,16 @@ export default function RolesPage() {
               <table className="min-w-full border-separate border-spacing-y-2.5">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                    <th className="px-3 py-2.5">Role</th>
-                    <th className="px-3 py-2.5">Description</th>
-                    <th className="px-3 py-2.5">Assignments</th>
-                    <th className="px-3 py-2.5">Permission Set</th>
-                    <th className="px-3 py-2.5">Status</th>
+                    <SortHeader k="name" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Role</SortHeader>
+                    <SortHeader k="description" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Description</SortHeader>
+                    <SortHeader k="assigned" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Assignments</SortHeader>
+                    <SortHeader k="perms" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Permission Set</SortHeader>
+                    <SortHeader k="status" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Status</SortHeader>
                     <th className="px-3 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRoles.map((role) => {
+                  {sortedRoles.map((role) => {
                     const status = role.status || "ACTIVE";
 
                     return (

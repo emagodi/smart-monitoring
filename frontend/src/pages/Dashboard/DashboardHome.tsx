@@ -30,7 +30,7 @@ import { useCachedGet } from "../../lib/cache";
 import { displayName, displayPartner } from "../../lib/brand";
 import { useGeography } from "../Registry/geo";
 import { useScope } from "../../lib/scope";
-import { HeroButton, HeroStat, HeroStats, Notice, PageHero, fmtNum, timeAgo } from "../../components/ui/page";
+import { HeroButton, HeroStat, HeroStats, Notice, PageHero, fmtNum, timeAgo, useTableSort, SortHeader } from "../../components/ui/page";
 import { AreaTrend, Bars, BarsWithLine, C, ChartCard, Donut, Empty, Pipeline, RankBars } from "../../components/charts/DashCharts";
 import type { AlertSummary, AlertTrends, EstateStats, Overview } from "./types";
 import { STATUS_META, activeDispatch, eventText, statusOf, vehicleLabel, type Board, type IncidentAlert } from "../Response/shared";
@@ -532,8 +532,15 @@ function LatestAlerts({ rows, loading, depotName }: { rows?: IncidentAlert[]; lo
 }
 
 function ActiveDispatches({ board, loading }: { board?: Board | null; loading: boolean }) {
-  if (loading) return <Empty>Loading…</Empty>;
   const rows = (board?.open ?? []).map((c) => ({ c, d: activeDispatch(c.dispatches) })).filter((x) => x.d);
+  const { sorted, sort, onSort } = useTableSort(rows, {
+    transformer: ({ c }) => c.alert.transformerName,
+    vehicle: ({ d }) => (d ? vehicleLabel(d) : null),
+    lead: ({ d }) => d?.crewLeadName,
+    stage: ({ c }) => STATUS_META[statusOf(c.alert)].label,
+    dispatched: ({ d }) => d?.dispatchedAt,
+  });
+  if (loading) return <Empty>Loading…</Empty>;
   const waiting = (board?.open ?? []).filter((c) => !activeDispatch(c.dispatches)).length;
   if (!rows.length)
     return (
@@ -546,15 +553,15 @@ function ActiveDispatches({ board, loading }: { board?: Board | null; loading: b
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-slate-400">
-            <th className="px-2 py-1.5 font-semibold">Transformer</th>
-            <th className="px-2 py-1.5 font-semibold">Vehicle</th>
-            <th className="px-2 py-1.5 font-semibold">Crew lead</th>
-            <th className="px-2 py-1.5 font-semibold">Stage</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Dispatched</th>
+            <SortHeader k="transformer" sort={sort} onSort={onSort} thClassName="px-2 py-1.5 font-semibold">Transformer</SortHeader>
+            <SortHeader k="vehicle" sort={sort} onSort={onSort} thClassName="px-2 py-1.5 font-semibold">Vehicle</SortHeader>
+            <SortHeader k="lead" sort={sort} onSort={onSort} thClassName="px-2 py-1.5 font-semibold">Crew lead</SortHeader>
+            <SortHeader k="stage" sort={sort} onSort={onSort} thClassName="px-2 py-1.5 font-semibold">Stage</SortHeader>
+            <SortHeader k="dispatched" sort={sort} onSort={onSort} thClassName="px-2 py-1.5 text-right font-semibold">Dispatched</SortHeader>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {rows.slice(0, 8).map(({ c, d }) => {
+          {sorted.slice(0, 8).map(({ c, d }) => {
             const st = statusOf(c.alert);
             return (
               <tr key={c.alert.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">

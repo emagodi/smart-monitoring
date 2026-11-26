@@ -6,25 +6,7 @@ import { invalidateCache, useCachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { useGeography } from "../Registry/geo";
 import AddFromEuiDrawer from "../Registry/AddFromEuiDrawer";
-import {
-  Button,
-  Chips,
-  Dialog,
-  EmptyRow,
-  HeroButton,
-  HeroStat,
-  HeroStats,
-  Notice,
-  PageHero,
-  Pager,
-  Panel,
-  SearchBox,
-  SelectBox,
-  SkeletonRows,
-  inputCls,
-  tableCls,
-  timeAgo,
-} from "../../components/ui/page";
+import { Button, Chips, Dialog, EmptyRow, HeroButton, HeroStat, HeroStats, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, inputCls, tableCls, timeAgo, useTableSort } from "../../components/ui/page";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -107,7 +89,14 @@ export default function NewControllersIndex() {
   }, [filter, items, partner, q]);
 
   const online = items.filter((c) => c.online).length;
-  const shown = rows.slice(page * pageSize, page * pageSize + pageSize);
+  const { sorted: sortedRows, th } = useTableSort(rows, {
+    name: (c) => label(c),
+    eui: (c) => c.devEui,
+    partner: (c) => (c.supplierCode ? displayPartner(c.supplierName, c.supplierCode) : null),
+    status: (c) => (c.online ? 0 : 1),
+    heard: (c) => c.lastReadingAt,
+  });
+  const shown = sortedRows.slice(page * pageSize, page * pageSize + pageSize);
   const loading = !list.data && !list.error;
 
   const refresh = () => {
@@ -193,11 +182,11 @@ export default function NewControllersIndex() {
           <table className={`${tableCls.table} min-w-[1120px]`}>
             <thead className={tableCls.thead}>
               <tr>
-                <th className={tableCls.th}>Controller</th>
-                <th className={tableCls.th}>Device EUI</th>
-                <th className={tableCls.th}>Partner</th>
-                <th className={tableCls.th}>Status</th>
-                <th className={tableCls.th}>Last heard</th>
+                {th("name", "Controller")}
+                {th("eui", "Device EUI")}
+                {th("partner", "Partner")}
+                {th("status", "Status")}
+                {th("heard", "Last heard")}
                 <th className={`${tableCls.th} w-[420px] text-center`}>Actions</th>
               </tr>
             </thead>

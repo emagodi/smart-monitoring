@@ -5,7 +5,7 @@ import { useScope } from "../../lib/scope";
 import { cachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { BarsWithLine, ChartCard } from "../../components/charts/DashCharts";
-import { Button, Chips, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Panel, SelectBox, tableCls } from "../../components/ui/page";
+import { Button, Chips, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Panel, SelectBox, tableCls, useTableSort, SortHeader } from "../../components/ui/page";
 import { useGeography } from "../Registry/geo";
 import { apiError } from "../Response/shared";
 import { usePartners } from "../Installations/components";
@@ -126,6 +126,36 @@ export default function AlarmInsights() {
     { header: "Avg ack (min)", value: (r) => r.avgAckMinutes ?? "—", align: "right" },
     { header: "Ack within 5 min", value: (r) => `${pct(r.ackWithin5, r.alerts)}%`, align: "right" },
   ];
+  const faultSort = useTableSort(data?.faults ?? [], {
+    partner: (f) => partnerName(f),
+    fault: (f) => FAULT_TYPES[f.faultType] ?? f.faultType,
+    raised: (f) => n(f.faults),
+    open: (f) => n(f.openFaults),
+    fix: (f) => f.avgHoursToFix,
+  });
+  const partnerSort = useTableSort(data?.byPartner ?? [], {
+    Partner: (r) => partnerName(r),
+    Transformers: (r) => n(r.transformers),
+    Alerts: (r) => n(r.alerts),
+    "Real threats": (r) => n(r.realThreat),
+    "False alarms": (r) => n(r.falseAlarm),
+    "False %": (r) => pct(r.falseAlarm, n(r.alerts) - n(r.openCases)),
+    "Technical faults": (r) => n(r.technicalFault),
+    "Authorised work": (r) => n(r.authorised),
+    "Still open": (r) => n(r.openCases),
+    "Avg ack (min)": (r) => r.avgAckMinutes,
+    "Ack within 5 min": (r) => pct(r.ackWithin5, r.alerts),
+  } as Record<string, (r: PartnerRow) => string | number | null | undefined>);
+  const depotSort = useTableSort(data?.byDepot ?? [], {
+    depot: (r) => depotName(r.depotId),
+    alerts: (r) => n(r.alerts),
+    real: (r) => n(r.realThreat),
+    false: (r) => n(r.falseAlarm),
+    faults: (r) => n(r.technicalFault),
+    open: (r) => n(r.openCases),
+    ack: (r) => r.avgAckMinutes,
+    site: (r) => r.avgOnSceneMinutes,
+  });
   const exportPartners = (kind: "pdf" | "csv") => {
     const spec = {
       title: "Alarms & false alarms by partner",
@@ -285,11 +315,11 @@ export default function AlarmInsights() {
             <table className={tableCls.table}>
               <thead className={tableCls.thead}>
                 <tr>
-                  <th className={tableCls.th}>Partner</th>
-                  <th className={tableCls.th}>Fault</th>
-                  <th className={`${tableCls.th} text-right`}>Raised</th>
-                  <th className={`${tableCls.th} text-right`}>Open</th>
-                  <th className={`${tableCls.th} text-right`}>Avg fix</th>
+                  {faultSort.th("partner", "Partner")}
+                  {faultSort.th("fault", "Fault")}
+                  {faultSort.th("raised", "Raised", "text-right")}
+                  {faultSort.th("open", "Open", "text-right")}
+                  {faultSort.th("fix", "Avg fix", "text-right")}
                 </tr>
               </thead>
               <tbody className={tableCls.tbody}>
@@ -300,7 +330,7 @@ export default function AlarmInsights() {
                     </td>
                   </tr>
                 ) : (
-                  (data?.faults ?? []).map((f, i) => (
+                  faultSort.sorted.map((f, i) => (
                     <tr key={i} className={tableCls.tr}>
                       <td className={tableCls.td} data-label="Partner">{partnerName(f)}</td>
                       <td className={tableCls.td} data-label="Fault">{FAULT_TYPES[f.faultType] ?? f.faultType}</td>
@@ -322,14 +352,14 @@ export default function AlarmInsights() {
             <thead className={tableCls.thead}>
               <tr>
                 {partnerCols.map((c) => (
-                  <th key={c.header} className={`${tableCls.th} ${c.align === "right" ? "text-right" : ""}`}>
+                  <SortHeader key={c.header} k={c.header} sort={partnerSort.sort} onSort={partnerSort.onSort} className={c.align === "right" ? "text-right" : ""}>
                     {c.header}
-                  </th>
+                  </SortHeader>
                 ))}
               </tr>
             </thead>
             <tbody className={tableCls.tbody}>
-              {(data?.byPartner ?? []).map((r) => {
+              {partnerSort.sorted.map((r) => {
                 const fp = pct(r.falseAlarm, n(r.alerts) - n(r.openCases));
                 return (
                   <tr key={r.supplierCode} className={tableCls.tr}>
@@ -362,18 +392,18 @@ export default function AlarmInsights() {
           <table className={tableCls.table}>
             <thead className={tableCls.thead}>
               <tr>
-                <th className={tableCls.th}>Depot</th>
-                <th className={`${tableCls.th} text-right`}>Alerts</th>
-                <th className={`${tableCls.th} text-right`}>Real</th>
-                <th className={`${tableCls.th} text-right`}>False</th>
-                <th className={`${tableCls.th} text-right`}>Faults</th>
-                <th className={`${tableCls.th} text-right`}>Open</th>
-                <th className={`${tableCls.th} text-right`}>Avg ack</th>
-                <th className={`${tableCls.th} text-right`}>Avg on site</th>
+                {depotSort.th("depot", "Depot")}
+                {depotSort.th("alerts", "Alerts", "text-right")}
+                {depotSort.th("real", "Real", "text-right")}
+                {depotSort.th("false", "False", "text-right")}
+                {depotSort.th("faults", "Faults", "text-right")}
+                {depotSort.th("open", "Open", "text-right")}
+                {depotSort.th("ack", "Avg ack", "text-right")}
+                {depotSort.th("site", "Avg on site", "text-right")}
               </tr>
             </thead>
             <tbody className={tableCls.tbody}>
-              {(data?.byDepot ?? []).map((r) => (
+              {depotSort.sorted.map((r) => (
                 <tr key={String(r.depotId)} className={tableCls.tr}>
                   <td className={`${tableCls.td} font-semibold`} data-label="Depot">
                     {depotName(r.depotId)}

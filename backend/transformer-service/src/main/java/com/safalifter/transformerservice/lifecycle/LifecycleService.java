@@ -134,7 +134,38 @@ public class LifecycleService {
         return getRequest(id);
     }
 
+    /* Table columns each list can be sorted by. Whitelisted: request text never reaches the SQL. */
+    private static final Map<String, String> REQUEST_SORT = Map.of(
+            "reference", "r.reference",
+            "depot", "r.depot_name",
+            "planned", "r.planned_date",
+            "partner", "COALESCE(r.supplier_name, r.supplier_code)",
+            "sites", "(SELECT COUNT(*) FROM installation_request_items i WHERE i.request_id = r.id)",
+            "status", "r.status");
+    private static final Map<String, String> INSTALL_SORT = Map.of(
+            "transformer", "t.name",
+            "partner", "COALESCE(ti.supplier_name, ti.supplier_code)",
+            "installed", "ti.installed_on",
+            "status", "FIELD(ti.status,'READY','FAILED','SCHEDULED','INSTALLED','COMMISSIONED','CANCELLED')",
+            "commissioning", "COALESCE(ti.commissioned_at, ti.tentative_date)",
+            "attempts", "ti.attempts");
+
+    /** " ORDER BY ..." for a whitelisted column; blanks last. depotOrder (ids in name order) sorts the depot column by name. */
+    private static String orderBy(Map<String, String> cols, String sort, String dir, String depotCol, List<Long> depotOrder, String fallback, String tieBreak) {
+        String d = "desc".equalsIgnoreCase(dir) ? " DESC" : " ASC";
+        if ("depot".equals(sort) && depotCol != null && depotOrder != null && !depotOrder.isEmpty()) {
+            String ids = depotOrder.stream().filter(java.util.Objects::nonNull).limit(2000).map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+            return " ORDER BY " + depotCol + " IS NULL, FIELD(" + depotCol + ", " + ids + ") = 0, FIELD(" + depotCol + ", " + ids + ")" + d + ", " + tieBreak;
+        }
+        String col = sort == null ? null : cols.get(sort);
+        return col == null ? fallback : " ORDER BY (" + col + ") IS NULL, " + col + d + ", " + tieBreak;
+    }
+
     public Map<String, Object> listRequests(String status, String supplier, List<Long> depotIds, LocalDate from, LocalDate to, String q, int page, int size) {
+        return listRequests(status, supplier, depotIds, from, to, q, page, size, null, null);
+    }
+
+    public Map<String, Object> listRequests(String status, String supplier, List<Long> depotIds, LocalDate from, LocalDate to, String q, int page, int size, String sort, String dir) {
         require("installations.read");
         List<String> where = new ArrayList<>();
         MapSqlParameterSource p = new MapSqlParameterSource();
@@ -156,7 +187,8 @@ public class LifecycleService {
                 SELECT r.*,
                        (SELECT COUNT(*) FROM installation_request_items i WHERE i.request_id = r.id) AS item_count,
                        (SELECT COUNT(*) FROM transformer_installations ti WHERE ti.request_id = r.id AND ti.status <> 'CANCELLED') AS installed_count
-                  FROM installation_requests r""" + w + " ORDER BY r.planned_date DESC, r.id DESC LIMIT :lim OFFSET :off", p);
+                  FROM installation_requests r""" + w
+                + orderBy(REQUEST_SORT, sort, dir, null, null, " ORDER BY r.planned_date DESC, r.id DESC", "r.id DESC") + " LIMIT :lim OFFSET :off", p);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("content", rows.stream().map(LifecycleService::camel).toList());
         out.put("totalElements", total == null ? 0 : total);
@@ -290,6 +322,12 @@ public class LifecycleService {
 
     public Map<String, Object> listInstallations(String status, String supplier, List<Long> depotIds, LocalDate from, LocalDate to,
                                                  String dateField, Long requestId, String q, int page, int size) {
+        return listInstallations(status, supplier, depotIds, from, to, dateField, requestId, q, page, size, null, null, null);
+    }
+
+    public Map<String, Object> listInstallations(String status, String supplier, List<Long> depotIds, LocalDate from, LocalDate to,
+                                                 String dateField, Long requestId, String q, int page, int size,
+                                                 String sort, String dir, List<Long> depotOrder) {
         require("installations.read");
         List<String> where = new ArrayList<>(List.of("ti.is_current = 1"));
         MapSqlParameterSource p = new MapSqlParameterSource();
@@ -320,7 +358,9 @@ public class LifecycleService {
         int lim = clamp(size, 1, 5000);
         p.addValue("lim", lim).addValue("off", Math.max(0, page) * (long) lim);
         List<Map<String, Object>> rows = jdbc.queryForList("SELECT " + INSTALL_COLS + base + w
-                + " ORDER BY FIELD(ti.status,'READY','FAILED','SCHEDULED','INSTALLED','COMMISSIONED','CANCELLED'), ti.updated_at DESC LIMIT :lim OFFSET :off", p);
+                + orderBy(INSTALL_SORT, sort, dir, "ti.depot_id", depotOrder,
+                        " ORDER BY FIELD(ti.status,'READY','FAILED','SCHEDULED','INSTALLED','COMMISSIONED','CANCELLED'), ti.updated_at DESC", "ti.updated_at DESC")
+                + " LIMIT :lim OFFSET :off", p);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("content", rows.stream().map(LifecycleService::camel).toList());
         out.put("totalElements", total == null ? 0 : total);

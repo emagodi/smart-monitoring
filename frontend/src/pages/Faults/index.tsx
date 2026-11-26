@@ -4,7 +4,7 @@ import { AlertOctagon, Bell, BellOff, Check, CheckCircle2, Plus, Wrench } from "
 import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
 import { cachedGet } from "../../lib/cache";
-import { Button, Chips, Dialog, EmptyRow, Field, HeroStat, HeroStats, inputCls, MobileFilters, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, tableCls } from "../../components/ui/page";
+import { Button, Chips, Dialog, EmptyRow, Field, HeroStat, HeroStats, inputCls, MobileFilters, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, SortHeader, tableCls, type SortState } from "../../components/ui/page";
 import { useGeography } from "../Registry/geo";
 import { apiError } from "../Response/shared";
 import { TransformerPicker, usePartners } from "../Installations/components";
@@ -177,14 +177,20 @@ export default function FaultsPage() {
   const [resolveNote, setResolveNote] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // sorted by the server so it covers every fault, not just this page
+  type FaultSortKey = "transformer" | "fault" | "partner" | "raised" | "status";
+  const [sort, setSort] = useState<SortState<FaultSortKey> | null>(null);
+  const onSort = (key: FaultSortKey) => setSort((cur) => (!cur || cur.key !== key ? { key, dir: 1 } : cur.dir === 1 ? { key, dir: -1 } : null));
+
   const qs = useMemo(() => {
     const p = new URLSearchParams({ page: String(page), size: String(size), status });
+    if (sort) { p.set("sort", sort.key); p.set("dir", sort.dir === 1 ? "asc" : "desc"); }
     if (q.trim()) p.set("q", q.trim());
     if (type) p.set("type", type);
     if (partner) p.set("supplierCode", partner);
     if (depotId) p.set("depotIds", depotId);
     return p.toString();
-  }, [page, size, status, q, type, partner, depotId]);
+  }, [page, size, status, q, type, partner, depotId, sort]);
 
   const load = useCallback(
     async (force = false) => {
@@ -204,7 +210,7 @@ export default function FaultsPage() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => setPage(0), [status, q, type, partner, depotId, size]);
+  useEffect(() => setPage(0), [status, q, type, partner, depotId, size, sort]);
 
   const resolve = async () => {
     if (!resolveFor) return;
@@ -303,11 +309,11 @@ export default function FaultsPage() {
           <table className={tableCls.table}>
             <thead className={tableCls.thead}>
               <tr>
-                <th className={tableCls.th}>Transformer</th>
-                <th className={tableCls.th}>Fault</th>
-                {!isPartner ? <th className={tableCls.th}>Partner</th> : null}
-                <th className={tableCls.th}>Raised</th>
-                <th className={tableCls.th}>Status</th>
+                <SortHeader k="transformer" sort={sort} onSort={onSort}>Transformer</SortHeader>
+                <SortHeader k="fault" sort={sort} onSort={onSort}>Fault</SortHeader>
+                {!isPartner ? <SortHeader k="partner" sort={sort} onSort={onSort}>Partner</SortHeader> : null}
+                <SortHeader k="raised" sort={sort} onSort={onSort}>Raised</SortHeader>
+                <SortHeader k="status" sort={sort} onSort={onSort}>Status</SortHeader>
                 <th className={`${tableCls.th} text-right`}>Actions</th>
               </tr>
             </thead>

@@ -39,8 +39,10 @@ public class InsightController {
                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                       @RequestParam(required = false) String q,
                                       @RequestParam(defaultValue = "0") int page,
-                                      @RequestParam(defaultValue = "10") int size) {
-        return faultService.list(status, transformerId, supplierCode, ids(depotIds), type, from, to, q, page, size);
+                                      @RequestParam(defaultValue = "10") int size,
+                                      @RequestParam(required = false) String sort,
+                                      @RequestParam(required = false) String dir) {
+        return faultService.list(status, transformerId, supplierCode, ids(depotIds), type, from, to, q, page, size, sort, dir);
     }
 
     @GetMapping("/api/v1/faults/open-by-transformer")

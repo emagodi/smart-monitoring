@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { Button, Dialog, HeroButton, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Pager, inputCls, timeAgo } from "../../components/ui/page";
+import { Button, Dialog, HeroButton, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Pager, inputCls, timeAgo, SortHeader, type SortState } from "../../components/ui/page";
 import { SimModal } from "./SimModal";
 import { SimImportDialog } from "./SimImportDialog";
 import { pinPukError } from "./PinPukFields";
@@ -135,7 +135,12 @@ export default function SimsIndex() {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
-  useEffect(() => setPage(0), [placement, network, condition, pin, puk, operator, search, pageSize]);
+  // Column sorting is done by the server so it covers every SIM, not just this page.
+  type SimSortKey = "iccid" | "msisdn" | "status" | "pinSort" | "pukSort" | "gatewaySort";
+  const [sort, setSort] = useState<SortState<SimSortKey> | null>(null);
+  const onSort = (key: SimSortKey) => setSort((cur) => (!cur || cur.key !== key ? { key, dir: 1 } : cur.dir === 1 ? { key, dir: -1 } : null));
+  const sortParam = sort ? `${sort.key},${sort.dir === 1 ? "asc" : "desc"}` : "id,desc";
+  useEffect(() => setPage(0), [placement, network, condition, pin, puk, operator, search, pageSize, sortParam]);
 
   const activeExtra = [pin, puk, operator].filter(Boolean).length;
   const anyFilter = Boolean(placement || network || condition || activeExtra || search);
@@ -183,7 +188,7 @@ export default function SimsIndex() {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, unknown> = { page, size: pageSize, sort: "id,desc", ...filterParams };
+      const params: Record<string, unknown> = { page, size: pageSize, sort: sortParam, ...filterParams };
       const r = await axios.get<{ content?: SimCardItem[]; totalElements?: number }>(`${API}/api/v1/sim-cards`, { headers, params });
       setItems(normalizeList<SimCardItem>(r.data));
       setTotal(typeof r.data?.totalElements === "number" ? r.data.totalElements : 0);
@@ -192,7 +197,7 @@ export default function SimsIndex() {
     } finally {
       setLoading(false);
     }
-  }, [API, headers, token, page, pageSize, filterParams]);
+  }, [API, headers, token, page, pageSize, filterParams, sortParam]);
 
   useEffect(() => void fetchSims(), [fetchSims]);
   useEffect(() => void fetchSummary(), [fetchSummary]);
@@ -439,12 +444,12 @@ export default function SimsIndex() {
           <table className="w-full min-w-[980px] text-left text-[13px]">
             <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
               <tr>
-                <th className="px-4 py-2.5 font-semibold">SIM card</th>
-                <th className="px-4 py-2.5 font-semibold">Number</th>
-                <th className="px-4 py-2.5 font-semibold">Status</th>
-                <th className="px-4 py-2.5 font-semibold">PIN</th>
-                <th className="px-4 py-2.5 font-semibold">PUK</th>
-                <th className="px-4 py-2.5 font-semibold">Gateway</th>
+                <SortHeader k="iccid" sort={sort} onSort={onSort} thClassName="px-4 py-2.5 font-semibold">SIM card</SortHeader>
+                <SortHeader k="msisdn" sort={sort} onSort={onSort} thClassName="px-4 py-2.5 font-semibold">Number</SortHeader>
+                <SortHeader k="status" sort={sort} onSort={onSort} thClassName="px-4 py-2.5 font-semibold">Status</SortHeader>
+                <SortHeader k="pinSort" sort={sort} onSort={onSort} thClassName="px-4 py-2.5 font-semibold">PIN</SortHeader>
+                <SortHeader k="pukSort" sort={sort} onSort={onSort} thClassName="px-4 py-2.5 font-semibold">PUK</SortHeader>
+                <SortHeader k="gatewaySort" sort={sort} onSort={onSort} thClassName="px-4 py-2.5 font-semibold">Gateway</SortHeader>
                 <th className="w-[1%] whitespace-nowrap px-4 py-2.5 text-center font-semibold">Actions</th>
               </tr>
             </thead>

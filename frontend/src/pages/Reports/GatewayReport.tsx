@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, ExternalLink, FileSpreadsheet, FileText, MapPin, MapPinOff, RefreshCw, Router, Wifi, WifiOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
-import { Button, Chips, EmptyRow, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, tableCls } from "../../components/ui/page";
+import { Button, Chips, EmptyRow, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, tableCls, useTableSort } from "../../components/ui/page";
 import {
   STATUS_INFO,
   coordsOf,
@@ -93,6 +93,15 @@ export default function GatewayReport() {
     return list.slice().sort((a, b) => (a.regionName || "~").localeCompare(b.regionName || "~") || (a.depotName || "~").localeCompare(b.depotName || "~") || (a.name || "").localeCompare(b.name || ""));
   }, [scoped, status]);
 
+  const STATUS_ORDER: Record<string, number> = { ONLINE: 0, DEGRADED: 1, OFFLINE: 2, NEVER_SEEN: 3, UNKNOWN: 4 };
+  const { sorted, th } = useTableSort(filtered, {
+    name: (g) => g.name,
+    area: (g) => [g.depotName || "", g.regionName || ""].join(" ").trim() || null,
+    coords: (g) => (coordsOf(g) ? coordsOf(g)!.lat : null),
+    status: (g) => STATUS_ORDER[statusOf(g)] ?? 9,
+    seen: (g) => lastSeenOf(g),
+  });
+
   const counts = useMemo(() => countByStatus(scoped), [scoped]);
   const allCounts = useMemo(() => countByStatus(active), [active]);
   const noLocation = useMemo(() => active.filter((g) => !coordsOf(g)).length, [active]);
@@ -102,7 +111,7 @@ export default function GatewayReport() {
     if (depot !== "ALL" && !depots.includes(depot)) setDepot("ALL");
   }, [depots, depot]);
 
-  const pageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const pageRows = sorted.slice(page * pageSize, (page + 1) * pageSize);
 
   const generatedBy = useMemo(() => {
     const name = [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim();
@@ -137,11 +146,11 @@ export default function GatewayReport() {
   const csv = useCallback(() => {
     setBusy("csv");
     try {
-      downloadGatewayCsv(filtered);
+      downloadGatewayCsv(sorted);
     } finally {
       setBusy(null);
     }
-  }, [filtered]);
+  }, [sorted]);
 
   const activeFilters = [region !== "ALL", depot !== "ALL", location !== "ALL", includeDecommissioned].filter(Boolean).length;
   const statusOptions: Array<{ value: StatusFilter; label: string; count?: number; dot?: string }> = [
@@ -237,11 +246,11 @@ export default function GatewayReport() {
           <table className={tableCls.table}>
             <thead className={tableCls.thead}>
               <tr>
-                <th className={tableCls.th}>Gateway</th>
-                <th className={tableCls.th}>Region / depot</th>
-                <th className={tableCls.th}>Coordinates</th>
-                <th className={tableCls.th}>Status</th>
-                <th className={tableCls.th}>Last seen</th>
+                {th("name", "Gateway")}
+                {th("area", "Region / depot")}
+                {th("coords", "Coordinates")}
+                {th("status", "Status")}
+                {th("seen", "Last seen")}
               </tr>
             </thead>
             <tbody className={tableCls.tbody}>

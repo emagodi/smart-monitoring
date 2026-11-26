@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import axios from "axios";
-import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
+import { HeroButton, HeroStat, HeroStats, PageHero, useTableSort, SortHeader } from "../../components/ui/page";
 import {
   Activity,
   Eye,
@@ -393,10 +393,16 @@ export default function OculusControlIndex() {
   }, [rows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const { sorted: sortedRows, sort: ocSort, onSort: ocOnSort } = useTableSort(filteredRows, {
+    transformer: (row) => row.transformerName,
+    controller: (row) => row.minutesSinceLastTelemetry ?? null,
+    motion: (row) => (row.motionDetected ? 0 : 1),
+    secondary: (row) => (row.secondaryAlertDetected ? 0 : 1),
+  });
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filteredRows.slice(start, start + pageSize);
-  }, [filteredRows, page, pageSize]);
+    return sortedRows.slice(start, start + pageSize);
+  }, [sortedRows, page, pageSize]);
 
   useEffect(() => {
     setPage(1);
@@ -684,10 +690,10 @@ export default function OculusControlIndex() {
                 <table className="min-w-[1180px]">
                   <thead className="border-b border-slate-200 bg-[linear-gradient(90deg,rgba(15,23,42,0.04),rgba(37,99,235,0.07),rgba(6,182,212,0.05))]">
                     <tr>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Transformer</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Controller</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Motion</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Vibration / Door</th>
+                      <SortHeader k="transformer" sort={ocSort} onSort={ocOnSort} thClassName="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Transformer</SortHeader>
+                      <SortHeader k="controller" sort={ocSort} onSort={ocOnSort} thClassName="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Controller</SortHeader>
+                      <SortHeader k="motion" sort={ocSort} onSort={ocOnSort} thClassName="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Motion</SortHeader>
+                      <SortHeader k="secondary" sort={ocSort} onSort={ocOnSort} thClassName="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Vibration / Door</SortHeader>
                       <th className="px-5 py-3.5 text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</th>
                     </tr>
                   </thead>

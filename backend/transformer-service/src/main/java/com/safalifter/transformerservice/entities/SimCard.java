@@ -119,4 +119,17 @@ public class SimCard {
     @Version
     @Column(name = "version")
     private Long version;
+
+    /* Read-only sort keys for the SIM table (?sort=gatewaySort,asc etc.); never written. */
+    @org.hibernate.annotations.Formula("(SELECT MAX(g.name) FROM gateway_sim_assignments a JOIN gateways g ON g.id = a.gateway_id WHERE a.sim_id = id AND a.active = 1)")
+    @Builder.Default
+    private String gatewaySort = null;
+
+    @org.hibernate.annotations.Formula("(CASE WHEN encrypted_pin IS NULL OR encrypted_pin = '' THEN 0 ELSE 1 END)")
+    @Builder.Default
+    private Integer pinSort = null;
+
+    @org.hibernate.annotations.Formula("(CASE WHEN encrypted_puk IS NULL OR encrypted_puk = '' THEN 0 ELSE 1 END)")
+    @Builder.Default
+    private Integer pukSort = null;
 }

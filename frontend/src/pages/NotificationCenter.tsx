@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTableSort, SortHeader } from "../components/ui/page";
 import axios from "axios";
 import {
   BellRing,
@@ -272,6 +273,25 @@ export default function NotificationCenter() {
       return a.displayName.localeCompare(b.displayName);
     });
   }, [workspace?.entries]);
+  const entrySort = useTableSort(supplierEntries, {
+    recipient: (e) => e.displayName,
+    channel: (e) => e.channel,
+    destination: (e) => e.destination,
+    events: (e) => (e.allNotificationTypes ? 9999 : e.notificationTypes.length),
+    status: (e) => (e.enabled ? 0 : 1),
+  });
+  const eligSort = useTableSort(whatsAppEligibility, {
+    number: (i) => i.phoneNumber || i.waId,
+    eligibility: (i) => (i.freeFormEligible ? 0 : i.optedIn ? 1 : 2),
+    window: (i) => i.conversationWindowOpenUntil,
+    mode: (i) => i.lastOutboundMode,
+    status: (i) => i.lastStatusAt || i.lastStatus,
+  });
+  const templateSort = useTableSort(whatsAppTemplates, {
+    template: (t) => t.templateName,
+    type: (t) => String(t.notificationType),
+    status: (t) => (t.enabled ? 0 : 1),
+  });
 
   const totals = useMemo(() => {
     const entries = workspace?.entries ?? [];
@@ -772,11 +792,11 @@ export default function NotificationCenter() {
               <table className="min-w-full border-separate border-spacing-y-2">
                 <thead>
                   <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
-                    <th className="px-3 py-2">Recipient</th>
-                    <th className="px-3 py-2">Channel</th>
-                    <th className="px-3 py-2">Destination</th>
-                    <th className="px-3 py-2">Events</th>
-                    <th className="px-3 py-2">Status</th>
+                    <SortHeader k="recipient" sort={entrySort.sort} onSort={entrySort.onSort} thClassName="px-3 py-2">Recipient</SortHeader>
+                    <SortHeader k="channel" sort={entrySort.sort} onSort={entrySort.onSort} thClassName="px-3 py-2">Channel</SortHeader>
+                    <SortHeader k="destination" sort={entrySort.sort} onSort={entrySort.onSort} thClassName="px-3 py-2">Destination</SortHeader>
+                    <SortHeader k="events" sort={entrySort.sort} onSort={entrySort.onSort} thClassName="px-3 py-2">Events</SortHeader>
+                    <SortHeader k="status" sort={entrySort.sort} onSort={entrySort.onSort} thClassName="px-3 py-2">Status</SortHeader>
                     <th className="px-3 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -796,7 +816,7 @@ export default function NotificationCenter() {
                       </td>
                     </tr>
                   ) : (
-                    supplierEntries.map((entry) => (
+                    entrySort.sorted.map((entry) => (
                       <tr key={entry.id} className="rounded-[22px] bg-slate-50/70 dark:bg-slate-900">
                         <td className="rounded-l-[22px] px-3 py-3">
                           <div>
@@ -903,11 +923,11 @@ export default function NotificationCenter() {
                 <table className="min-w-full border-separate border-spacing-y-0">
                   <thead className="bg-slate-50 dark:bg-slate-950">
                     <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
-                      <th className="px-4 py-3">WhatsApp Number</th>
-                      <th className="px-4 py-3">Eligibility</th>
-                      <th className="px-4 py-3">Window</th>
-                      <th className="px-4 py-3">Last Mode</th>
-                      <th className="px-4 py-3">Last Status</th>
+                      <SortHeader k="number" sort={eligSort.sort} onSort={eligSort.onSort} thClassName="px-4 py-3">WhatsApp Number</SortHeader>
+                      <SortHeader k="eligibility" sort={eligSort.sort} onSort={eligSort.onSort} thClassName="px-4 py-3">Eligibility</SortHeader>
+                      <SortHeader k="window" sort={eligSort.sort} onSort={eligSort.onSort} thClassName="px-4 py-3">Window</SortHeader>
+                      <SortHeader k="mode" sort={eligSort.sort} onSort={eligSort.onSort} thClassName="px-4 py-3">Last Mode</SortHeader>
+                      <SortHeader k="status" sort={eligSort.sort} onSort={eligSort.onSort} thClassName="px-4 py-3">Last Status</SortHeader>
                     </tr>
                   </thead>
                   <tbody>
@@ -924,7 +944,7 @@ export default function NotificationCenter() {
                         </td>
                       </tr>
                     ) : (
-                      whatsAppEligibility.map((item) => (
+                      eligSort.sorted.map((item) => (
                         <tr key={item.waId} className="border-t border-slate-200 bg-white dark:border-gray-800 dark:bg-slate-900">
                           <td className="px-4 py-3 align-top">
                             <p className="text-sm font-semibold text-slate-900 dark:text-white">{item.phoneNumber || item.waId}</p>
@@ -956,9 +976,9 @@ export default function NotificationCenter() {
                 <table className="min-w-full border-separate border-spacing-y-0">
                   <thead className="bg-slate-50 dark:bg-slate-950">
                     <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
-                      <th className="px-4 py-3">Template</th>
-                      <th className="px-4 py-3">Type</th>
-                      <th className="px-4 py-3">Status</th>
+                      <SortHeader k="template" sort={templateSort.sort} onSort={templateSort.onSort} thClassName="px-4 py-3">Template</SortHeader>
+                      <SortHeader k="type" sort={templateSort.sort} onSort={templateSort.onSort} thClassName="px-4 py-3">Type</SortHeader>
+                      <SortHeader k="status" sort={templateSort.sort} onSort={templateSort.onSort} thClassName="px-4 py-3">Status</SortHeader>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -976,7 +996,7 @@ export default function NotificationCenter() {
                         </td>
                       </tr>
                     ) : (
-                      whatsAppTemplates.map((template) => (
+                      templateSort.sorted.map((template) => (
                         <tr key={template.id} className="border-t border-slate-200 bg-white dark:border-gray-800 dark:bg-slate-900">
                           <td className="px-4 py-3 align-top">
                             <p className="text-sm font-semibold text-slate-900 dark:text-white">{template.templateName}</p>

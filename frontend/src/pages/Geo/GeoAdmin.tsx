@@ -64,7 +64,7 @@ type Row = Rollup & {
   avgArrival: number | null;
 };
 
-type SortKey = "name" | "children" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "avgArrival";
+type SortKey = "name" | "children" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "avgArrival" | "vehiclesAvailable";
 
 const META: Record<GeoLevel, { title: string; plural: string; eyebrow: string; icon: ReactNode; perm: string; api: string; subtitle: string }> = {
   region: {
@@ -360,7 +360,7 @@ export default function GeoAdmin({ level }: { level: GeoLevel }) {
                 <SortTh k="openAlerts" sort={sort} onSort={onSort}>Open</SortTh>
                 <SortTh k="alerts24h" sort={sort} onSort={onSort}>Alerts 24h</SortTh>
                 <SortTh k="avgArrival" sort={sort} onSort={onSort}>Avg arrival</SortTh>
-                {level === "depot" ? <th className={tableCls.th}>Vehicles</th> : null}
+                {level === "depot" ? <SortTh k="vehiclesAvailable" sort={sort} onSort={onSort}>Vehicles</SortTh> : null}
                 <th className={`${tableCls.th} text-right`}>Actions</th>
               </tr>
             </thead>

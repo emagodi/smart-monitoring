@@ -3,7 +3,7 @@
  * filters, pagination, status colours). Built from the Insights page so the whole system
  * reads as one product. Use these instead of hand-rolled cards on new or redesigned pages.
  */
-import { useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Loader2, RefreshCcw, Search, SlidersHorizontal, X } from "lucide-react";
 
@@ -385,6 +385,91 @@ export const compareBy = <T,>(get: (row: T) => string | number | null | undefine
   if (typeof x === "string" || typeof y === "string") return String(x).localeCompare(String(y)) * dir;
   return (x < y ? -1 : x > y ? 1 : 0) * dir;
 };
+
+/* ---------------------------------------------------- click-to-sort tables */
+
+type SortValue = string | number | boolean | Date | null | undefined;
+export type SortGetters<T, K extends string> = Record<K, (row: T) => SortValue>;
+
+const sortable = (v: SortValue): string | number | null => {
+  if (v == null || v === "") return null;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.getTime();
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  // ISO dates sort as time; everything else as text
+  if (/^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    const t = Date.parse(v);
+    if (!Number.isNaN(t)) return t;
+  }
+  return v.toLowerCase();
+};
+
+/**
+ * Click-to-sort for any table whose rows are in memory. The first click on a column sorts A→Z / smallest first,
+ * the second reverses it, the third goes back to the table's own order. Blank values always go last.
+ *   const { sorted, th } = useTableSort(rows, { name: (r) => r.name, seen: (r) => r.lastSeenAt });
+ *   <thead><tr>{th("name", "Gateway")}{th("seen", "Last seen")}</tr></thead> ... sorted.map(...)
+ */
+export function useTableSort<T, K extends string>(rows: T[], getters: SortGetters<T, K>, initial: SortState<K> | null = null) {
+  const [sort, setSort] = useState<SortState<K> | null>(initial);
+  const onSort = useCallback(
+    (key: K) => setSort((cur) => (!cur || cur.key !== key ? { key, dir: 1 } : cur.dir === 1 ? { key, dir: -1 } : null)),
+    []
+  );
+  const sorted = useMemo(() => {
+    if (!sort) return rows;
+    const get = getters[sort.key];
+    if (!get) return rows;
+    const keyed = rows.map((r, i) => ({ r, i, v: sortable(get(r)) }));
+    keyed.sort((a, b) => {
+      if (a.v == null && b.v == null) return a.i - b.i;
+      if (a.v == null) return 1;
+      if (b.v == null) return -1;
+      const c = typeof a.v === "number" && typeof b.v === "number" ? a.v - b.v : String(a.v).localeCompare(String(b.v), undefined, { numeric: true });
+      return c === 0 ? a.i - b.i : c * sort.dir;
+    });
+    return keyed.map((k) => k.r);
+  }, [rows, sort, getters]);
+  const th = (key: K, label: ReactNode, className = "") => (
+    <SortHeader key={key} k={key} sort={sort} onSort={onSort} className={className}>
+      {label}
+    </SortHeader>
+  );
+  return { sorted, sort, setSort, onSort, th };
+}
+
+/** A header cell with the up/down arrows. `sort` may be null (table in its own order). */
+export function SortHeader<K extends string>({
+  k,
+  sort,
+  onSort,
+  children,
+  className = "",
+  thClassName,
+}: {
+  k: K;
+  sort: SortState<K> | null;
+  onSort: (k: K) => void;
+  children: ReactNode;
+  className?: string;
+  thClassName?: string;
+}) {
+  const on = sort?.key === k;
+  const Icon = on ? (sort!.dir === 1 ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <th className={thClassName ?? `${tableCls.th} ${className}`} aria-sort={on ? (sort!.dir === 1 ? "ascending" : "descending") : "none"}>
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        title={on ? (sort!.dir === 1 ? "Sorted ascending — click to reverse" : "Sorted descending — click to clear") : "Click to sort"}
+        className={`group inline-flex items-center gap-1 uppercase tracking-[inherit] ${on ? "text-blue-700 dark:text-blue-300" : "hover:text-slate-800 dark:hover:text-slate-200"}`}
+      >
+        {children}
+        <Icon className={`h-3 w-3 shrink-0 ${on ? "opacity-90" : "opacity-40 group-hover:opacity-80"}`} />
+      </button>
+    </th>
+  );
+}
 
 export function SkeletonRows({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
   return (

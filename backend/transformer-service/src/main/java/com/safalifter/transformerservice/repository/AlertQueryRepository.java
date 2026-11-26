@@ -63,11 +63,30 @@ public class AlertQueryRepository {
     }
 
     public List<AlertResponse> findPage(AlertFilter filter, int page, int size) {
+        return findPage(filter, page, size, null, null);
+    }
+
+    /** Column keys the alerts table can sort by (whitelisted: never put request text into SQL). */
+    private static final java.util.Map<String, String> SORT_COLUMNS = java.util.Map.of(
+            "status", EFFECTIVE_STATUS,
+            "transformer", "a.transformer_name",
+            "depot", "a.depot_name",
+            "supplier", "COALESCE(a.supplier_name, a.supplier_code)",
+            "detected", "a.created_at",
+            "lastSeen", "COALESCE(a.last_seen_at, a.created_at)",
+            "assigned", "c.assigned_to_name",
+            "alert", "COALESCE(a.value, a.message)");
+
+    /** Same as {@link #findPage(AlertFilter, int, int)} ordered by a table column; blanks always last, newest first on ties. */
+    public List<AlertResponse> findPage(AlertFilter filter, int page, int size, String sort, String dir) {
         MapSqlParameterSource params = new MapSqlParameterSource();
         String where = buildWhere(filter, params);
         params.addValue("limit", size);
         params.addValue("offset", (long) page * size);
-        String sql = SELECT_COLUMNS + where + " ORDER BY a.id DESC LIMIT :limit OFFSET :offset";
+        String col = sort == null ? null : SORT_COLUMNS.get(sort);
+        String order = col == null ? " ORDER BY a.id DESC"
+                : " ORDER BY (" + col + ") IS NULL, " + col + ("desc".equalsIgnoreCase(dir) ? " DESC" : " ASC") + ", a.id DESC";
+        String sql = SELECT_COLUMNS + where + order + " LIMIT :limit OFFSET :offset";
         return jdbc.query(sql, params, ALERT_ROW_MAPPER);
     }
 

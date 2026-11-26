@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { HeroStat, HeroStats, MobileFilters, PageHero } from "../../components/ui/page";
+import { HeroStat, HeroStats, MobileFilters, PageHero, useTableSort, SortHeader } from "../../components/ui/page";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 import { ActionMenu } from "../../components/ui/dropdown/ActionMenu";
@@ -323,6 +323,14 @@ export default function Users() {
       return matchesSearch && matchesRole && matchesUserType && matchesStatus;
     });
   }, [users, search, roleFilter, userTypeFilter, statusFilter]);
+  const { sorted: sortedUsers, sort, onSort } = useTableSort(filteredUsers, {
+    user: (u) => `${u.firstname || ""} ${u.lastname || ""}`.trim() || u.email,
+    type: (u) => u.userType,
+    org: (u) => u.supplierName || [u.depot, u.district, u.region].filter(Boolean).join(" ") || "Internal",
+    roles: (u) => (u.roles ?? []).join(", "),
+    status: (u) => u.status,
+    login: (u) => u.lastLoginAt,
+  });
 
   const activeCount = users.filter((user) => (user.status || "ACTIVE") === "ACTIVE").length;
   const inactiveCount = users.length - activeCount;
@@ -805,12 +813,12 @@ export default function Users() {
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
                       </th>
-                      <th className="px-3 py-2.5">User</th>
-                      <th className="px-3 py-2.5">User Type</th>
-                      <th className="px-3 py-2.5">Organisation</th>
-                      <th className="px-3 py-2.5">Roles</th>
-                      <th className="px-3 py-2.5">Status</th>
-                      <th className="px-3 py-2.5">Last Login</th>
+                      <SortHeader k="user" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">User</SortHeader>
+                      <SortHeader k="type" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">User Type</SortHeader>
+                      <SortHeader k="org" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Organisation</SortHeader>
+                      <SortHeader k="roles" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Roles</SortHeader>
+                      <SortHeader k="status" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Status</SortHeader>
+                      <SortHeader k="login" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Last Login</SortHeader>
                       <th className="px-3 py-2.5 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -836,7 +844,7 @@ export default function Users() {
                         </td>
                       </tr>
                     ) : (
-                      filteredUsers.map((user) => {
+                      sortedUsers.map((user) => {
                         const initials =
                           `${user.firstname?.[0] || ""}${user.lastname?.[0] || ""}`.toUpperCase() || "U";
                         const isActive = (user.status || "ACTIVE") === "ACTIVE";

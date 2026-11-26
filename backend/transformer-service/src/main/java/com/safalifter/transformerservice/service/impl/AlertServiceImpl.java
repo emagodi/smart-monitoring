@@ -164,6 +164,12 @@ public class AlertServiceImpl implements AlertService {
     @Override
     @Transactional(readOnly = true)
     public Page<AlertResponse> search(int page, int size, String status, Long transformerId, String query) {
+        return search(page, size, status, transformerId, query, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AlertResponse> search(int page, int size, String status, Long transformerId, String query, String sort, String dir) {
         int sanitizedPage = Math.max(page, 0);
         int sanitizedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize);
@@ -174,7 +180,7 @@ public class AlertServiceImpl implements AlertService {
                 transformerId,
                 query
         );
-        List<AlertResponse> content = alertQueryRepository.findPage(filter, sanitizedPage, sanitizedSize);
+        List<AlertResponse> content = alertQueryRepository.findPage(filter, sanitizedPage, sanitizedSize, sort, dir);
         long total = alertQueryRepository.count(filter);
         return new PageImpl<>(content, pageable, total);
     }

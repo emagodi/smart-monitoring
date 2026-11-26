@@ -24,6 +24,11 @@ public interface AlertService {
     AlertResponse getById(Long id);
     Page<AlertResponse> getAll(int page, int size);
     Page<AlertResponse> search(int page, int size, String status, Long transformerId, String query);
+
+    /** {@link #search} ordered by a table column (status, transformer, depot, supplier, detected, lastSeen, assigned). */
+    default Page<AlertResponse> search(int page, int size, String status, Long transformerId, String query, String sort, String dir) {
+        return search(page, size, status, transformerId, query);
+    }
     AlertSummaryResponse summary();
     List<TransformerAlertStateResponse> transformerStates(boolean openOnly);
     TransformerAlertStateResponse transformerState(Long transformerId);

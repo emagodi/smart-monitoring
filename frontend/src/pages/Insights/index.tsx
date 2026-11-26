@@ -66,7 +66,7 @@ type Overview = {
 };
 
 type PartnerSort = "name" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "realThreats24h" | "falseAlarmPercent" | "avgArrivalMinutes" | "unmatchedControllers";
-type DepotSort = "name" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "realThreats24h" | "avgArrivalMinutes";
+type DepotSort = "name" | "transformers" | "onlinePercent" | "offline" | "openAlerts" | "alerts24h" | "realThreats24h" | "avgArrivalMinutes" | "vehiclesAvailable";
 
 const mins = (n?: number | null) => (n == null ? "—" : `${Math.round(n)} min`);
 
@@ -345,7 +345,7 @@ function DepotsPanel({ data, geo }: { data?: Overview; geo: ReturnType<typeof us
               <SortTh k="alerts24h" sort={sort} onSort={onSort}>Alerts 24h</SortTh>
               <SortTh k="realThreats24h" sort={sort} onSort={onSort}>Real threats</SortTh>
               <SortTh k="avgArrivalMinutes" sort={sort} onSort={onSort}>Avg arrival</SortTh>
-              {!partner ? <th className={tableCls.th}>Vehicles</th> : null}
+              {!partner ? <SortTh k="vehiclesAvailable" sort={sort} onSort={onSort}>Vehicles</SortTh> : null}
             </tr>
           </thead>
           <tbody className={tableCls.tbody}>

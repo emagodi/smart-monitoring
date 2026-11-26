@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
 import { cachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
-import { Button, Chips, EmptyRow, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, tableCls } from "../../components/ui/page";
+import { Button, Chips, EmptyRow, HeroStat, HeroStats, MobileFilters, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, SortHeader, tableCls, useTableSort } from "../../components/ui/page";
 import { useGeography } from "../Registry/geo";
 import { apiError } from "../Response/shared";
 import { usePartners } from "../Installations/components";
@@ -26,7 +26,7 @@ type Config<T> = {
   defaultStatus?: string;
   statusParam?: string;
   dateFields?: Array<{ value: string; label: string }>;
-  columns: (ctx: Ctx) => Array<ReportColumn<T> & { render?: (row: T) => ReactNode; partnerOnly?: boolean }>;
+  columns: (ctx: Ctx) => Array<ReportColumn<T> & { render?: (row: T) => ReactNode; partnerOnly?: boolean; sort?: (row: T) => string | number | null | undefined }>;
   tiles: (rows: T[], counts: Record<string, number>) => Array<{ label: string; value: string; color?: [number, number, number]; tone?: "good" | "bad" | "warn" }>;
   footnote?: string;
 };
@@ -100,14 +100,16 @@ function TableReport<T extends { id: number }>({ cfg }: { cfg: Config<T> }) {
   const exportAs = async (kind: "pdf" | "csv") => {
     setBusy(true);
     try {
-      const spec = { title: cfg.title, generatedBy, filters, fileName: cfg.fileName, columns: cols, rows, tiles, footnote: cfg.footnote };
+      const spec = { title: cfg.title, generatedBy, filters, fileName: cfg.fileName, columns: cols, rows: sorted, tiles, footnote: cfg.footnote };
       if (kind === "pdf") await downloadTablePdf(spec);
       else downloadTableCsv(spec);
     } finally {
       setBusy(false);
     }
   };
-  const pageRows = rows.slice(page * size, (page + 1) * size);
+  const getters = useMemo(() => Object.fromEntries(cols.map((c) => [c.header, c.sort ?? c.value])) as Record<string, (r: T) => string | number | null | undefined>, [cols]);
+  const { sorted, sort, onSort } = useTableSort(rows, getters);
+  const pageRows = sorted.slice(page * size, (page + 1) * size);
 
   return (
     <div className="space-y-4">
@@ -200,9 +202,9 @@ function TableReport<T extends { id: number }>({ cfg }: { cfg: Config<T> }) {
             <thead className={tableCls.thead}>
               <tr>
                 {cols.map((c) => (
-                  <th key={c.header} className={`${tableCls.th} ${c.align === "right" ? "text-right" : ""}`}>
+                  <SortHeader key={c.header} k={c.header} sort={sort} onSort={onSort} className={c.align === "right" ? "text-right" : ""}>
                     {c.header}
-                  </th>
+                  </SortHeader>
                 ))}
               </tr>
             </thead>
@@ -263,12 +265,12 @@ const installationsCfg: Config<Installation> = {
     { header: "Depot", value: (r) => ctx.depotName(r.depotId) },
     { header: "Region", value: (r) => ctx.regionName(r.depotId) },
     { header: "Green light", value: (r) => r.requestReference },
-    { header: "Installed", value: (r) => fmtDate(r.installedOn) },
-    { header: "Ready", value: (r) => (r.readyAt ? fmtDate(r.readyAt) : null) },
-    { header: "Tentative", value: (r) => (r.tentativeDate ? fmtDate(r.tentativeDate) : null) },
+    { header: "Installed", value: (r) => fmtDate(r.installedOn), sort: (r) => r.installedOn },
+    { header: "Ready", value: (r) => (r.readyAt ? fmtDate(r.readyAt) : null), sort: (r) => r.readyAt },
+    { header: "Tentative", value: (r) => (r.tentativeDate ? fmtDate(r.tentativeDate) : null), sort: (r) => r.tentativeDate },
     { header: "Status", value: (r) => STATUS_META[r.status]?.label ?? r.status, render: (r) => pill(r.status) },
     { header: "Attempts", value: (r) => r.attempts, align: "right" },
-    { header: "Commissioned", value: (r) => (r.commissionedAt ? fmtDate(r.commissionedAt) : null) },
+    { header: "Commissioned", value: (r) => (r.commissionedAt ? fmtDate(r.commissionedAt) : null), sort: (r) => r.commissionedAt },
     { header: "Days to commission", value: (r) => (r.commissionedAt ? daysBetween(r.installedOn, r.commissionedAt) : null), align: "right" },
   ],
   tiles: (rows) => {
@@ -325,8 +327,8 @@ const commissioningCfg: Config<AttemptRow> = {
     { header: "No.", value: (r) => r.transformerNumber, width: 16 },
     { header: "Partner", value: (r) => displayPartner(r.supplierName ?? r.supplierCode), partnerOnly: true },
     { header: "Depot", value: (r) => ctx.depotName(r.depotId) },
-    { header: "Attempt", value: (r) => `${r.attemptNo} of ${r.totalAttempts ?? r.attemptNo}`, align: "right" },
-    { header: "Test date", value: (r) => fmtDate(r.testDate) },
+    { header: "Attempt", value: (r) => `${r.attemptNo} of ${r.totalAttempts ?? r.attemptNo}`, align: "right", sort: (r) => r.attemptNo },
+    { header: "Test date", value: (r) => fmtDate(r.testDate), sort: (r) => r.testDate },
     {
       header: "Result",
       value: (r) => (r.status === "PASSED" ? "Passed" : r.status === "FAILED" ? "Failed" : "In progress"),
@@ -337,7 +339,7 @@ const commissioningCfg: Config<AttemptRow> = {
       ),
     },
     { header: "Decided by", value: (r) => (r.decidedBy ? who(r.decidedBy) : null) },
-    { header: "Decided", value: (r) => (r.decidedAt ? fmtDateTime(r.decidedAt) : null) },
+    { header: "Decided", value: (r) => (r.decidedAt ? fmtDateTime(r.decidedAt) : null), sort: (r) => r.decidedAt },
     { header: "Reason / note", value: (r) => r.decisionNote, width: 60 },
   ],
   tiles: (rows) => {
@@ -375,9 +377,9 @@ const faultsCfg: Config<Fault> = {
     { header: "Depot", value: (r) => ctx.depotName(r.depotId) },
     { header: "Fault", value: (r) => FAULT_TYPES[r.faultType] ?? r.faultType },
     { header: "Details", value: (r) => r.description, width: 60 },
-    { header: "Raised", value: (r) => fmtDateTime(r.reportedAt) },
+    { header: "Raised", value: (r) => fmtDateTime(r.reportedAt), sort: (r) => r.reportedAt },
     { header: "Status", value: (r) => (r.status === "OPEN" ? "Open" : "Fixed") },
-    { header: "Fixed", value: (r) => (r.resolvedAt ? fmtDateTime(r.resolvedAt) : null) },
+    { header: "Fixed", value: (r) => (r.resolvedAt ? fmtDateTime(r.resolvedAt) : null), sort: (r) => r.resolvedAt },
     { header: "Hours", value: (r) => r.ageHours, align: "right" },
   ],
   tiles: (rows) => {

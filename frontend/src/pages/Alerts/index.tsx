@@ -23,7 +23,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useGeography } from "../Registry/geo";
 import { cachedGet } from "../../lib/cache";
 import { displayName } from "../../lib/brand";
-import { HeroButton, HeroStat, HeroStats, PageHero } from "../../components/ui/page";
+import { HeroButton, HeroStat, HeroStats, PageHero, SortHeader, type SortState } from "../../components/ui/page";
 import Alert from "../../components/ui/alert/Alert";
 import { Modal } from "../../components/ui/modal";
 
@@ -261,9 +261,14 @@ export default function AlertsIndex() {
     return () => window.clearTimeout(handle);
   }, [search]);
 
+  // Sorting is done by the server so it covers every alert, not only the page on screen.
+  type AlertSortKey = "status" | "transformer" | "depot" | "supplier" | "detected" | "assigned";
+  const [sort, setSort] = useState<SortState<AlertSortKey> | null>(null);
+  const onSort = (key: AlertSortKey) => setSort((cur) => (!cur || cur.key !== key ? { key, dir: 1 } : cur.dir === 1 ? { key, dir: -1 } : null));
+
   useEffect(() => {
     setPage(0);
-  }, [filterMode, debouncedSearch]);
+  }, [filterMode, debouncedSearch, sort]);
 
   const [summaryLoaded, setSummaryLoaded] = useState(false);
   const fetchSummary = useCallback(
@@ -291,6 +296,8 @@ export default function AlertsIndex() {
           size: pageSize,
           status: FILTER_TO_STATUS[filterMode],
           q: debouncedSearch || undefined,
+          sort: sort?.key,
+          dir: sort ? (sort.dir === 1 ? "asc" : "desc") : undefined,
         },
       });
       const normalized = normalizePage<AlertItem>(response.data);
@@ -303,7 +310,7 @@ export default function AlertsIndex() {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE_URL, debouncedSearch, filterMode, headers, page, pageSize]);
+  }, [API_BASE_URL, debouncedSearch, filterMode, headers, page, pageSize, sort]);
 
   const fetchDetails = useCallback(
     async (alertId: number) => {
@@ -500,12 +507,12 @@ export default function AlertsIndex() {
             <table className="min-w-[980px] w-full">
               <thead className="bg-slate-50/80 dark:bg-slate-900/60">
                 <tr className="text-left">
-                  <Th>Status</Th>
-                  <Th>Transformer</Th>
-                  <Th>Depot</Th>
-                  <Th>Supplier</Th>
-                  <Th>Detected</Th>
-                  <Th>Assigned</Th>
+                  <SortHeader k="status" sort={sort} onSort={onSort} thClassName="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Status</SortHeader>
+                  <SortHeader k="transformer" sort={sort} onSort={onSort} thClassName="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Transformer</SortHeader>
+                  <SortHeader k="depot" sort={sort} onSort={onSort} thClassName="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Depot</SortHeader>
+                  <SortHeader k="supplier" sort={sort} onSort={onSort} thClassName="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Supplier</SortHeader>
+                  <SortHeader k="detected" sort={sort} onSort={onSort} thClassName="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Detected</SortHeader>
+                  <SortHeader k="assigned" sort={sort} onSort={onSort} thClassName="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Assigned</SortHeader>
                   <Th className="text-right">Action</Th>
                 </tr>
               </thead>

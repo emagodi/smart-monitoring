@@ -24,7 +24,7 @@ import { invalidateCache, useCachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { useGeography } from "../Registry/geo";
 import { CONTROL_PARTNERS } from "../Partners";
-import { Button, Dialog, EmptyRow, HeroStat, HeroStats, Notice, PageHero, Pager, Panel, STATUS_META, StatusPill, tableCls, timeAgo } from "../../components/ui/page";
+import { Button, Dialog, EmptyRow, HeroStat, HeroStats, Notice, PageHero, Pager, Panel, STATUS_META, SortHeader, StatusPill, tableCls, timeAgo, type SortState } from "../../components/ui/page";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -97,6 +97,13 @@ export default function TransformerDetail() {
   const { token, user, hasPermission } = useAuth();
   const geo = useGeography(token);
   const [alertPage, setAlertPage] = useState(0);
+  // the alert list is paged by the server, so the server sorts it
+  const [alertSort, setAlertSort] = useState<SortState<"alert" | "status" | "detected" | "assigned"> | null>(null);
+  const onAlertSort = (key: "alert" | "status" | "detected" | "assigned") => {
+    setAlertPage(0);
+    setAlertSort((cur) => (!cur || cur.key !== key ? { key, dir: 1 } : cur.dir === 1 ? { key, dir: -1 } : null));
+  };
+  const alertSortQs = alertSort ? `&sort=${alertSort.key}&dir=${alertSort.dir === 1 ? "asc" : "desc"}` : "";
   const [confirm, setConfirm] = useState<"arm" | "disarm" | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -106,7 +113,7 @@ export default function TransformerDetail() {
     refreshMs: 30_000,
     errorText: "This transformer could not be found, or you do not have access to it.",
   });
-  const alerts = useCachedGet<AlertPage>(token && id ? `${API}/api/v1/alerts?transformerId=${id}&page=${alertPage}&size=10` : null, token, { maxAgeMs: 15_000 });
+  const alerts = useCachedGet<AlertPage>(token && id ? `${API}/api/v1/alerts?transformerId=${id}&page=${alertPage}&size=10${alertSortQs}` : null, token, { maxAgeMs: 15_000 });
 
   const d = det.data;
   const path = geo.pathOf(d?.depotId);
@@ -224,10 +231,10 @@ export default function TransformerDetail() {
             <table className={`${tableCls.table} min-w-[640px]`}>
               <thead className={tableCls.thead}>
                 <tr>
-                  <th className={tableCls.th}>Alert</th>
-                  <th className={tableCls.th}>Status</th>
-                  <th className={tableCls.th}>Detected</th>
-                  <th className={tableCls.th}>Handled by</th>
+                  <SortHeader k="alert" sort={alertSort} onSort={onAlertSort}>Alert</SortHeader>
+                  <SortHeader k="status" sort={alertSort} onSort={onAlertSort}>Status</SortHeader>
+                  <SortHeader k="detected" sort={alertSort} onSort={onAlertSort}>Detected</SortHeader>
+                  <SortHeader k="assigned" sort={alertSort} onSort={onAlertSort}>Handled by</SortHeader>
                 </tr>
               </thead>
               <tbody className={tableCls.tbody}>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTableSort, SortHeader } from "../../components/ui/page";
 import axios from "axios";
 import { Building2, Loader2, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -54,6 +55,12 @@ export default function UserTypesPage() {
       );
     });
   }, [userTypes, search]);
+  const { sorted: sortedUserTypes, sort, onSort } = useTableSort(filteredUserTypes, {
+    name: (u) => u.name,
+    description: (u) => u.description,
+    users: (u) => u.userCount,
+    status: (u) => u.status || "ACTIVE",
+  });
 
   const pushNotice = (variant: "success" | "error" | "info" | "warning", title: string, message: string) => {
     setNotice({ variant, title, message });
@@ -240,15 +247,15 @@ export default function UserTypesPage() {
               <table className="min-w-full border-separate border-spacing-y-2.5">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                    <th className="px-3 py-2.5">User Type</th>
-                    <th className="px-3 py-2.5">Description</th>
-                    <th className="px-3 py-2.5">Users</th>
-                    <th className="px-3 py-2.5">Status</th>
+                    <SortHeader k="name" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">User Type</SortHeader>
+                    <SortHeader k="description" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Description</SortHeader>
+                    <SortHeader k="users" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Users</SortHeader>
+                    <SortHeader k="status" sort={sort} onSort={onSort} thClassName="px-3 py-2.5">Status</SortHeader>
                     <th className="px-3 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUserTypes.map((userType) => {
+                  {sortedUserTypes.map((userType) => {
                     const status = userType.status || "ACTIVE";
 
                     return (

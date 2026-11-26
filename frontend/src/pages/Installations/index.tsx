@@ -28,7 +28,9 @@ import {
   SearchBox,
   SelectBox,
   SkeletonRows,
+  SortHeader,
   tableCls,
+  type SortState,
 } from "../../components/ui/page";
 import { cachedGet } from "../../lib/cache";
 import { useGeography } from "../Registry/geo";
@@ -73,6 +75,14 @@ export default function InstallationsPage() {
   const [reqStatus, setReqStatus] = useState<RequestStatus | "ALL">("ALL");
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(10);
+  // Column sorting runs on the server (both lists are paged there), one sort per tab.
+  type InstSortKey = "transformer" | "partner" | "depot" | "installed" | "status" | "commissioning";
+  type ReqSortKey = "reference" | "depot" | "planned" | "partner" | "sites" | "status";
+  const [instSort, setInstSort] = useState<SortState<InstSortKey> | null>(null);
+  const [reqSort, setReqSort] = useState<SortState<ReqSortKey> | null>(null);
+  const cycle = <K extends string>(cur: SortState<K> | null, key: K): SortState<K> | null => (!cur || cur.key !== key ? { key, dir: 1 } : cur.dir === 1 ? { key, dir: -1 } : null);
+  const onInstSort = (key: InstSortKey) => setInstSort((cur) => cycle(cur, key));
+  const onReqSort = (key: ReqSortKey) => setReqSort((cur) => cycle(cur, key));
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
@@ -95,13 +105,22 @@ export default function InstallationsPage() {
     if (partner) p.set("supplierCode", partner);
     if (from) p.set("from", from);
     if (to) p.set("to", to);
+    const sort = tab === "installations" ? instSort : reqSort;
+    if (sort) {
+      p.set("sort", sort.key);
+      p.set("dir", sort.dir === 1 ? "asc" : "desc");
+      // depots live in another service, so send their ids in name order for the depot column
+      if (sort.key === "depot" && tab === "installations") {
+        p.set("depotOrder", [...geo.depots].sort((a, b) => a.name.localeCompare(b.name)).map((d) => d.id).join(","));
+      }
+    }
     if (tab === "installations") {
       p.set("dateField", dateField);
       if (status === "OPEN") p.set("status", "INSTALLED,READY,SCHEDULED,FAILED");
       else if (status !== "ALL") p.set("status", status);
     } else if (reqStatus !== "ALL") p.set("status", reqStatus);
     return p.toString();
-  }, [page, size, debounced, depotIds, partner, from, to, tab, dateField, status, reqStatus]);
+  }, [page, size, debounced, depotIds, partner, from, to, tab, dateField, status, reqStatus, instSort, reqSort, geo.depots]);
 
   const filterKey = qs.replace(/(^|&)page=\d+/, "");
   const [lastKey, setLastKey] = useState(filterKey);
@@ -354,12 +373,12 @@ export default function InstallationsPage() {
               <table className={tableCls.table}>
                 <thead className={tableCls.thead}>
                   <tr>
-                    <th className={tableCls.th}>Transformer</th>
-                    {!isPartner ? <th className={tableCls.th}>Partner</th> : null}
-                    <th className={tableCls.th}>Depot</th>
-                    <th className={tableCls.th}>Installed</th>
-                    <th className={tableCls.th}>Status</th>
-                    <th className={tableCls.th}>Commissioning</th>
+                    <SortHeader k="transformer" sort={instSort} onSort={onInstSort}>Transformer</SortHeader>
+                    {!isPartner ? <SortHeader k="partner" sort={instSort} onSort={onInstSort}>Partner</SortHeader> : null}
+                    <SortHeader k="depot" sort={instSort} onSort={onInstSort}>Depot</SortHeader>
+                    <SortHeader k="installed" sort={instSort} onSort={onInstSort}>Installed</SortHeader>
+                    <SortHeader k="status" sort={instSort} onSort={onInstSort}>Status</SortHeader>
+                    <SortHeader k="commissioning" sort={instSort} onSort={onInstSort}>Commissioning</SortHeader>
                     <th className={`${tableCls.th} text-right`}>Actions</th>
                   </tr>
                 </thead>
@@ -420,12 +439,12 @@ export default function InstallationsPage() {
               <table className={tableCls.table}>
                 <thead className={tableCls.thead}>
                   <tr>
-                    <th className={tableCls.th}>Request</th>
-                    <th className={tableCls.th}>Region / depot</th>
-                    <th className={tableCls.th}>Planned</th>
-                    {!isPartner ? <th className={tableCls.th}>Partner</th> : null}
-                    <th className={tableCls.th}>Sites</th>
-                    <th className={tableCls.th}>Status</th>
+                    <SortHeader k="reference" sort={reqSort} onSort={onReqSort}>Request</SortHeader>
+                    <SortHeader k="depot" sort={reqSort} onSort={onReqSort}>Region / depot</SortHeader>
+                    <SortHeader k="planned" sort={reqSort} onSort={onReqSort}>Planned</SortHeader>
+                    {!isPartner ? <SortHeader k="partner" sort={reqSort} onSort={onReqSort}>Partner</SortHeader> : null}
+                    <SortHeader k="sites" sort={reqSort} onSort={onReqSort}>Sites</SortHeader>
+                    <SortHeader k="status" sort={reqSort} onSort={onReqSort}>Status</SortHeader>
                     <th className={`${tableCls.th} text-right`}>Actions</th>
                   </tr>
                 </thead>

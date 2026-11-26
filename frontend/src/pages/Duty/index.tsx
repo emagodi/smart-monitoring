@@ -4,7 +4,7 @@ import { BellRing, Loader2, Mail, MessageCircle, Phone, Save, ShieldCheck, UserC
 import { useAuth } from "../../context/AuthContext";
 import { useScope } from "../../lib/scope";
 import { cachedGet, invalidateCache } from "../../lib/cache";
-import { Button, EmptyRow, HeroStat, HeroStats, Notice, PageHero, Panel, SearchBox, SelectBox, SkeletonRows, tableCls } from "../../components/ui/page";
+import { Button, EmptyRow, HeroStat, HeroStats, Notice, PageHero, Panel, SearchBox, SelectBox, SkeletonRows, tableCls, useTableSort } from "../../components/ui/page";
 import { useGeography } from "../Registry/geo";
 import { apiError } from "../Response/shared";
 import AckGuide from "./AckGuide";
@@ -144,6 +144,13 @@ export default function DutyRoster() {
     const s = q.trim().toLowerCase();
     return !s || [p.name, p.email, p.depot, p.region, ...(p.roles ?? [])].some((v) => v && v.toLowerCase().includes(s));
   });
+  const { sorted: sortedPeople, th } = useTableSort(people, {
+    duty: (p) => (drafts[p.id]?.onDuty ? 0 : p.onDuty === "SOME" ? 1 : 2),
+    person: (p) => p.name || p.email,
+    works: (p) => p.depot || (p.region ? `${p.region} region` : "National"),
+    paged: (p) => [drafts[p.id]?.notifySms, drafts[p.id]?.notifyWhatsapp, drafts[p.id]?.notifyEmail].filter(Boolean).length,
+    note: (p) => drafts[p.id]?.shiftNote || null,
+  });
   const onNow = (roster?.people ?? []).filter((p) => drafts[p.id]?.onDuty).length;
   const coveredDepots = Object.keys(coverage).length;
   const totalDepots = geo.depots.length;
@@ -233,11 +240,11 @@ export default function DutyRoster() {
             <table className={tableCls.table}>
               <thead className={tableCls.thead}>
                 <tr>
-                  <th className={tableCls.th}>On duty</th>
-                  <th className={tableCls.th}>Person</th>
-                  <th className={tableCls.th}>Works at</th>
-                  <th className={tableCls.th}>Paged by</th>
-                  <th className={tableCls.th}>Shift / note</th>
+                  {th("duty", "On duty")}
+                  {th("person", "Person")}
+                  {th("works", "Works at")}
+                  {th("paged", "Paged by")}
+                  {th("note", "Shift / note")}
                 </tr>
               </thead>
               <tbody className={tableCls.tbody}>
@@ -246,7 +253,7 @@ export default function DutyRoster() {
                 ) : people.length === 0 ? (
                   <EmptyRow cols={5}>No ZESA group users found for this area. Give users a region and depot under Users first.</EmptyRow>
                 ) : (
-                  people.map((p) => {
+                  sortedPeople.map((p) => {
                     const d = drafts[p.id] ?? { onDuty: false, notifySms: true, notifyWhatsapp: true, notifyEmail: false, shiftNote: "" };
                     const partial = p.onDuty === "SOME" && !changed.includes(p.id);
                     return (

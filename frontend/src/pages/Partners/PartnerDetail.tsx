@@ -8,26 +8,7 @@ import { cachedGet, invalidateCache, useCachedGet } from "../../lib/cache";
 import { displayPartner } from "../../lib/brand";
 import { useScope } from "../../lib/scope";
 import { useGeography } from "../Registry/geo";
-import {
-  Button,
-  Chips,
-  CountBadge,
-  Dialog,
-  EmptyRow,
-  HeroButton,
-  HeroStat,
-  HeroStats,
-  Notice,
-  PageHero,
-  Pager,
-  Panel,
-  SearchBox,
-  SelectBox,
-  SkeletonRows,
-  STATUS_META,
-  tableCls,
-  timeAgo,
-} from "../../components/ui/page";
+import { Button, Chips, CountBadge, Dialog, EmptyRow, HeroButton, HeroStat, HeroStats, Notice, PageHero, Pager, Panel, SearchBox, SelectBox, SkeletonRows, STATUS_META, tableCls, timeAgo, useTableSort } from "../../components/ui/page";
 import { CONTROL_PARTNERS, type Overview } from "./index";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
@@ -255,7 +236,15 @@ export default function PartnerDetail() {
     return ids.map((id) => ({ id, name: geo.pathOf(id).depotName })).sort((a, b) => a.name.localeCompare(b.name));
   }, [geo, sites]);
 
-  const shown = rows.slice(page * pageSize, page * pageSize + pageSize);
+  const DEVICE_ORDER: Record<string, number> = { ONLINE: 0, DELAYED: 1, OFFLINE: 2, NEVER_SEEN: 3, NO_DEVICE: 4 };
+  const ARM_ORDER: Record<string, number> = { ARMED: 0, DISARMED: 1, UNKNOWN: 2 };
+  const { sorted: sortedRows, th } = useTableSort(rows, {
+    name: (s) => s.name,
+    device: (s) => DEVICE_ORDER[s.device] ?? 9,
+    sensors: (s) => (control ? (s.motion ? 2 : 0) + (s.door ? 1 : 0) + (s.openAlerts ? 4 : 0) : s.openAlerts),
+    arm: (s) => ARM_ORDER[s.arm] ?? 9,
+  });
+  const shown = sortedRows.slice(page * pageSize, page * pageSize + pageSize);
   const loading = !reg.data || (control && !ctl.data && !ctl.error);
   const canArm = hasPermission("control.arm");
   const canDisarm = hasPermission("control.disarm");
@@ -397,10 +386,10 @@ export default function PartnerDetail() {
           <table className={`${tableCls.table} min-w-[1080px]`}>
             <thead className={tableCls.thead}>
               <tr>
-                <th className={tableCls.th}>Transformer</th>
-                <th className={tableCls.th}>Device</th>
-                {control ? <th className={tableCls.th}>Sensors now</th> : <th className={tableCls.th}>Alerts</th>}
-                <th className={tableCls.th}>Site security</th>
+                {th("name", "Transformer")}
+                {th("device", "Device")}
+                {th("sensors", control ? "Sensors now" : "Alerts")}
+                {th("arm", "Site security")}
                 <th className={`${tableCls.th} text-right`}>{control ? "Control" : ""}</th>
               </tr>
             </thead>

@@ -192,6 +192,19 @@ public class FaultService {
               FROM transformer_faults f JOIN transformers t ON t.id = f.transformer_id""";
 
     public Map<String, Object> list(String status, Long transformerId, String supplier, List<Long> depotIds, String type, LocalDate from, LocalDate to, String q, int page, int size) {
+        return list(status, transformerId, supplier, depotIds, type, from, to, q, page, size, null, null);
+    }
+
+    /** Table columns the fault list can be sorted by (whitelisted: request text never reaches the SQL). */
+    private static final Map<String, String> SORT_COLUMNS = Map.of(
+            "transformer", "t.name",
+            "fault", "f.fault_type",
+            "partner", "COALESCE(f.supplier_name, f.supplier_code)",
+            "raised", "f.reported_at",
+            "status", "f.status",
+            "resolved", "f.resolved_at");
+
+    public Map<String, Object> list(String status, Long transformerId, String supplier, List<Long> depotIds, String type, LocalDate from, LocalDate to, String q, int page, int size, String sort, String dir) {
         require("faults.read", "faults.record");
         List<String> where = new ArrayList<>();
         MapSqlParameterSource p = new MapSqlParameterSource();
@@ -209,7 +222,10 @@ public class FaultService {
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM transformer_faults f JOIN transformers t ON t.id = f.transformer_id" + w, p, Long.class);
         int lim = Math.max(1, Math.min(5000, size));
         p.addValue("lim", lim).addValue("off", Math.max(0, page) * (long) lim);
-        List<Map<String, Object>> rows = jdbc.queryForList(SELECT + w + " ORDER BY f.status = 'OPEN' DESC, f.reported_at DESC LIMIT :lim OFFSET :off", p);
+        String col = sort == null ? null : SORT_COLUMNS.get(sort);
+        String order = col == null ? " ORDER BY f.status = 'OPEN' DESC, f.reported_at DESC"
+                : " ORDER BY (" + col + ") IS NULL, " + col + ("desc".equalsIgnoreCase(dir) ? " DESC" : " ASC") + ", f.reported_at DESC";
+        List<Map<String, Object>> rows = jdbc.queryForList(SELECT + w + order + " LIMIT :lim OFFSET :off", p);
         Map<String, Long> counts = new LinkedHashMap<>();
         jdbc.query("SELECT f.status, COUNT(*) FROM transformer_faults f JOIN transformers t ON t.id = f.transformer_id"
                         + (where.isEmpty() ? "" : " WHERE " + String.join(" AND ", where)) + " GROUP BY f.status", p,
