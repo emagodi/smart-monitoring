@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Loader2, Pencil, X } from "lucide-react";
 import { Modal } from "../../components/ui/modal";
+import { depotDistrictId, districtRegionId, useGeography } from "../Registry/geo";
 
 interface GatewayItem {
   id: number;
@@ -9,6 +10,14 @@ interface GatewayItem {
   depotName?: string | null;
   regionName?: string | null;
   districtName?: string | null;
+  regionId?: number | null;
+  districtId?: number | null;
+  depotId?: number | null;
+  description?: string | null;
+  customer?: string | null;
+  altitude?: number | string | null;
+  commissioningDate?: string | null;
+  locationVerified?: boolean | null;
   networkName?: string | null;
   operator?: string | null;
   lat?: number;
@@ -52,11 +61,15 @@ export function EditGatewayModal({
   onCancel?: () => void;
   canSave?: boolean;
 }) {
-  void token;
+  void depotOptions;
+  void regionOptions;
+  const geo = useGeography(token || null);
   const [name, setName] = useState(gateway.name || "");
-  const [depotName, setDepotName] = useState(gateway.depotName || "");
-  const [regionName, setRegionName] = useState(gateway.regionName || "");
-  const [districtName, setDistrictName] = useState(gateway.districtName || "");
+  // Region / district / depot come from the configured lists (Regions, Districts, Depots pages) and are saved by id.
+  const [regionId, setRegionId] = useState<number | null>(gateway.regionId ?? null);
+  const [districtId, setDistrictId] = useState<number | null>(gateway.districtId ?? null);
+  const [depotId, setDepotId] = useState<number | null>(gateway.depotId ?? null);
+  const [matched, setMatched] = useState(false);
   const [networkName, setNetworkName] = useState(gateway.networkName || "");
   const [operator, setOperator] = useState(gateway.operator || "");
   const [latitude, setLatitude] = useState(
@@ -66,8 +79,74 @@ export function EditGatewayModal({
     typeof gateway.lng === "number" ? String(gateway.lng) : ""
   );
   const [address, setAddress] = useState(gateway.address || "");
-  const [commissioningDate, setCommissioningDate] = useState("");
-  const [locationVerified, setLocationVerified] = useState(false);
+  const [commissioningDate, setCommissioningDate] = useState(gateway.commissioningDate ? String(gateway.commissioningDate).slice(0, 10) : "");
+  const [locationVerified, setLocationVerified] = useState(Boolean(gateway.locationVerified));
+
+  const norm = (v?: string | null) => (v || "").trim().toLowerCase();
+  const regionOf = (dId: number | null) => {
+    const d = dId == null ? undefined : geo.districts.find((x) => x.id === dId);
+    return d ? districtRegionId(d) ?? null : null;
+  };
+  const districtOf = (pId: number | null) => {
+    const p = pId == null ? undefined : geo.depots.find((x) => x.id === pId);
+    return p ? depotDistrictId(p) ?? null : null;
+  };
+
+  /* Once the lists load: fill blanks from the depot/district chosen, and match old free-typed names to the configured entries. */
+  useEffect(() => {
+    if (matched || !geo.depots.length || !geo.regions.length) return;
+    const p = depotId ?? geo.depots.find((d) => norm(d.name) === norm(gateway.depotName))?.id ?? null;
+    let d = districtId ?? geo.districts.find((x) => norm(x.name) === norm(gateway.districtName))?.id ?? null;
+    if (p != null && d == null) d = districtOf(p);
+    let r = regionId ?? geo.regions.find((x) => norm(x.name) === norm(gateway.regionName))?.id ?? null;
+    if (d != null && r == null) r = regionOf(d);
+    setDepotId(p);
+    setDistrictId(d);
+    setRegionId(r);
+    setMatched(true);
+  }, [geo.depots, geo.districts, geo.regions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const districtChoices = useMemo(
+    () => geo.districts.filter((d) => regionId == null || districtRegionId(d) === regionId).sort((a, b) => a.name.localeCompare(b.name)),
+    [geo.districts, regionId]
+  );
+  const depotChoices = useMemo(
+    () =>
+      geo.depots
+        .filter((p) => {
+          const d = depotDistrictId(p);
+          if (districtId != null) return d === districtId;
+          if (regionId != null) return d != null && regionOf(d) === regionId;
+          return true;
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [geo.depots, geo.districts, districtId, regionId] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const regionChoices = useMemo(() => [...geo.regions].sort((a, b) => a.name.localeCompare(b.name)), [geo.regions]);
+
+  const pickRegion = (id: number | null) => {
+    setRegionId(id);
+    if (id != null && districtId != null && regionOf(districtId) !== id) { setDistrictId(null); setDepotId(null); }
+  };
+  const pickDistrict = (id: number | null) => {
+    setDistrictId(id);
+    if (id != null) setRegionId(regionOf(id) ?? regionId);
+    if (id != null && depotId != null && districtOf(depotId) !== id) setDepotId(null);
+  };
+  const pickDepot = (id: number | null) => {
+    setDepotId(id);
+    if (id != null) {
+      const d = districtOf(id);
+      if (d != null) { setDistrictId(d); setRegionId(regionOf(d) ?? regionId); }
+    }
+  };
+  const legacy = matched
+    ? [
+        !regionId && gateway.regionName ? `region "${gateway.regionName}"` : null,
+        !districtId && gateway.districtName ? `district "${gateway.districtName}"` : null,
+        !depotId && gateway.depotName ? `depot "${gateway.depotName}"` : null,
+      ].filter(Boolean)
+    : [];
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,9 +162,28 @@ export function EditGatewayModal({
     try {
       const requestBody = {
         name,
-        depotName: depotName || null,
-        regionName: regionName || null,
-        districtName: districtName || null,
+        // if the lists could not load, keep what the gateway already had instead of clearing it
+        ...(matched
+          ? {
+              regionId,
+              districtId,
+              depotId,
+              regionName: geo.regions.find((r) => r.id === regionId)?.name ?? null,
+              districtName: geo.districts.find((d) => d.id === districtId)?.name ?? null,
+              depotName: geo.depots.find((d) => d.id === depotId)?.name ?? null,
+            }
+          : {
+              regionId: gateway.regionId ?? null,
+              districtId: gateway.districtId ?? null,
+              depotId: gateway.depotId ?? null,
+              regionName: gateway.regionName ?? null,
+              districtName: gateway.districtName ?? null,
+              depotName: gateway.depotName ?? null,
+            }),
+        // keep fields this form does not show, so saving does not clear them
+        description: gateway.description ?? null,
+        customer: gateway.customer ?? null,
+        altitude: gateway.altitude != null && gateway.altitude !== "" ? Number(gateway.altitude) : null,
         networkName: networkName || null,
         operator: operator || null,
         latitude: latitude !== "" ? parseFloat(latitude) : null,
@@ -149,7 +247,7 @@ export function EditGatewayModal({
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1 md:col-span-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Name</span>
           <input
             type="text"
@@ -160,48 +258,40 @@ export function EditGatewayModal({
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</span>
-          <input
-            type="text"
-            list="depot-list"
-            value={depotName}
-            onChange={(e) => setDepotName(e.target.value)}
-            placeholder="Select or type..."
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          />
-          <datalist id="depot-list">
-            {depotOptions.map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
-        </label>
-
-        <label className="flex flex-col gap-1">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Region</span>
-          <input
-            type="text"
-            list="region-list"
-            value={regionName}
-            onChange={(e) => setRegionName(e.target.value)}
-            placeholder="Select or type..."
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          />
-          <datalist id="region-list">
-            {regionOptions.map((n) => (
-              <option key={n} value={n} />
+          <select value={regionId ?? ""} onChange={(e) => pickRegion(e.target.value ? Number(e.target.value) : null)} disabled={!geo.regions.length} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+            <option value="">{geo.regions.length ? "Choose a region…" : "Loading…"}</option>
+            {regionChoices.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
             ))}
-          </datalist>
+          </select>
         </label>
 
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">District</span>
-          <input
-            type="text"
-            value={districtName}
-            onChange={(e) => setDistrictName(e.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          />
+          <select value={districtId ?? ""} onChange={(e) => pickDistrict(e.target.value ? Number(e.target.value) : null)} disabled={!geo.districts.length} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+            <option value="">{regionId ? "Choose a district…" : "Any district"}</option>
+            {districtChoices.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
         </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Depot</span>
+          <select value={depotId ?? ""} onChange={(e) => pickDepot(e.target.value ? Number(e.target.value) : null)} disabled={!geo.depots.length} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+            <option value="">{depotChoices.length ? "Choose a depot…" : "No depots in this area"}</option>
+            {depotChoices.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <p className="self-end pb-2 text-[11px] text-slate-500 dark:text-slate-400">
+          {legacy.length
+            ? `Previously typed ${legacy.join(", ")} is not in the configured list — choose the matching entry.`
+            : "Lists come from the Regions, Districts and Depots pages. Choosing a depot fills in its district and region."}
+        </p>
 
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Network Name</span>
